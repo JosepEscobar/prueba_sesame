@@ -1,107 +1,130 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
-from app.core.graph import AgentGraph
+from typing import Dict, Any, Optional, List
 from app.core.orchestrator import AgentOrchestrator
 from app.core.logging import logger
 from app.core.metrics import MetricsCollector
+import time
 
 router = APIRouter()
-agent_graph = AgentGraph()
 orchestrator = AgentOrchestrator()
 
 class AgentRequest(BaseModel):
     query: str
     content: Optional[str] = None
     action_request: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 class AgentResponse(BaseModel):
-    result: Dict[str, Any]
-    confidence: float
+    status: str
     agent_used: str
+    confidence: float
+    result: Any
+    execution_time: Optional[float] = None
+
+class AgentInfo(BaseModel):
+    name: str
+    description: str
 
 @router.post("/process", response_model=AgentResponse)
 async def process_request(request: AgentRequest):
     """
-    Procesa una solicitud a través del sistema de agentes.
-    """
-    try:
-        # Preparar los datos de entrada
-        input_data = {
-            "query": request.query,
-            "content": request.content,
-            "action_request": request.action_request
-        }
-        
-        # Ejecutar el grafo de agentes
-        result = await agent_graph.execute(input_data)
-        
-        return AgentResponse(
-            result=result["agent_output"],
-            confidence=result["confidence"],
-            agent_used=result["current_agent"]
-        )
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error procesando la solicitud: {str(e)}"
-        )
-
-@router.get("/agents")
-async def list_agents():
-    """
-    Lista todos los agentes disponibles en el sistema.
-    """
-    return {
-        "agents": [
-            {
-                "name": "Router Agent",
-                "description": "Agente que decide qué agente especializado debe manejar la solicitud"
-            },
-            {
-                "name": "Analysis Agent",
-                "description": "Agente especializado en análisis detallado de datos y textos"
-            },
-            {
-                "name": "Action Agent",
-                "description": "Agente especializado en realizar acciones específicas"
-            },
-            {
-                "name": "Summary Agent",
-                "description": "Agente especializado en crear resúmenes concisos"
-            }
-        ]
-    }
-
-@router.post("/process")
-async def process_request_orchestrator(request: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Procesa una solicitud a través del sistema de agentes.
+    Procesa una solicitud a través del sistema de orquestación de agentes.
     
     Args:
-        request: Diccionario con los datos de la solicitud
+        request: La solicitud con el query y datos adicionales
         
     Returns:
-        Dict con el resultado del procesamiento
+        AgentResponse con el resultado del procesamiento
     """
     try:
         logger.info(
             "Nueva solicitud recibida",
-            extra={"request_data": request}
+            extra={"request_data": request.dict()}
         )
         
-        result = await orchestrator.process_request(request)
+        # Convertir solicitud a diccionario para el orquestador
+        input_data = request.dict(exclude_unset=True)
         
-        return result
+        # Procesar la solicitud a través del orquestador
+        start_time = time.time()
+        result = await orchestrator.process_request(input_data)
+        execution_time = time.time() - start_time
+        
+        # Añadir tiempo de ejecución al resultado
+        result["execution_time"] = execution_time
+        
+        logger.info(
+            "Solicitud procesada exitosamente",
+            extra={
+                "agent_used": result["agent_used"],
+                "confidence": result["confidence"],
+                "execution_time": execution_time
+            }
+        )
+        
+        return AgentResponse(**result)
         
     except Exception as e:
         logger.error(
             f"Error al procesar la solicitud: {str(e)}",
-            extra={"request_data": request}
+            extra={"request_data": request.dict()}
         )
         MetricsCollector.record_error("api", "request_processing_error")
         raise HTTPException(
             status_code=500,
             detail=f"Error al procesar la solicitud: {str(e)}"
-        ) 
+        )
+
+@router.get("/agents", response_model=List[AgentInfo])
+async def list_agents():
+    """
+    Lista todos los agentes disponibles en el sistema.
+    """
+    agents = [
+        AgentInfo(
+            name="Router Agent",
+            description="Agente que decide qué agente especializado debe manejar la solicitud"
+        ),
+        AgentInfo(
+            name="Analysis Agent",
+            description="Agente especializado en análisis detallado de datos y textos"
+        ),
+        AgentInfo(
+            name="Action Agent",
+            description="Agente especializado en realizar acciones específicas"
+        ),
+        AgentInfo(
+            name="Summary Agent",
+            description="Agente especializado en crear resúmenes concisos"
+        )
+    ]
+    
+    return agents
+
+@router.get("/health")
+async def agent_health():
+    """
+    Verifica el estado de salud del sistema de agentes.
+    """
+    try:
+        # Realizar una verificación básica del orquestador
+        health_status = {
+            "status": "healthy",
+            "agents": {
+                "router": orchestrator.router_agent is not None,
+                "analysis": orchestrator.analysis_agent is not None,
+                "action": orchestrator.action_agent is not None,
+                "summary": orchestrator.summary_agent is not None
+            },
+            "workflow": orchestrator.workflow is not None
+        }
+        
+        return health_status
+        
+    except Exception as e:
+        logger.error(f"Error en verificación de salud: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "error": str(e)
+        } 

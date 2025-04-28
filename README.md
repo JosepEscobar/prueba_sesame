@@ -1,183 +1,145 @@
-# 🧠 Sistema Multi-Agente MCP con LangGraph y FastAPI
+# Sistema Multi-Agente con LangGraph y FastAPI
 
-Este proyecto implementa un sistema de agentes inteligentes basados en **LangGraph** y **MCP (Model Context Protocol)**, orquestados mediante un **grafo dinámico de agentes** en un servidor **FastAPI** con instrumentación avanzada, CI/CD automatizado y arquitectura limpia y escalable. Para una prueba técnica con Sesame HR.
+Este proyecto implementa un sistema multi-agente utilizando LangGraph para orquestar la interacción entre diferentes agentes especializados. El sistema está diseñado para procesar solicitudes de usuarios y dirigirlas al agente más adecuado para manejarlas.
 
-## 🚀 Tecnologías principales
+## Características
 
-- [FastAPI](https://fastapi.tiangolo.com/) + [Uvicorn](https://www.uvicorn.org/) (ASGI server)
-- [LangGraph](https://langgraph.readthedocs.io/en/latest/) (Multi-agent orchestration framework)
-- [LangChain](https://www.langchain.dev/) (Base LLM agents)
-- **MCP Protocol** (Integración de herramientas externas estandarizada)
-- **Python 3.12+**
-- **Docker** (despliegue de contenedores)
-- **GitHub Actions** (CI/CD)
-- Observabilidad con:
-  - **Sentry** (errores y performance)
-  - **Grafana Loki** (centralización de logs estructurados)
-  - **Prometheus** (métricas opcionales)
-- **Ruff** (Linter y formateador rápido)
-- **Black** (Formateador de código)
-- **Pytest** (tests unitarios y de integración)
+- Sistema de orquestación basado en LangGraph
+- Agentes especializados: Análisis, Acción y Resumen
+- Router inteligente para determinar el agente adecuado para cada solicitud
+- Logging estructurado en formato JSON
+- Sistema de métricas con Prometheus
+- API RESTful con FastAPI
+- Contenedores Docker para despliegue
 
----
-
-## 🛠️ Arquitectura
-
-- **Servidor HTTP** FastAPI expone endpoints REST para recibir solicitudes.
-- **Sistema de agentes LangGraph** orquesta múltiples agentes IA mediante un grafo dirigido dinámico.
-- **Router inteligente** analiza el estado y decide dinámicamente el siguiente agente a ejecutar.
-- **Herramientas externas** se consumen a través de servidores MCP mediante JSON-RPC estandarizado.
-- **Logging estructurado y coloreado**, con logs persistentes y centralizados.
-- **Instrumentación de tokens** y métricas de uso para control de costes y performance.
-- **Arquitectura Hexagonal / Clean Architecture** que facilita escalabilidad y testabilidad.
-
-### Diagrama general:
+## Estructura del Proyecto
 
 ```
-Cliente HTTP
-    ↓
-FastAPI (entrada HTTP)
-    ↓
-Router (orquestador dinámico)
-   ↙       ↘
-Agente A    Agente B
-   ↓           ↓
-Herramienta MCP  Herramienta MCP
-    ↘         ↙
-  Sentry / Loki / Metrics
+├── app/
+│   ├── agents/                  # Agentes especializados
+│   │   ├── base.py              # Clase base para agentes
+│   │   ├── router_agent.py      # Agente de enrutamiento
+│   │   ├── analysis_agent.py    # Agente de análisis
+│   │   ├── action_agent.py      # Agente de acción
+│   │   └── summary_agent.py     # Agente de resumen
+│   ├── api/                     # Endpoints de API
+│   │   └── v1/
+│   │       ├── endpoints/
+│   │       │   └── agents.py    # Endpoints para los agentes
+│   │       └── router.py        # Router principal de la API
+│   ├── core/                    # Funcionalidades centrales
+│   │   ├── config.py            # Configuración
+│   │   ├── logging.py           # Sistema de logging
+│   │   ├── metrics.py           # Sistema de métricas
+│   │   └── orchestrator.py      # Orquestador de agentes
+│   └── main.py                  # Punto de entrada de la aplicación
+├── examples/                    # Ejemplos de uso
+│   └── run_examples.py          # Script para ejecutar ejemplos
+├── tests/                       # Tests automatizados
+│   └── test_orchestrator.py     # Tests para el orquestador
+├── .env.example                 # Plantilla para variables de entorno
+├── Dockerfile                   # Docker para despliegue
+├── docker-compose.yml           # Composición Docker
+├── requirements.txt             # Dependencias
+└── README.md                    # Este archivo
 ```
 
----
+## Requisitos
 
-## 📦 Instalación y despliegue local
+- Python 3.10+
+- OpenAI API Key
+- Docker (opcional, para despliegue)
 
-> [TODO]: **Nota**: Para la instalación, ejecución local, testing y despliegue, consulta la guía completa en [docs/INSTALLATION.md](docs/INSTALLATION.md).
+## Instalación
 
-Resumen rápido:
+1. Clonar el repositorio:
+   ```bash
+   git clone https://github.com/tuusuario/sistema-multi-agente.git
+   cd sistema-multi-agente
+   ```
+
+2. Crear un entorno virtual y activarlo:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # En Windows: venv\Scripts\activate
+   ```
+
+3. Instalar dependencias:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Configurar variables de entorno:
+   ```bash
+   cp .env.example .env
+   # Editar .env con tu API key de OpenAI y otras configuraciones
+   ```
+
+## Uso
+
+### Ejecutar la API
 
 ```bash
-# Clonar repositorio
-git clone https://github.com/tu_usuario/tu_proyecto.git
-cd tu_proyecto
-
-# Crear entorno virtual
-python -m venv .venv
-source .venv/bin/activate  # o .venv\Scripts\activate en Windows
-
-# Instalar dependencias
-pip install -r requirements.txt
-
-# Crear archivo .env y configurar variables (ver ejemplo en .env.example)
-
-# Ejecutar servidor local en modo desarrollo
 uvicorn app.main:app --reload
 ```
 
-Para levantar el servicio en **Docker**:
+La API estará disponible en http://localhost:8000. La documentación de la API se puede acceder en http://localhost:8000/docs.
+
+### Ejecutar Ejemplos
 
 ```bash
-# Build de la imagen
-docker build -t multi-agent-ia .
+# Listar ejemplos disponibles
+python examples/run_examples.py --list
 
-# Correr el contenedor
-docker run --env-file .env -p 8000:8000 multi-agent-ia
+# Ejecutar un ejemplo específico
+python examples/run_examples.py --type analysis
+
+# Ejecutar un ejemplo personalizado
+python examples/run_examples.py --type custom
 ```
 
----
+### Endpoints Principales
 
-## 🧪 Testing
+- `POST /api/v1/process`: Procesa una solicitud a través del sistema de agentes
+- `GET /api/v1/agents`: Lista todos los agentes disponibles
+- `GET /api/v1/health`: Verifica el estado del sistema de agentes
+- `GET /metrics`: Endpoint para Prometheus (métricas)
 
-Para ejecutar todos los tests unitarios y de integración:
+## Despliegue con Docker
 
 ```bash
-pytest
+# Construir la imagen
+docker build -t multi-agent-system .
+
+# Ejecutar el contenedor
+docker run -p 8000:8000 --env-file .env multi-agent-system
 ```
 
-Cobertura de código:
+O usando Docker Compose:
 
 ```bash
-pytest --cov=app --cov-report=term-missing
+docker-compose up -d
 ```
 
----
+## Desarrolladores
 
-## 🔥 CI/CD y workflows automáticos
+Para contribuir al proyecto:
 
-- **Push en develop**:
-  - Linting (Ruff)
-  - Formateo (Black)
-  - Tests (Pytest)
-  - Build de imagen Docker
-  - Deploy automático a entorno de testing
+1. Ejecutar tests:
+   ```bash
+   pytest
+   ```
 
-- **Merge a master**:
-  - Linting + Tests
-  - Build imagen Docker final
-  - Deploy automático a entorno de producción
+2. Formatear código:
+   ```bash
+   black app tests
+   ```
 
-Protecciones de ramas configuradas para asegurar calidad en PRs.
+3. Verificar estilo:
+   ```bash
+   ruff check app tests
+   ```
 
----
+## Licencia
 
-## 📈 Observabilidad y seguimiento
-
-- **Sentry**: Captura automática de errores y performance tracing.
-- **Grafana Loki**: Logs JSON centralizados, coloreados y estructurados.
-- **Prometheus** (opcional): Exposición de métricas para latencia, errores, uso de tokens.
-- **Tracking de tokens y coste**: Análisis de uso de OpenAI API por conversación.
-
----
-
-## 🧠 Agentes inteligentes
-
-Sistema de agentes basado en LangGraph:
-- **Agente Router**: Decide dinámicamente el flujo.
-- **Agentes especializados**: Ejecutan tareas concretas.
-- **Memoria compartida**: Estado persistente a lo largo de la conversación.
-- **Herramientas**: Usadas vía protocolos MCP, adaptables y expansibles.
-
----
-
-## 📚 Estructura del repositorio
-
-```
-app/
-  ├── agents/           # Definición de agentes LangGraph
-  ├── core/             # Configuración de grafo LangGraph
-  ├── domain/           # Entidades, casos de uso, interfaces
-  ├── infra/            # Implementaciones: OpenAI, MCPClient, Logger
-  ├── main.py           # FastAPI app
-  └── tests/            # Unit tests, integration tests
-.vscode/
-  ├── launch.json       # Configuraciones de debug
-  └── settings.json     # Formato, lint, entorno
-.github/
-  └── workflows/        # GitHub Actions CI/CD
-Dockerfile
-docker-compose.yml (opcional)
-.env.example
-requirements.txt
-README.md
-```
-
----
-
-## 🧩 Roadmap
-
-- Integración de nuevos agentes especializados.
-- Auto-scaling de agentes según carga.
-- Expansión del catálogo de herramientas MCP.
-- Análisis de costes y optimización automática de prompts.
-
----
-
-## 🧑‍💻 Contribución
-
-Se aceptan contribuciones via Pull Request siguiendo las reglas de linting, testing y convenciones de arquitectura del proyecto.  
-Consulta el [CONTRIBUTING.md](docs/CONTRIBUTING.md) para más detalles.
-
----
-
-## 📜 Licencia
-
-Este proyecto se entrega como código abierto bajo la Licencia [MIT](LICENSE).
+Este proyecto está licenciado bajo la licencia MIT.
