@@ -18,6 +18,7 @@ from app.core.orchestrator import AgentOrchestrator
 
 # Ejemplos predefinidos
 EXAMPLES = {
+    # Ejemplos generales
     "analysis": {
         "query": "Analiza este texto e identifica las principales ideas y patrones",
         "content": """
@@ -48,6 +49,56 @@ EXAMPLES = {
         y la toma de decisiones médicas.
         """
     },
+    
+    # Ejemplos de consultoría empresarial - Marketing
+    "marketing_strategy": {
+        "query": "¿Qué estrategias de marketing recomiendan para lanzar un producto SaaS B2B?",
+        "content": "Estamos lanzando una nueva plataforma SaaS para gestión de proyectos enfocada en empresas medianas del sector tecnológico."
+    },
+    "digital_marketing": {
+        "query": "¿Cómo puedo mejorar el ROI de mis campañas en redes sociales?",
+        "content": "Actualmente invertimos en Facebook Ads e Instagram, pero el coste por adquisición es demasiado alto."
+    },
+    "seo_optimization": {
+        "query": "Necesito mejorar el SEO de mi sitio web de comercio electrónico",
+        "content": "Vendemos productos electrónicos y no estamos apareciendo en las primeras páginas de Google para nuestras palabras clave principales."
+    },
+    
+    # Ejemplos de consultoría empresarial - Finanzas
+    "investment_strategy": {
+        "query": "¿Qué estrategia de inversión recomendarías para una startup en fase seed?",
+        "content": "Tenemos $500,000 en financiación inicial y necesitamos decidir cómo distribuirla para maximizar nuestro crecimiento."
+    },
+    "financial_analysis": {
+        "query": "¿Cómo puedo mejorar el flujo de caja de mi negocio?",
+        "content": "Somos una pequeña empresa manufacturera con problemas de liquidez debido a largos ciclos de pago de clientes."
+    },
+    "valuation": {
+        "query": "¿Cómo debería valorar mi startup para una ronda de inversión Series A?",
+        "content": "Tenemos dos años de operación, ingresos mensuales recurrentes de $100,000 y crecimiento del 15% mensual."
+    },
+    
+    # Ejemplos de consultoría empresarial - Operaciones
+    "supply_chain": {
+        "query": "¿Cómo puedo optimizar mi cadena de suministro para reducir costos?",
+        "content": "Somos una empresa de alimentos con proveedores internacionales y distribución nacional."
+    },
+    "process_optimization": {
+        "query": "Necesito mejorar la eficiencia de nuestro proceso de atención al cliente",
+        "content": "Actualmente nuestro tiempo de respuesta promedio es de 48 horas y queremos reducirlo significativamente."
+    },
+    "inventory_management": {
+        "query": "¿Qué sistema de gestión de inventario recomiendas para una tienda minorista con múltiples ubicaciones?",
+        "content": "Tenemos 5 tiendas físicas y un almacén central, con aproximadamente 2000 SKUs diferentes."
+    },
+    
+    # Ejemplo de búsqueda de información externa
+    "market_research": {
+        "query": "Necesito datos actualizados sobre tendencias de consumo en comercio electrónico para 2023",
+        "content": "Estoy preparando una presentación para inversores y necesito estadísticas recientes del mercado."
+    },
+    
+    # Ejemplo personalizado
     "custom": {
         "query": "",
         "content": "",
@@ -77,14 +128,15 @@ async def run_example(orchestrator: AgentOrchestrator, example_type: str) -> Dic
     # Eliminar campos vacíos
     input_data = {k: v for k, v in example.items() if v}
     
-    print("\n" + "="*50)
-    print(f"Ejecutando ejemplo: {example_type}")
+    print("\n" + "="*80)
+    print(f"EJECUTANDO EJEMPLO: {example_type}")
+    print("="*80)
     print(f"Consulta: {input_data['query']}")
     if "content" in input_data:
-        print(f"Contenido: {input_data['content'][:50]}...")
+        print(f"Contenido: {input_data['content'][:100]}..." if len(input_data['content']) > 100 else f"Contenido: {input_data['content']}")
     if "action_request" in input_data:
         print(f"Solicitud de acción: {input_data['action_request']}")
-    print("="*50 + "\n")
+    print("="*80 + "\n")
     
     # Procesar la solicitud
     start_message = "Procesando solicitud... (esto puede tomar un momento)"
@@ -102,9 +154,9 @@ def display_result(result: Dict[str, Any]) -> None:
     if not result:
         return
     
-    print("\n" + "="*50)
+    print("\n" + "="*80)
     print(f"RESULTADO DEL PROCESAMIENTO")
-    print("="*50)
+    print("="*80)
     print(f"Estado: {result['status']}")
     print(f"Agente utilizado: {result['agent_used']}")
     print(f"Confianza: {result['confidence']:.2f}")
@@ -116,8 +168,14 @@ def display_result(result: Dict[str, Any]) -> None:
         print(f"  Confianza: {result['routing']['confidence']:.2f}")
         print(f"  Razonamiento: {result['routing']['reasoning']}")
     
+    # Mostrar información adicional si existe
+    if "additional_info" in result and "data_lookup" in result["additional_info"]:
+        print("\nInformación adicional de búsqueda de datos:")
+        print(f"  Tiempo de ejecución: {result['additional_info']['data_lookup']['execution_time']:.2f} segundos")
+        print(f"  Confianza: {result['additional_info']['data_lookup']['confidence']:.2f}")
+    
     print("\nRESULTADO:")
-    print("-"*50)
+    print("-"*80)
     if result.get("result"):
         print(result["result"])
     else:
@@ -127,7 +185,24 @@ def display_result(result: Dict[str, Any]) -> None:
         print("\nERROR:")
         print(result["error"])
     
-    print("="*50 + "\n")
+    print("="*80 + "\n")
+
+def list_examples_by_category():
+    """Muestra los ejemplos disponibles organizados por categoría."""
+    categories = {
+        "General": ["analysis", "action", "summary"],
+        "Marketing": ["marketing_strategy", "digital_marketing", "seo_optimization"],
+        "Finanzas": ["investment_strategy", "financial_analysis", "valuation"],
+        "Operaciones": ["supply_chain", "process_optimization", "inventory_management"],
+        "Búsqueda de Datos": ["market_research"],
+        "Otros": ["custom"]
+    }
+    
+    print("\nEjemplos disponibles por categoría:")
+    for category, examples in categories.items():
+        print(f"\n{category}:")
+        for example in examples:
+            print(f"  - {example}: {EXAMPLES[example]['query'][:70]}...")
 
 async def main():
     """Función principal del script."""
@@ -135,7 +210,7 @@ async def main():
     parser.add_argument(
         "--type", "-t", 
         choices=list(EXAMPLES.keys()), 
-        default="analysis",
+        default="marketing_strategy",
         help="Tipo de ejemplo a ejecutar"
     )
     parser.add_argument(
@@ -143,13 +218,22 @@ async def main():
         action="store_true",
         help="Listar tipos de ejemplos disponibles"
     )
+    parser.add_argument(
+        "--category", "-c", 
+        action="store_true",
+        help="Listar ejemplos por categoría"
+    )
     
     args = parser.parse_args()
     
     if args.list:
         print("Ejemplos disponibles:")
         for example_type in EXAMPLES:
-            print(f"  - {example_type}")
+            print(f"  - {example_type}: {EXAMPLES[example_type]['query'][:70]}...")
+        return
+        
+    if args.category:
+        list_examples_by_category()
         return
     
     # Crear orquestador

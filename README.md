@@ -1,145 +1,140 @@
-# Sistema Multi-Agente con LangGraph y FastAPI
+# Sistema Multi-Agente para Consultoría Empresarial
 
-Este proyecto implementa un sistema multi-agente utilizando LangGraph para orquestar la interacción entre diferentes agentes especializados. El sistema está diseñado para procesar solicitudes de usuarios y dirigirlas al agente más adecuado para manejarlas.
+Un sistema multi-agente basado en LangGraph y FastAPI para proveer consultoría empresarial especializada a través de agentes inteligentes.
 
 ## Características
 
-- Sistema de orquestación basado en LangGraph
-- Agentes especializados: Análisis, Acción y Resumen
-- Router inteligente para determinar el agente adecuado para cada solicitud
-- Logging estructurado en formato JSON
-- Sistema de métricas con Prometheus
-- API RESTful con FastAPI
-- Contenedores Docker para despliegue
+- **Sistema Modular de Agentes**: Diferentes agentes especializados que trabajan juntos para procesar consultas empresariales
+- **Enrutamiento Inteligente**: Distribución automática de consultas al agente más adecuado
+- **Integración de Datos**: Consulta de fuentes externas para proporcionar respuestas contextualizadas
+- **Observabilidad Integrada**: Métricas y logs estructurados para monitoreo
+- **API REST**: Interfaz sencilla para integración con otras aplicaciones
 
-## Estructura del Proyecto
+## Agentes Disponibles
+
+- **Router Agent**: Determina qué agente especializado debe procesar cada consulta
+- **Analysis Agent**: Especializado en análisis de contenido y extracción de información clave
+- **Action Agent**: Enfocado en la implementación de acciones concretas y recomendaciones
+- **Summary Agent**: Genera resúmenes concisos de información compleja
+- **Finance Agent**: Análisis financiero y consultoría económica
+- **Marketing Agent**: Estrategias de marketing y análisis de mercado
+
+## Arquitectura
+
+El sistema está construido con una arquitectura modular:
 
 ```
-├── app/
-│   ├── agents/                  # Agentes especializados
-│   │   ├── base.py              # Clase base para agentes
-│   │   ├── router_agent.py      # Agente de enrutamiento
-│   │   ├── analysis_agent.py    # Agente de análisis
-│   │   ├── action_agent.py      # Agente de acción
-│   │   └── summary_agent.py     # Agente de resumen
-│   ├── api/                     # Endpoints de API
-│   │   └── v1/
-│   │       ├── endpoints/
-│   │       │   └── agents.py    # Endpoints para los agentes
-│   │       └── router.py        # Router principal de la API
-│   ├── core/                    # Funcionalidades centrales
-│   │   ├── config.py            # Configuración
-│   │   ├── logging.py           # Sistema de logging
-│   │   ├── metrics.py           # Sistema de métricas
-│   │   └── orchestrator.py      # Orquestador de agentes
-│   └── main.py                  # Punto de entrada de la aplicación
-├── examples/                    # Ejemplos de uso
-│   └── run_examples.py          # Script para ejecutar ejemplos
-├── tests/                       # Tests automatizados
-│   └── test_orchestrator.py     # Tests para el orquestador
-├── .env.example                 # Plantilla para variables de entorno
-├── Dockerfile                   # Docker para despliegue
-├── docker-compose.yml           # Composición Docker
-├── requirements.txt             # Dependencias
-└── README.md                    # Este archivo
+app/
+├── agents/             # Agentes especializados
+├── api/                # Endpoints de la API REST
+├── core/               # Funcionalidades centrales
+│   ├── config.py       # Configuración del sistema
+│   ├── logging.py      # Sistema de logging
+│   ├── metrics.py      # Recolección de métricas
+│   └── orchestrator.py # Orquestación de agentes
+├── services/           # Servicios externos
+└── main.py             # Punto de entrada de la aplicación
 ```
 
 ## Requisitos
 
-- Python 3.10+
-- OpenAI API Key
-- Docker (opcional, para despliegue)
+- Python 3.11+
+- FastAPI
+- LangChain
+- OpenAI API / Anthropic API
+- Prometheus (para métricas)
+- Sentry (opcional, para seguimiento de errores)
 
 ## Instalación
 
-1. Clonar el repositorio:
-   ```bash
-   git clone https://github.com/tuusuario/sistema-multi-agente.git
-   cd sistema-multi-agente
-   ```
+1. Clone el repositorio:
+```bash
+git clone https://github.com/usuario/proyecto.git
+cd proyecto
+```
 
-2. Crear un entorno virtual y activarlo:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # En Windows: venv\Scripts\activate
-   ```
+2. Instale las dependencias:
+```bash
+pip install -r requirements.txt
+```
 
-3. Instalar dependencias:
-   ```bash
-   pip install -r requirements.txt
-   ```
+3. Configure las variables de entorno:
+```bash
+cp .env.example .env
+# Edite el archivo .env con sus claves de API y configuración
+```
 
-4. Configurar variables de entorno:
-   ```bash
-   cp .env.example .env
-   # Editar .env con tu API key de OpenAI y otras configuraciones
-   ```
+## Ejecución
 
-## Uso
+### Modo Desarrollo
 
-### Ejecutar la API
+Para ejecutar la aplicación en modo desarrollo:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-La API estará disponible en http://localhost:8000. La documentación de la API se puede acceder en http://localhost:8000/docs.
+### Uso con Docker
 
-### Ejecutar Ejemplos
-
-```bash
-# Listar ejemplos disponibles
-python examples/run_examples.py --list
-
-# Ejecutar un ejemplo específico
-python examples/run_examples.py --type analysis
-
-# Ejecutar un ejemplo personalizado
-python examples/run_examples.py --type custom
-```
-
-### Endpoints Principales
-
-- `POST /api/v1/process`: Procesa una solicitud a través del sistema de agentes
-- `GET /api/v1/agents`: Lista todos los agentes disponibles
-- `GET /api/v1/health`: Verifica el estado del sistema de agentes
-- `GET /metrics`: Endpoint para Prometheus (métricas)
-
-## Despliegue con Docker
-
-```bash
-# Construir la imagen
-docker build -t multi-agent-system .
-
-# Ejecutar el contenedor
-docker run -p 8000:8000 --env-file .env multi-agent-system
-```
-
-O usando Docker Compose:
+Para ejecutar la aplicación con Docker y servicios auxiliares (Prometheus, Grafana):
 
 ```bash
 docker-compose up -d
 ```
 
-## Desarrolladores
+## Uso de la API
 
-Para contribuir al proyecto:
+### Consulta General
 
-1. Ejecutar tests:
-   ```bash
-   pytest
-   ```
+```bash
+curl -X POST "http://localhost:8000/api/query" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "query": "¿Cuál es la mejor estrategia de marketing para una startup de tecnología?",
+       "context": {
+         "company": "TechStartup Inc.",
+         "industry": "Software as a Service",
+         "target_audience": "Pequeñas y medianas empresas",
+         "budget": "Limitado"
+       }
+     }'
+```
 
-2. Formatear código:
-   ```bash
-   black app tests
-   ```
+### Consultas a Agentes Específicos
 
-3. Verificar estilo:
-   ```bash
-   ruff check app tests
-   ```
+Puede especificar un agente preferido (opcional):
+
+```bash
+curl -X POST "http://localhost:8000/api/query" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "query": "Necesito un análisis financiero para mi empresa de software",
+       "agent_preference": "finance_agent",
+       "context": {
+         "company": "SoftDev Inc.",
+         "industry": "Desarrollo de software",
+         "revenue": "2.5M",
+         "growth_rate": "15%"
+       }
+     }'
+```
+
+## Monitoreo
+
+- **Métricas Prometheus**: Disponibles en `http://localhost:9090`
+- **Dashboards Grafana**: Disponibles en `http://localhost:3000` (usuario: admin, contraseña: admin)
+- **Documentación API**: Disponible en `http://localhost:8000/docs`
+
+## Contribuciones
+
+Las contribuciones son bienvenidas. Por favor, siga estos pasos:
+
+1. Fork el repositorio
+2. Cree una rama para su característica (`git checkout -b feature/nueva-caracteristica`)
+3. Haga commit de sus cambios (`git commit -am 'Añadir nueva característica'`)
+4. Push a la rama (`git push origin feature/nueva-caracteristica`)
+5. Cree un Pull Request
 
 ## Licencia
 
-Este proyecto está licenciado bajo la licencia MIT.
+Este proyecto está licenciado bajo la Licencia MIT - vea el archivo [LICENSE](LICENSE) para más detalles.
