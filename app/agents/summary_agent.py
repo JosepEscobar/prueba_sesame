@@ -26,7 +26,7 @@ class SummaryAgent(BaseAgent):
             ("human", "{input}")
         ])
         
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Ejecuta la creación del resumen."""
         # Preparar el input para el prompt
         prompt_input = {
