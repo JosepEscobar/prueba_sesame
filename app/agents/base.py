@@ -1,8 +1,12 @@
 from typing import Dict, Any, List, Optional, Callable
 import time
 import abc
+from langchain_openai import ChatOpenAI
 from app.core.logging import logger
 from app.core.metrics import MetricsCollector
+from app.core.config import get_settings
+
+settings = get_settings()
 
 class BaseAgent(abc.ABC):
     """
@@ -25,6 +29,14 @@ class BaseAgent(abc.ABC):
         self.description = description
         self.tools = {}
         self.memory = {}
+        
+        # Inicializar el modelo LLM predeterminado
+        self.llm = ChatOpenAI(
+            model_name=settings.OPENAI_MODEL,
+            temperature=settings.TEMPERATURE,
+            api_key=settings.OPENAI_API_KEY
+        )
+        
         logger.info(f"Agente {name} inicializado")
     
     def add_tool(self, tool_name: str, tool: Any) -> None:
