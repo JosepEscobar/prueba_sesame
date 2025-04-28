@@ -1,0 +1,72 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+## 🌟 Caso de uso: "Asistente Inteligente de Consultoría Empresarial"
+
+**Descripción breve**:  
+Desarrollar un sistema de IA que **reciba consultas de negocio** de usuarios (clientes internos o externos) y genere **respuestas accionables**, combinando:
+
+- **Clasificación automática** del tipo de consulta (finanzas, marketing, operaciones...).
+- **Búsqueda de información en bases de datos/documentación externa** mediante herramientas MCP.
+- **Generación de respuestas personalizadas** usando agentes LLM.
+- **Enrutado dinámico** entre agentes especializados dependiendo del tipo de pregunta y resultados intermedios.
+
+---
+
+## 📚 Flujo básico de usuario
+
+1. El usuario manda una **pregunta** (ejemplo: *"¿Qué estrategias de marketing recomiendan para lanzar un producto SaaS?"*).
+
+2. **FastAPI** recibe la consulta y lanza el **grafo LangGraph**.
+
+3. El **Router** (Agente de Clasificación) decide:
+   - ¿Es una consulta de tipo *marketing*? → Sí.
+   - Envía la solicitud al **Agente de Marketing**.
+
+4. El **Agente de Marketing**:
+   - **Busca información actualizada** usando una **herramienta MCP** que consulta artículos, bases de datos de estrategias previas, informes internos, etc.
+   - **Genera una respuesta** basada en los datos obtenidos y su conocimiento.
+
+5. Si la información no es suficiente o falta contexto:
+   - El **Router** puede redirigir a un **Agente de Datos** para complementar.
+
+6. El sistema **devuelve una respuesta consolidada** al usuario, estructurada y clara.
+
+7. Mientras tanto:
+   - Se mide **cuánto costó en tokens** la interacción.
+   - Se registran **logs detallados**.
+   - Se envían **errores a Sentry** si algo falla.
+   - Se guarda todo el flujo de logs estructurados en **Grafana Loki**.
+
+---
+
+## 📂 Agentes que podrías modelar
+
+| Agente                 | Descripción breve                                                   |
+|-------------------------|---------------------------------------------------------------------|
+| `RouterAgent`           | Decide ruta: clasificación inicial según tipo de consulta.         |
+| `MarketingAgent`        | Especialista en preguntas sobre marketing, campañas, SEO, etc.      |
+| `FinanceAgent`          | Especialista en preguntas sobre finanzas, presupuestos, inversión. |
+| `OperationsAgent`       | Especialista en operaciones, logística, procesos internos.         |
+| `DataLookupAgent`       | Consulta bases de datos/documentos mediante MCP si falta información. |
+
+---
+
+## 🔌 Herramientas externas vía MCP (ejemplos)
+
+- `search_articles`: Buscador de artículos de marketing y business intelligence.
+- `query_kb`: Consulta una base de conocimiento interna.
+- `financial_models`: Devuelve plantillas/modelos de análisis financiero.
+
+Cada una sería un pequeño microservicio MCP sencillo.
+
+---
+
+## 🧠 Idea:
+
+> "Este sistema multiagente está diseñado como un **asistente inteligente de consultoría empresarial**, capaz de interpretar preguntas abiertas, enrutar dinámicamente entre especialistas, consultar fuentes externas mediante MCP y proporcionar respuestas accionables, todo de forma trazable, costeable y escalable."
+
+## GENERACIÓN DE DATOS SINTÉTICOS
+Esta prueba debe funcionar con datos sintenticos generados y alamacenados en sus respectivos sitios. 
