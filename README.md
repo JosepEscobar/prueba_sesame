@@ -1,140 +1,155 @@
-# Sistema Multi-Agente para Consultoría Empresarial
+# Sistema Multi-Agente con LangGraph y FastAPI
 
-Un sistema multi-agente basado en LangGraph y FastAPI para proveer consultoría empresarial especializada a través de agentes inteligentes.
+Sistema avanzado de agentes inteligentes construido con LangGraph y FastAPI, diseñado para procesamiento de consultas y análisis empresarial.
 
-## Características
+## Características principales
 
-- **Sistema Modular de Agentes**: Diferentes agentes especializados que trabajan juntos para procesar consultas empresariales
-- **Enrutamiento Inteligente**: Distribución automática de consultas al agente más adecuado
-- **Integración de Datos**: Consulta de fuentes externas para proporcionar respuestas contextualizadas
-- **Observabilidad Integrada**: Métricas y logs estructurados para monitoreo
-- **API REST**: Interfaz sencilla para integración con otras aplicaciones
+- **Arquitectura multi-agente** basada en LangGraph, que permite flujos de trabajo dinámicos y complejos
+- **Router dinámico** que analiza las consultas y las dirige al agente especializado más adecuado
+- **Agentes especializados** para distintos tipos de tareas:
+  - **Router Agent**: Clasifica consultas y las dirige al agente apropiado 
+  - **Analysis Agent**: Análisis detallado de información y situaciones empresariales
+  - **Action Agent**: Recomendaciones prácticas y planes de acción
+  - **Summary Agent**: Síntesis de información compleja en formato conciso
+  - **Finance Agent**: Análisis financiero y consultoría económica
+  - **Marketing Agent**: Estrategias de marketing y análisis de mercado
+- **Integración con fuentes de datos externas** a través del servicio DataLookupService
+- **Logging estructurado** en formato JSON para mejor observabilidad
+- **Sistema de métricas** basado en Prometheus para monitorización de rendimiento
+- **API RESTful** con FastAPI para interacción con el sistema
+- **Soporte para Model Context Protocol (MCP)** para integración de herramientas externas
 
-## Agentes Disponibles
-
-- **Router Agent**: Determina qué agente especializado debe procesar cada consulta
-- **Analysis Agent**: Especializado en análisis de contenido y extracción de información clave
-- **Action Agent**: Enfocado en la implementación de acciones concretas y recomendaciones
-- **Summary Agent**: Genera resúmenes concisos de información compleja
-- **Finance Agent**: Análisis financiero y consultoría económica
-- **Marketing Agent**: Estrategias de marketing y análisis de mercado
-
-## Arquitectura
-
-El sistema está construido con una arquitectura modular:
+## Estructura del proyecto
 
 ```
 app/
-├── agents/             # Agentes especializados
-├── api/                # Endpoints de la API REST
-├── core/               # Funcionalidades centrales
-│   ├── config.py       # Configuración del sistema
-│   ├── logging.py      # Sistema de logging
-│   ├── metrics.py      # Recolección de métricas
-│   └── orchestrator.py # Orquestación de agentes
-├── services/           # Servicios externos
-└── main.py             # Punto de entrada de la aplicación
+├── agents/                   # Implementación de los agentes del sistema
+│   ├── action_agent.py       # Agente especializado en acciones y recomendaciones
+│   ├── analysis_agent.py     # Agente especializado en análisis de información
+│   ├── base.py               # Clase base para todos los agentes
+│   ├── finance_agent.py      # Agente especializado en análisis financiero
+│   ├── marketing_agent.py    # Agente especializado en estrategias de marketing
+│   ├── router_agent.py       # Agente que clasifica y enruta las consultas
+│   └── summary_agent.py      # Agente que genera resúmenes concisos
+├── api/                      # Definición de la API REST
+│   ├── models.py             # Modelos de datos para la API
+│   └── router.py             # Enrutador principal de la API
+├── core/                     # Componentes principales del sistema
+│   ├── config.py             # Configuración centralizada
+│   ├── graph.py              # Definición del grafo de agentes con LangGraph
+│   ├── logging.py            # Configuración de logging estructurado
+│   ├── metrics.py            # Sistema de métricas y monitoreo
+│   └── orchestrator.py       # Orquestador del sistema multi-agente
+├── services/                 # Servicios externos e integraciones
+│   └── data_lookup.py        # Servicio para búsqueda en fuentes de datos externas
+├── tools/                    # Herramientas utilizadas por los agentes
+│   └── mcp_client.py         # Cliente para Model Context Protocol
+├── tests/                    # Tests automatizados
+├── main.py                   # Punto de entrada de la aplicación
+└── requirements.txt          # Dependencias del proyecto
 ```
-
-## Requisitos
-
-- Python 3.11+
-- FastAPI
-- LangChain
-- OpenAI API / Anthropic API
-- Prometheus (para métricas)
-- Sentry (opcional, para seguimiento de errores)
 
 ## Instalación
 
-1. Clone el repositorio:
-```bash
-git clone https://github.com/usuario/proyecto.git
-cd proyecto
-```
+### Prerrequisitos
 
-2. Instale las dependencias:
+- Python 3.10+
+- pip
+
+### Instalación de dependencias
+
 ```bash
+# Crear entorno virtual
+python -m venv venv
+source venv/bin/activate  # En Windows usar: venv\Scripts\activate
+
+# Instalar dependencias
 pip install -r requirements.txt
 ```
 
-3. Configure las variables de entorno:
-```bash
-cp .env.example .env
-# Edite el archivo .env con sus claves de API y configuración
+### Configuración
+
+Crear un archivo `.env` en la raíz del proyecto con las siguientes variables:
+
+```
+OPENAI_API_KEY=tu_api_key
+ALPHA_VANTAGE_API_KEY=tu_api_key    # Para datos financieros
+NEWS_API_KEY=tu_api_key              # Para búsqueda de noticias
+BING_SEARCH_API_KEY=tu_api_key       # Para búsqueda web
 ```
 
-## Ejecución
+## Uso
 
-### Modo Desarrollo
-
-Para ejecutar la aplicación en modo desarrollo:
+### Iniciar el servidor
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-### Uso con Docker
+Una vez iniciado, la API estará disponible en `http://localhost:8000`.
 
-Para ejecutar la aplicación con Docker y servicios auxiliares (Prometheus, Grafana):
+### Endpoints principales
 
-```bash
-docker-compose up -d
-```
+- `GET /api/v1/agents`: Lista todos los agentes disponibles y sus capacidades
+- `POST /api/v1/query`: Procesa una consulta utilizando el sistema multi-agente
 
-## Uso de la API
-
-### Consulta General
+### Ejemplo de consulta
 
 ```bash
-curl -X POST "http://localhost:8000/api/query" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "query": "¿Cuál es la mejor estrategia de marketing para una startup de tecnología?",
-       "context": {
-         "company": "TechStartup Inc.",
-         "industry": "Software as a Service",
-         "target_audience": "Pequeñas y medianas empresas",
-         "budget": "Limitado"
-       }
-     }'
+curl -X POST "http://localhost:8000/api/v1/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "¿Cuáles son las mejores estrategias de marketing digital para una startup de fintech?",
+    "context": {
+      "industry": "fintech",
+      "target_market": "millennials",
+      "budget": "limitado",
+      "competitors": ["Revolut", "N26", "Wise"]
+    }
+  }'
 ```
 
-### Consultas a Agentes Específicos
+## Servicios Integrados
 
-Puede especificar un agente preferido (opcional):
+### DataLookupService
+
+El sistema incluye un servicio de búsqueda y recuperación de datos externos que permite a los agentes enriquecer sus análisis y recomendaciones con información actualizada. Este servicio proporciona las siguientes funcionalidades:
+
+- **Búsqueda de datos de mercado**: Información financiera y económica
+- **Búsqueda de noticias**: Artículos y noticias relevantes sobre el tema consultado
+- **Búsqueda de informes de industria**: Informes y análisis de sectores específicos
+- **Búsqueda web**: Información general desde Internet
+- **Información de empresas**: Datos detallados sobre compañías específicas
+
+Estas capacidades permiten a los agentes proporcionar respuestas más completas, actualizadas y basadas en evidencia.
+
+## Métricas y Monitoreo
+
+El sistema incluye un sistema completo de métricas y monitoreo que registra:
+
+- **Tiempos de ejecución de los agentes**
+- **Número de solicitudes procesadas**
+- **Niveles de confianza de las respuestas**
+- **Uso de tokens por modelo**
+- **Tasas de error por tipo**
+
+Estas métricas están disponibles en formato Prometheus en el endpoint `/metrics`.
+
+## Desarrollo
+
+### Ejecutar pruebas
 
 ```bash
-curl -X POST "http://localhost:8000/api/query" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "query": "Necesito un análisis financiero para mi empresa de software",
-       "agent_preference": "finance_agent",
-       "context": {
-         "company": "SoftDev Inc.",
-         "industry": "Desarrollo de software",
-         "revenue": "2.5M",
-         "growth_rate": "15%"
-       }
-     }'
+pytest
 ```
 
-## Monitoreo
+### Añadir un nuevo agente
 
-- **Métricas Prometheus**: Disponibles en `http://localhost:9090`
-- **Dashboards Grafana**: Disponibles en `http://localhost:3000` (usuario: admin, contraseña: admin)
-- **Documentación API**: Disponible en `http://localhost:8000/docs`
-
-## Contribuciones
-
-Las contribuciones son bienvenidas. Por favor, siga estos pasos:
-
-1. Fork el repositorio
-2. Cree una rama para su característica (`git checkout -b feature/nueva-caracteristica`)
-3. Haga commit de sus cambios (`git commit -am 'Añadir nueva característica'`)
-4. Push a la rama (`git push origin feature/nueva-caracteristica`)
-5. Cree un Pull Request
+1. Crear un nuevo archivo en `app/agents/` basado en `base.py`
+2. Implementar la lógica especializada en el método `_execute_impl`
+3. Registrar el nuevo agente en `app/core/orchestrator.py`
+4. Actualizar el `router_agent.py` para incluir el nuevo agente entre las opciones
 
 ## Licencia
 
-Este proyecto está licenciado bajo la Licencia MIT - vea el archivo [LICENSE](LICENSE) para más detalles.
+Este proyecto está licenciado bajo [MIT License](LICENSE).

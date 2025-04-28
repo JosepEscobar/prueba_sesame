@@ -1,114 +1,137 @@
-from typing import Dict, Any, List, Optional
+"""
+Modelos Pydantic para la API
+"""
+
+from typing import Dict, List, Optional, Any, Union
 from pydantic import BaseModel, Field
-
-
-class QueryRequest(BaseModel):
-    """Modelo para la solicitud de consulta al sistema multi-agente."""
-    
-    query: str = Field(
-        ..., 
-        description="La consulta o pregunta del usuario", 
-        min_length=3, 
-        example="¿Cuál es la mejor estrategia de marketing para una startup de tecnología?"
-    )
-    
-    context: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Contexto adicional para la consulta, como información de empresa, industria, etc.",
-        example={
-            "company": "TechStartup Inc.",
-            "industry": "Software as a Service",
-            "target_audience": "Pequeñas y medianas empresas",
-            "budget": "Limitado"
-        }
-    )
-    
-    agent_preference: Optional[str] = Field(
-        None,
-        description="Preferencia opcional de un agente específico para procesar la consulta",
-        example="marketing_agent"
-    )
-    
-    metadata: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Metadatos adicionales para la solicitud",
-        example={
-            "client_id": "app-web",
-            "session_id": "abc123"
-        }
-    )
-
-
-class QueryResponse(BaseModel):
-    """Modelo para la respuesta de la consulta procesada."""
-    
-    result: Any = Field(
-        ...,
-        description="Resultado de la consulta procesada por el agente"
-    )
-    
-    agent_used: str = Field(
-        ...,
-        description="Nombre del agente que procesó la consulta",
-        example="marketing_agent"
-    )
-    
-    request_id: str = Field(
-        ...,
-        description="Identificador único de la solicitud para seguimiento",
-        example="c4b3f8a0-8f9e-4b1a-9e1a-0e1f3a1e0f1a"
-    )
-    
-    processing_time: float = Field(
-        ...,
-        description="Tiempo de procesamiento en segundos",
-        example=0.856
-    )
-    
-    success: bool = Field(
-        ...,
-        description="Indicador de éxito del procesamiento",
-        example=True
-    )
-    
-    sources: Optional[List[str]] = Field(
-        None,
-        description="Fuentes de datos utilizadas para generar la respuesta",
-        example=["Base de conocimiento interna", "Análisis de mercado 2023", "Tendencias de industria"]
-    )
-    
-    confidence: Optional[float] = Field(
-        None,
-        description="Nivel de confianza del agente en su respuesta (0-1)",
-        example=0.92,
-        ge=0,
-        le=1
-    )
-
 
 class ErrorResponse(BaseModel):
     """Modelo para respuestas de error."""
-    
-    error: str = Field(
-        ...,
-        description="Mensaje de error",
-        example="Error al procesar la consulta: problema de conexión con el LLM"
+    detail: str = Field(..., description="Descripción del error")
+    error_code: Optional[str] = Field(None, description="Código de error interno")
+
+class DataSource(BaseModel):
+    """Modelo para representar una fuente de datos."""
+    type: str = Field(..., description="Tipo de fuente (web, news, report, etc.)")
+    source: str = Field(..., description="Nombre o identificador de la fuente")
+    url: Optional[str] = Field(None, description="URL de la fuente, si está disponible")
+
+class QueryRequest(BaseModel):
+    """
+    Modelo para solicitudes de consulta al sistema multi-agente.
+    """
+    query: str = Field(
+        ..., 
+        min_length=3, 
+        max_length=2000,
+        description="Consulta o pregunta del usuario"
+    )
+    context: Optional[Dict[str, Any]] = Field(
+        default={}, 
+        description="Contexto adicional para la consulta (opcional)"
+    )
+    agent_preference: Optional[str] = Field(
+        None, 
+        description="Preferencia de agente específico (opcional)"
     )
     
-    request_id: Optional[str] = Field(
-        None,
-        description="Identificador único de la solicitud para seguimiento",
-        example="c4b3f8a0-8f9e-4b1a-9e1a-0e1f3a1e0f1a"
+    class Config:
+        schema_extra = {
+            "example": {
+                "query": "¿Cuáles son las mejores estrategias de marketing digital para una startup de fintech?",
+                "context": {
+                    "industry": "fintech",
+                    "target_market": "millennials",
+                    "budget": "limitado",
+                    "competitors": ["Revolut", "N26", "Wise"]
+                },
+                "agent_preference": "marketing_agent"
+            }
+        }
+
+class QueryResponse(BaseModel):
+    """
+    Modelo para respuestas del sistema multi-agente.
+    """
+    status: str = Field(..., description="Estado de la respuesta (success o error)")
+    result: Optional[Union[Dict[str, Any], str]] = Field(
+        None, 
+        description="Resultado de la consulta o mensaje de error"
+    )
+    request_id: str = Field(..., description="Identificador único de la solicitud")
+    processing_time: float = Field(
+        ..., 
+        description="Tiempo de procesamiento en segundos"
+    )
+    selected_agent: Optional[str] = Field(
+        None, 
+        description="Agente que procesó la consulta"
+    )
+    confidence: Optional[float] = Field(
+        None, 
+        description="Nivel de confianza del resultado (0.0 a 1.0)"
+    )
+    data_sources: Optional[List[DataSource]] = Field(
+        None, 
+        description="Fuentes de datos utilizadas para la respuesta"
     )
     
-    success: bool = Field(
-        False,
-        description="Indicador de éxito (siempre falso para errores)",
-        example=False
-    )
+    class Config:
+        schema_extra = {
+            "example": {
+                "status": "success",
+                "result": {
+                    "analysis": "Las mejores estrategias de marketing digital para una startup de fintech...",
+                    "recommendations": [
+                        "Utilizar marketing de contenidos enfocado en educación financiera",
+                        "Implementar campañas de marketing en redes sociales dirigidas a millennials",
+                        "Desarrollar un programa de referidos con incentivos",
+                        "Optimizar la presencia móvil y la experiencia de usuario",
+                        "Establecer alianzas con influencers del sector financiero"
+                    ]
+                },
+                "request_id": "550e8400-e29b-41d4-a716-446655440000",
+                "processing_time": 1.25,
+                "selected_agent": "marketing_agent",
+                "confidence": 0.87,
+                "data_sources": [
+                    {"type": "report", "source": "FinTech Trends 2023", "url": "https://example.com/report"},
+                    {"type": "news", "source": "TechCrunch", "url": "https://techcrunch.com/article/123"}
+                ]
+            }
+        }
+
+class DataLookupRequest(BaseModel):
+    """Modelo para solicitudes de búsqueda de datos"""
+    query: Dict[str, Any] = Field(..., description="Parámetros de búsqueda")
+    lookup_type: str = Field(..., description="Tipo de búsqueda (market, news, industry, web, company)")
     
-    error_code: Optional[str] = Field(
-        None,
-        description="Código de error opcional para clasificar el tipo de error",
-        example="AGENT_NOT_FOUND"
-    ) 
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": {"term": "fintech latinoamerica", "limit": 5},
+                "lookup_type": "news"
+            }
+        }
+
+class DataLookupResponse(BaseModel):
+    """Modelo para respuestas de búsqueda de datos"""
+    success: bool = Field(True, description="Indica si la búsqueda fue exitosa")
+    result: Any = Field(..., description="Resultado de la búsqueda")
+    lookup_type: str = Field(..., description="Tipo de búsqueda realizada")
+    query: Dict[str, Any] = Field(..., description="Parámetros de búsqueda utilizados")
+    error: Optional[str] = Field(None, description="Mensaje de error si ocurrió alguno")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "result": [
+                    {"title": "Crecimiento del sector fintech en LATAM", "source": "Financial Times", "date": "2023-05-10"},
+                    {"title": "Nuevas regulaciones para fintech en Brasil", "source": "Bloomberg", "date": "2023-04-22"}
+                ],
+                "lookup_type": "news",
+                "query": {"term": "fintech latinoamerica", "limit": 5},
+                "error": None
+            }
+        } 
