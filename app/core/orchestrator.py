@@ -12,6 +12,7 @@ from app.agents.action_agent import ActionAgent
 from app.agents.summary_agent import SummaryAgent
 from app.agents.finance_agent import FinanceAgent
 from app.agents.marketing_agent import MarketingAgent
+from app.services.data_lookup import DataLookupService
 
 
 class Orchestrator:
@@ -27,6 +28,9 @@ class Orchestrator:
         """Inicializa el orquestador con todos los agentes necesarios."""
         self.request_id = None
         
+        # Inicializar servicio de búsqueda de datos
+        self.data_lookup_service = DataLookupService()
+        
         # Inicializar los agentes
         self.router = RouterAgent()
         
@@ -39,118 +43,109 @@ class Orchestrator:
             "marketing_agent": MarketingAgent()
         }
         
-        logger.info(f"Orchestrator inicializado con {len(self.agents)} agentes")
+        # Proporcionar el servicio de búsqueda a todos los agentes
+        for agent in self.agents.values():
+            agent.add_tool("data_lookup", self.data_lookup_service)
+        
+        logger.info(f"Orchestrator inicializado con {len(self.agents)} agentes y servicio de búsqueda de datos")
     
-    def process_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    def process_request(self, request: Dict[str, Any], request_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Procesa una solicitud completa, desde el enrutamiento hasta la ejecución
-        del agente especializado.
+        Procesa una solicitud utilizando el sistema multi-agente.
         
         Args:
-            request: Diccionario con los datos de la solicitud, incluyendo 'query' y contexto
+            request: Diccionario con los datos de la solicitud
+            request_id: Identificador único para la solicitud (opcional)
             
         Returns:
-            Diccionario con los resultados del procesamiento
+            Resultado del procesamiento de la solicitud
         """
-        # Generar un ID único para la solicitud
-        self.request_id = str(uuid.uuid4())
+        # Generar o establecer ID de solicitud para rastreo
+        self.request_id = request_id or str(uuid.uuid4())
+        
         start_time = time.time()
-        
-        # Extraer la consulta principal
-        query = request.get("query", "")
-        if not query:
-            return {"error": "Se requiere una consulta ('query') en la solicitud", "success": False}
-        
-        logger.info(
-            f"Iniciando procesamiento de solicitud #{self.request_id}", 
-            extra={"request_id": self.request_id, "query": query[:100]}
-        )
+        logger.info(f"Procesando solicitud {self.request_id}: {request.get('query', '')[:50]}...")
         
         try:
-            # Configuración para pasar el request_id a los agentes
+            # Configurar contexto de ejecución con ID de solicitud para rastreo
             config = RunnableConfig(
-                metadata={"request_id": self.request_id}
+                metadata={
+                    "request_id": self.request_id,
+                    "timestamp": time.time()
+                }
             )
             
-            # 1. Enrutar la solicitud al agente apropiado
-            router_result = self.router._execute_impl(request)
-            selected_agent_name = router_result.get("agent")
+            # Ejecutar el agente router para determinar qué agente especializado usar
+            router_result = self.router.execute(request)
             
-            logger.info(
-                f"Router seleccionó {selected_agent_name}", 
-                extra={"request_id": self.request_id, "selected_agent": selected_agent_name}
-            )
+            if "error" in router_result:
+                logger.error(f"Error en router: {router_result['error']}")
+                MetricsCollector.record_error("router_agent", "routing_error")
+                return {
+                    "status": "error",
+                    "error": router_result["error"],
+                    "request_id": self.request_id,
+                    "processing_time": time.time() - start_time
+                }
             
-            # 2. Verificar que el agente existe
+            # Obtener el agente seleccionado
+            selected_agent_name = router_result.get("agent", "")
+            confidence = router_result.get("confidence", 0)
+            
+            logger.info(f"Router seleccionó agente '{selected_agent_name}' con confianza {confidence}")
+            
             if selected_agent_name not in self.agents:
-                logger.error(
-                    f"Agente '{selected_agent_name}' no encontrado en el sistema", 
-                    extra={"request_id": self.request_id}
-                )
-                return {"error": f"Agente '{selected_agent_name}' no disponible", "success": False}
+                error_msg = f"Agente seleccionado '{selected_agent_name}' no está disponible"
+                logger.error(error_msg)
+                MetricsCollector.record_error("orchestrator", "agent_not_found")
+                return {
+                    "status": "error",
+                    "error": error_msg,
+                    "request_id": self.request_id,
+                    "processing_time": time.time() - start_time
+                }
             
-            # 3. Ejecutar el agente seleccionado
+            # Ejecutar el agente seleccionado
             selected_agent = self.agents[selected_agent_name]
+            agent_result = selected_agent.execute(router_result.get("input", request))
             
-            logger.info(
-                f"Ejecutando agente {selected_agent_name}", 
-                extra={"request_id": self.request_id, "agent": selected_agent_name}
-            )
+            # Verificar si se necesita un resumen
+            final_result = agent_result
+            if router_result.get("needs_summary", False) and "result" in agent_result:
+                logger.info("Generando resumen final del resultado")
+                summary_input = {
+                    "query": request.get("query", ""),
+                    "context": agent_result["result"]
+                }
+                summary_result = self.agents["summary_agent"].execute(summary_input)
+                final_result = {
+                    "original_result": agent_result["result"],
+                    "summary": summary_result["result"],
+                    "confidence": summary_result.get("confidence", 0)
+                }
             
-            agent_result = selected_agent._execute_impl(request)
-            
-            # 4. Preparar la respuesta final
+            # Añadir metadatos al resultado
             processing_time = time.time() - start_time
-            
-            # Registrar métricas
-            MetricsCollector.record_agent_execution(
-                agent_name="orchestrator",
-                execution_time=processing_time,
-                status="success"
-            )
-            
-            logger.info(
-                f"Solicitud #{self.request_id} procesada con éxito en {processing_time:.2f} segundos", 
-                extra={"request_id": self.request_id, "processing_time": processing_time}
-            )
-            
-            # Combinar los resultados para la respuesta final
-            final_response = {
-                "result": agent_result.get("analysis", agent_result),
-                "agent_used": selected_agent_name,
-                "processing_time": processing_time,
+            result = {
+                "status": "success",
+                "result": final_result,
                 "request_id": self.request_id,
-                "success": True
+                "processing_time": processing_time,
+                "selected_agent": selected_agent_name
             }
             
-            # Añadir fuentes de datos si están disponibles
-            if "data_sources" in agent_result:
-                final_response["sources"] = agent_result["data_sources"]
-            
-            return final_response
+            logger.info(f"Solicitud {self.request_id} procesada exitosamente en {processing_time:.2f} segundos")
+            return result
             
         except Exception as e:
-            # Registrar el error
             processing_time = time.time() - start_time
-            logger.error(
-                f"Error al procesar solicitud #{self.request_id}: {str(e)}", 
-                extra={"request_id": self.request_id, "error": str(e)}
-            )
-            
-            # Registrar métricas de error
-            MetricsCollector.record_agent_execution(
-                agent_name="orchestrator",
-                execution_time=processing_time,
-                status="error"
-            )
-            
-            MetricsCollector.record_error(
-                agent_name="orchestrator",
-                error_type=type(e).__name__
-            )
+            error_msg = f"Error en procesamiento de solicitud: {str(e)}"
+            logger.error(error_msg)
+            MetricsCollector.record_error("orchestrator", "processing_error")
             
             return {
-                "error": f"Error al procesar la solicitud: {str(e)}",
+                "status": "error",
+                "error": error_msg,
                 "request_id": self.request_id,
-                "success": False
+                "processing_time": processing_time
             } 

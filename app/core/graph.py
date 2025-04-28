@@ -4,6 +4,7 @@ from app.agents.router_agent import RouterAgent
 from app.agents.analysis_agent import AnalysisAgent
 from app.agents.action_agent import ActionAgent
 from app.agents.summary_agent import SummaryAgent
+from app.core.logging import logger
 
 class AgentState(TypedDict):
     messages: List[str]
@@ -18,6 +19,7 @@ class AgentGraph:
         self.action = ActionAgent()
         self.summary = SummaryAgent()
         self.graph = self._build_graph()
+        logger.info("AgentGraph inicializado con 4 agentes")
         
     def _build_graph(self) -> Graph:
         """Construye el grafo de agentes."""
@@ -33,21 +35,35 @@ class AgentGraph:
         # Definir las transiciones
         def route_to_agent(state: AgentState) -> str:
             """Determina el siguiente agente basado en la decisión del router."""
-            decision = state["agent_output"].get("agent_decision", "").lower()
+            agent_output = state["agent_output"]
+            selected_agent = agent_output.get("agent", "")
             
-            if "análisis" in decision or "analysis" in decision:
+            logger.info(f"Enrutando solicitud a: {selected_agent}")
+            
+            if selected_agent == "analysis_agent":
                 return "analysis"
-            elif "acción" in decision or "action" in decision:
+            elif selected_agent == "action_agent":
                 return "action"
-            elif "resumen" in decision or "summary" in decision:
+            elif selected_agent == "summary_agent":
                 return "summary"
             else:
+                logger.warning(f"Agente desconocido: {selected_agent}, finalizando flujo")
                 return "end"
                 
         def should_continue(state: AgentState) -> str:
             """Determina si continuar o terminar."""
-            if state["confidence"] > 0.7:
+            confidence = state.get("confidence", 0)
+            agent_output = state.get("agent_output", {})
+            
+            if "error" in agent_output:
+                logger.warning(f"Error detectado en la ejecución del agente: {agent_output.get('error')}")
+                return "end"
+            
+            if confidence > 0.7:
+                logger.info(f"Confianza suficiente ({confidence}), volviendo al router")
                 return "router"
+            
+            logger.info(f"Confianza insuficiente ({confidence}), finalizando flujo")
             return "end"
             
         # Añadir las transiciones
@@ -59,18 +75,42 @@ class AgentGraph:
         # Establecer el nodo de entrada
         workflow.set_entry_point("router")
         
+        logger.info("Grafo de agentes construido correctamente")
         return workflow.compile()
         
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Ejecuta el grafo de agentes."""
-        initial_state = {
-            "messages": [],
-            "current_agent": "router",
-            "agent_output": {},
-            "confidence": 1.0
-        }
+    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Ejecuta el flujo de agentes sobre los datos de entrada.
         
-        # Ejecutar el grafo
-        final_state = await self.graph.ainvoke(initial_state)
-        
-        return final_state 
+        Args:
+            input_data: Datos de entrada para el flujo de agentes
+            
+        Returns:
+            Resultado final del flujo de agentes
+        """
+        try:
+            logger.info(f"Iniciando ejecución del grafo de agentes con input: {input_data.get('query', '')[:50]}...")
+            
+            # Configurar el estado inicial
+            state = {
+                "messages": [input_data.get("query", "")],
+                "current_agent": "router",
+                "agent_output": {"input": input_data},
+                "confidence": 1.0  # Confianza inicial
+            }
+            
+            # Ejecutar el flujo
+            result = self.graph.invoke(state)
+            
+            # Extraer y devolver la salida final
+            final_output = result.get("agent_output", {})
+            logger.info("Ejecución del grafo de agentes completada con éxito")
+            
+            return final_output
+            
+        except Exception as e:
+            logger.error(f"Error en ejecución del grafo de agentes: {str(e)}")
+            return {
+                "error": f"Error en el flujo de agentes: {str(e)}",
+                "input": input_data.get("query", "")
+            } 

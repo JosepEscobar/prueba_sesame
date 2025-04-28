@@ -1,15 +1,30 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+import time
+
 from langchain.prompts import ChatPromptTemplate
 from app.agents.base import BaseAgent
 from app.core.logging import logger
+from app.core.config import settings
 from app.tools.mcp_client import MCPClient
+from app.services.data_lookup import DataLookupService
 
 class DataLookupAgent(BaseAgent):
+    """
+    Agente especializado en buscar y obtener información de fuentes externas.
+    
+    Este agente se encarga de realizar búsquedas en diversas fuentes de datos como
+    noticias, informes de mercado, información de empresas y contenido web para
+    proporcionar información relevante y actualizada para consultas empresariales.
+    """
+    
     def __init__(self):
+        """Inicializa el DataLookupAgent con el servicio de búsqueda de datos."""
         super().__init__(
             name="Data Lookup Agent",
             description="Agente especializado en buscar y obtener información de fuentes externas"
         )
+        self.data_service = DataLookupService()
+        logger.info(f"DataLookupAgent inicializado con modelo: {settings.OPENAI_MODEL}")
         
         # Inicializar el cliente MCP para herramientas externas
         self.mcp_client = MCPClient()
@@ -42,60 +57,138 @@ class DataLookupAgent(BaseAgent):
             ("human", "{query}\n\nContexto de búsqueda: {context}")
         ])
         
-    async def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Ejecuta la búsqueda de información."""
-        try:
-            # Preparar el input para el prompt
-            query = input_data.get("query", "")
-            context = input_data.get("context", "No hay contexto adicional para la búsqueda")
-            
-            # Simulación de búsqueda de información externa usando herramientas MCP
-            search_results = await self._search_external_information(query)
-            
-            # Añadir los resultados al contexto
-            enhanced_context = f"{context}\n\nResultados de búsqueda:\n{search_results}"
-            
-            prompt_input = {
-                "query": query,
-                "context": enhanced_context
+    def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Ejecuta la operación de búsqueda de datos basada en los datos de entrada.
+        
+        Args:
+            input_data: Diccionario que contiene la consulta y cualquier contexto adicional.
+                Debe incluir 'query' y opcionalmente 'lookup_type' y 'parameters'.
+                
+        Returns:
+            Dict con los resultados de la búsqueda, la consulta original y un nivel de confianza.
+        """
+        start_time = time.time()
+        
+        # Extraer la consulta y parámetros
+        query = input_data.get("query", "")
+        lookup_type = input_data.get("lookup_type", "general")
+        parameters = input_data.get("parameters", {})
+        
+        logger.info(
+            f"DataLookupAgent ejecutando búsqueda",
+            extra={
+                "agent_name": self.name,
+                "lookup_type": lookup_type,
+                "query": query[:100] + "..." if len(query) > 100 else query
             }
+        )
+        
+        # Realizar búsqueda según el tipo solicitado
+        results = {}
+        data_sources = []
+        
+        try:
+            if lookup_type == "market_data" or lookup_type == "general":
+                market_data = self.data_service.search_market_data(query)
+                results["market_data"] = market_data
+                data_sources.append({"type": "market_data", "source": "Alpha Vantage API"})
+                
+            if lookup_type == "news" or lookup_type == "general":
+                news_data = self.data_service.search_news(query)
+                results["news"] = news_data
+                data_sources.append({"type": "news", "source": "News API"})
+                
+            if lookup_type == "industry" or lookup_type == "general":
+                industry = parameters.get("industry", "")
+                if industry:
+                    industry_data = self.data_service.search_industry_reports(industry)
+                    results["industry"] = industry_data
+                    data_sources.append({"type": "industry", "source": "Industry Reports Database"})
+                
+            if lookup_type == "web" or lookup_type == "general":
+                web_data = self.data_service.search_web(query)
+                results["web"] = web_data
+                data_sources.append({"type": "web", "source": "Bing Search API"})
+                
+            if lookup_type == "company":
+                company = parameters.get("company", "")
+                if company:
+                    company_data = self.data_service.lookup_company_data(company)
+                    results["company"] = company_data
+                    data_sources.append({"type": "company", "source": "Company Database"})
             
-            logger.info(
-                f"DataLookupAgent procesando consulta",
-                extra={
-                    "agent_name": self.name,
-                    "query": query[:100] + "..." if len(query) > 100 else query
-                }
-            )
+            # Preparar el prompt para sintetizar los resultados
+            prompt = self._prepare_synthesis_prompt(query, results, lookup_type)
             
-            # Obtener la respuesta del LLM
-            chain = self.prompt | self.llm
-            response = await chain.ainvoke(prompt_input)
+            # Invocar el LLM para obtener la síntesis
+            synthesis = self._invoke_llm(prompt)
             
-            logger.info(
-                f"DataLookupAgent generó respuesta",
-                extra={
-                    "agent_name": self.name,
-                    "response_length": len(response.content)
-                }
-            )
+            processing_time = time.time() - start_time
             
             return {
-                "data_lookup_result": response.content,
-                "search_results": search_results,
-                "original_input": input_data,
-                "confidence": 0.88
+                "results": results,
+                "synthesis": synthesis,
+                "data_sources": data_sources,
+                "query": query,
+                "confidence": 0.85,
+                "processing_time": processing_time
             }
             
         except Exception as e:
             logger.error(
                 f"Error en DataLookupAgent: {str(e)}",
-                extra={
-                    "agent_name": self.name,
-                    "error": str(e)
-                }
+                extra={"agent_name": self.name, "error": str(e)}
             )
-            raise
+            return {
+                "results": {},
+                "synthesis": f"Error al buscar información: {str(e)}",
+                "data_sources": [],
+                "query": query,
+                "confidence": 0.0,
+                "error": str(e)
+            }
+    
+    def _prepare_synthesis_prompt(self, query: str, results: Dict[str, Any], lookup_type: str) -> str:
+        """
+        Prepara el prompt para la síntesis de los resultados de búsqueda.
+        
+        Args:
+            query: La consulta original
+            results: Los resultados de la búsqueda
+            lookup_type: El tipo de búsqueda realizada
+            
+        Returns:
+            El prompt para el LLM
+        """
+        # Formatear los resultados para el prompt
+        formatted_results = ""
+        for result_type, data in results.items():
+            formatted_results += f"\n--- {result_type.upper()} ---\n"
+            formatted_results += str(data)[:1500]  # Limitar tamaño para no exceder contexto
+            formatted_results += "\n"
+        
+        prompt = f"""
+        Eres un especialista en sintetizar y organizar información de múltiples fuentes de datos.
+        
+        CONSULTA: {query}
+        TIPO DE BÚSQUEDA: {lookup_type}
+        
+        RESULTADOS ENCONTRADOS:
+        {formatted_results}
+        
+        Por favor, sintetiza estos resultados en un formato claro y estructurado siguiendo estas pautas:
+        
+        1. RESUMEN EJECUTIVO: Una síntesis concisa de los hallazgos principales (2-3 frases)
+        2. DATOS CLAVE: Lista de 3-5 puntos con la información más relevante
+        3. ANÁLISIS: Breve análisis de cómo esta información responde a la consulta original
+        4. RECOMENDACIONES: Si aplica, sugerencias basadas en los datos encontrados
+        
+        La síntesis debe ser objetiva, basada en hechos y directamente relevante para la consulta original.
+        Usa un tono profesional y claro, adecuado para consultoría empresarial.
+        """
+        
+        return prompt
     
     async def _search_external_information(self, query: str) -> str:
         """

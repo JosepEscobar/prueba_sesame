@@ -1,67 +1,129 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Dict, Any, List
+import time
+import uuid
 
-from app.core.config import settings
 from app.core.logging import logger
-from app.api.models import ErrorResponse
+from app.core.orchestrator import Orchestrator
+from app.core.config import get_settings, Settings
 
-# Crear el router principal
-api_router = APIRouter(
-    prefix=settings.API_V1_STR,
-    responses={
-        400: {"model": ErrorResponse, "description": "Solicitud incorrecta"},
-        404: {"model": ErrorResponse, "description": "Recurso no encontrado"},
-        500: {"model": ErrorResponse, "description": "Error interno del servidor"}
-    }
-)
+# Modelo de datos para las solicitudes y respuestas
+from app.api.models import QueryRequest, QueryResponse
 
-# Endpoints para información sobre los agentes
-@api_router.get("/agents", response_model=List[Dict[str, Any]])
-async def get_available_agents():
+api_router = APIRouter()
+
+# Instancia del orquestador para procesar las consultas
+orchestrator = Orchestrator()
+
+# Dependencia para obtener configuraciones
+def get_config():
+    return get_settings()
+
+@api_router.post("/query", response_model=QueryResponse)
+async def process_query(request: QueryRequest, request_obj: Request, config: Settings = Depends(get_config)):
     """
-    Devuelve la lista de agentes disponibles en el sistema.
+    Procesa una consulta utilizando el sistema multi-agente.
     
-    Incluye información sobre sus capacidades y áreas de especialización.
+    La consulta se enruta automáticamente al agente especializado más apropiado
+    según su contenido y contexto.
+    """
+    # Extraer request_id del middleware o generar uno nuevo
+    request_id = getattr(request_obj.state, "request_id", str(uuid.uuid4()))
+    
+    # Convertir solicitud a diccionario
+    query_data = request.dict()
+    
+    logger.info(
+        f"Procesando consulta de usuario: {query_data.get('query', '')[:50]}...",
+        extra={
+            "request_id": request_id,
+            "query_length": len(query_data.get("query", ""))
+        }
+    )
+    
+    try:
+        # Procesar la consulta a través del orquestador
+        result = orchestrator.process_request(query_data, request_id)
+        
+        # Verificar si hay errores
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("error", "Error al procesar la consulta")
+            )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(
+            f"Error procesando consulta: {str(e)}",
+            extra={
+                "request_id": request_id,
+                "error": str(e)
+            }
+        )
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al procesar la consulta: {str(e)}"
+        )
+
+@api_router.get("/agents", response_model=List[Dict[str, Any]])
+async def get_available_agents(config: Settings = Depends(get_config)):
+    """
+    Retorna la lista de agentes disponibles en el sistema y sus capacidades.
+    
+    Esta información puede ser utilizada por el cliente para mostrar las opciones
+    disponibles al usuario.
     """
     try:
+        # Obtener información de los agentes a través del orquestador
         agents_info = [
+            {
+                "id": "router_agent",
+                "name": "Agente Router",
+                "description": "Agente que analiza consultas y las dirige al especialista más adecuado.",
+                "capabilities": [
+                    "análisis de consultas",
+                    "categorización de preguntas",
+                    "enrutamiento de solicitudes",
+                    "delegación de tareas"
+                ]
+            },
             {
                 "id": "analysis_agent",
                 "name": "Agente de Análisis",
-                "description": "Analiza información compleja y proporciona resúmenes detallados.",
+                "description": "Especialista en análisis detallado de información y situaciones empresariales.",
                 "capabilities": [
-                    "análisis de datos", 
-                    "extracción de insights", 
-                    "procesamiento de documentos", 
-                    "resumen de información",
+                    "análisis de datos",
+                    "evaluación de situaciones",
                     "identificación de patrones",
-                    "análisis FODA"
+                    "extracción de insights",
+                    "análisis de tendencias"
                 ]
             },
             {
                 "id": "action_agent",
                 "name": "Agente de Acción",
-                "description": "Ejecuta acciones concretas y tareas operativas.",
+                "description": "Especialista en recomendaciones prácticas y planes de acción.",
                 "capabilities": [
-                    "automatización de tareas", 
-                    "ejecución de procesos", 
-                    "seguimiento de procedimientos", 
-                    "implementación de soluciones",
-                    "gestión de flujos de trabajo",
-                    "optimización de operaciones"
+                    "planificación estratégica",
+                    "recomendaciones tácticas",
+                    "planes de implementación",
+                    "priorización de acciones",
+                    "definición de procesos"
                 ]
             },
             {
                 "id": "summary_agent",
                 "name": "Agente de Resumen",
-                "description": "Genera resúmenes concisos y puntos clave de información extensa.",
+                "description": "Especialista en sintetizar información compleja en formato conciso.",
                 "capabilities": [
-                    "condensación de contenido", 
-                    "extracción de puntos clave", 
-                    "síntesis de información", 
-                    "jerarquización de datos",
-                    "resumen ejecutivo",
-                    "priorización de información"
+                    "condensación de contenido",
+                    "extracción de puntos clave",
+                    "síntesis de información",
+                    "estructuración de resúmenes",
+                    "simplificación de conceptos"
                 ]
             },
             {
@@ -109,7 +171,7 @@ async def get_available_agents():
         )
 
 @api_router.get("/agents/{agent_id}", response_model=Dict[str, Any])
-async def get_agent_info(agent_id: str):
+def get_agent_info(agent_id: str):
     """
     Devuelve información detallada sobre un agente específico.
     
@@ -229,7 +291,7 @@ async def get_agent_info(agent_id: str):
 
 # Endpoint para estadísticas del sistema
 @api_router.get("/stats", response_model=Dict[str, Any])
-async def get_system_stats():
+def get_system_stats():
     """
     Devuelve estadísticas generales del sistema multi-agente.
     
@@ -253,7 +315,7 @@ async def get_system_stats():
             },
             "system_uptime": 99.95,
             "last_restart": "2023-10-15T08:30:45Z",
-            "api_version": settings.API_V1_STR.replace("/", "")
+            "api_version": config.API_V1_STR.replace("/", "")
         }
         
         return stats
@@ -263,4 +325,54 @@ async def get_system_stats():
         raise HTTPException(
             status_code=500,
             detail="Error al recuperar estadísticas del sistema"
+        )
+
+@api_router.post("/lookup", response_model=Dict[str, Any])
+def data_lookup(query: Dict[str, Any]):
+    """
+    Realiza una búsqueda de datos utilizando el servicio de integración de datos.
+    
+    Args:
+        query: Diccionario con parámetros para la búsqueda
+    """
+    try:
+        lookup_service = DataLookupService()
+        lookup_type = query.get("type", "market")
+        search_term = query.get("query", "")
+        
+        if not search_term:
+            raise HTTPException(
+                status_code=400,
+                detail="El parámetro 'query' es obligatorio"
+            )
+        
+        # Realizar la búsqueda según el tipo especificado
+        if lookup_type == "market":
+            result = lookup_service.search_market_data(search_term)
+        elif lookup_type == "news":
+            result = lookup_service.search_news(search_term)
+        elif lookup_type == "industry":
+            result = lookup_service.search_industry_reports(search_term)
+        elif lookup_type == "web":
+            result = lookup_service.search_web(search_term)
+        elif lookup_type == "company":
+            result = lookup_service.lookup_company_data(search_term)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tipo de búsqueda no válido: {lookup_type}"
+            )
+        
+        return {
+            "success": True,
+            "result": result,
+            "query": search_term,
+            "type": lookup_type
+        }
+        
+    except Exception as e:
+        logger.error(f"Error en la búsqueda de datos: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al realizar la búsqueda: {str(e)}"
         ) 

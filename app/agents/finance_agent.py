@@ -1,9 +1,10 @@
 from typing import Dict, Any, List, Optional
 import time
 
+from langchain_openai import ChatOpenAI
 from app.agents.base import BaseAgent
 from app.core.logging import logger
-from app.services.data_lookup import DataLookupService
+from app.core.config import settings
 
 
 class FinanceAgent(BaseAgent):
@@ -21,7 +22,7 @@ class FinanceAgent(BaseAgent):
             name="finance_agent",
             description="Especialista en análisis financiero y consultoría económica."
         )
-        self.data_service = DataLookupService()
+        self.llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.2)
         self.services = [
             "Análisis financiero",
             "Planificación de presupuestos",
@@ -35,7 +36,7 @@ class FinanceAgent(BaseAgent):
         ]
         logger.info(f"Agente {self.name} inicializado con {len(self.services)} servicios")
         
-    def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_impl(self, input_data: Dict[Any, Any]) -> Dict[Any, Any]:
         """
         Implementa la lógica de ejecución del agente financiero.
         
@@ -49,28 +50,38 @@ class FinanceAgent(BaseAgent):
         query = input_data.get("query", "")
         context = input_data.get("context", {})
         
-        logger.info(f"Procesando consulta financiera: {query}")
+        logger.info(f"Procesando consulta financiera: {query[:50]}...")
         
         # Recopilar datos financieros relevantes
         financial_data = {}
+        data_service = self.get_tool("data_lookup")
         
-        # Si hay empresas mencionadas, buscar información sobre ellas
-        if "company" in context:
-            company_data = self.data_service.lookup_company_data(context["company"])
-            financial_data["company_info"] = company_data
+        if data_service:
+            logger.info("Utilizando servicio de búsqueda de datos para enriquecer el análisis financiero")
             
-        # Buscar datos de mercado relevantes
-        market_data = self.data_service.search_market_data(query)
-        financial_data["market_data"] = market_data
-        
-        # Buscar noticias financieras recientes
-        news_data = self.data_service.search_news(query + " finanzas")
-        financial_data["recent_news"] = news_data
-        
-        # Si hay una industria específica, buscar informes del sector
-        if "industry" in context:
-            industry_reports = self.data_service.search_industry_reports(context["industry"])
-            financial_data["industry_reports"] = industry_reports
+            # Si hay empresas mencionadas, buscar información sobre ellas
+            if "company" in context:
+                company_data = data_service.lookup_company_data(context["company"])
+                financial_data["company_info"] = company_data
+                
+            # Buscar datos de mercado relevantes
+            market_data = data_service.search_market_data(query)
+            financial_data["market_data"] = market_data
+            
+            # Buscar noticias financieras recientes
+            news_data = data_service.search_news(query + " finanzas")
+            financial_data["recent_news"] = news_data
+            
+            # Si hay una industria específica, buscar informes del sector
+            if "industry" in context:
+                industry_reports = data_service.search_industry_reports(context["industry"])
+                financial_data["industry_reports"] = industry_reports
+                
+            # Buscar información web adicional
+            web_data = data_service.search_web(query + " análisis financiero")
+            financial_data["web_resources"] = web_data
+        else:
+            logger.warning("Servicio de búsqueda de datos no disponible para el agente financiero")
         
         # Preparar input para el prompt con todos los datos recopilados
         prompt_input = {
@@ -81,23 +92,36 @@ class FinanceAgent(BaseAgent):
         }
         
         # Generar análisis financiero utilizando el LLM
+        logger.info("Generando análisis financiero con el LLM")
         response = self.llm.invoke(
             self._format_finance_prompt(prompt_input)
         )
         
         # Estructurar la respuesta
+        processing_time = time.time() - start_time
+        
+        # Recopilar fuentes de datos utilizadas
+        data_sources = []
+        if "market_data" in financial_data and isinstance(financial_data["market_data"], dict):
+            source = financial_data["market_data"].get("source")
+            if source:
+                data_sources.append({"type": "market", "source": source})
+                
+        if "recent_news" in financial_data and isinstance(financial_data["recent_news"], dict):
+            source = financial_data["recent_news"].get("source")
+            if source:
+                data_sources.append({"type": "news", "source": source})
+        
         result = {
-            "analysis": response.content,
-            "data_sources": [
-                source.get("source", "Unknown") 
-                for source in [market_data, news_data] 
-                if "source" in source
-            ],
-            "input": input_data,
-            "confidence": 0.89  # Nivel de confianza alto para respuestas financieras
+            "result": response.content,
+            "data_sources": data_sources,
+            "input": input_data.get("query", ""),
+            "confidence": 0.89,  # Nivel de confianza alto para respuestas financieras
+            "processing_time": processing_time,
+            "model": "gpt-3.5-turbo"
         }
         
-        logger.info(f"Análisis financiero completado en {time.time() - start_time:.2f} segundos")
+        logger.info(f"Análisis financiero completado en {processing_time:.2f} segundos")
         
         return result
     
