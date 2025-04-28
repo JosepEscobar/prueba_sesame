@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: sesame_api
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=dev
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - LOG_LEVEL=INFO
+      - API_V1_STR=/api/v1
+    volumes:
+      - ./app:/app/app
+    depends_on:
+      - prometheus
+    networks:
+      - sesame_network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - sesame_network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    networks:
+      - sesame_network
+
+networks:
+  sesame_network:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data: 
