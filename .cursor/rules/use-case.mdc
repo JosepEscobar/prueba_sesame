@@ -70,3 +70,5 @@ Cada una sería un pequeño microservicio MCP sencillo.
 
 ## GENERACIÓN DE DATOS SINTÉTICOS
 Esta prueba debe funcionar con datos sintenticos generados y alamacenados en sus respectivos sitios. 
+
+Por cada nueva funcionalidad que crees crea UINT TESTS, y ejecutalos. 

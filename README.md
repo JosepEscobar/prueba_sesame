@@ -8,7 +8,7 @@ Este proyecto implementa un sistema de agentes inteligentes basados en **LangGra
 - [LangGraph](https://langgraph.readthedocs.io/en/latest/) (Multi-agent orchestration framework)
 - [LangChain](https://www.langchain.dev/) (Base LLM agents)
 - **MCP Protocol** (Integración de herramientas externas estandarizada)
-- **Python 3.10+**
+- **Python 3.12+**
 - **Docker** (despliegue de contenedores)
 - **GitHub Actions** (CI/CD)
 - Observabilidad con:

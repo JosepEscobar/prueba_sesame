@@ -2,9 +2,13 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 from app.core.graph import AgentGraph
+from app.core.orchestrator import AgentOrchestrator
+from app.core.logging import logger
+from app.core.metrics import MetricsCollector
 
 router = APIRouter()
 agent_graph = AgentGraph()
+orchestrator = AgentOrchestrator()
 
 class AgentRequest(BaseModel):
     query: str
@@ -68,4 +72,36 @@ async def list_agents():
                 "description": "Agente especializado en crear resúmenes concisos"
             }
         ]
-    } 
+    }
+
+@router.post("/process")
+async def process_request_orchestrator(request: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Procesa una solicitud a través del sistema de agentes.
+    
+    Args:
+        request: Diccionario con los datos de la solicitud
+        
+    Returns:
+        Dict con el resultado del procesamiento
+    """
+    try:
+        logger.info(
+            "Nueva solicitud recibida",
+            extra={"request_data": request}
+        )
+        
+        result = await orchestrator.process_request(request)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(
+            f"Error al procesar la solicitud: {str(e)}",
+            extra={"request_data": request}
+        )
+        MetricsCollector.record_error("api", "request_processing_error")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al procesar la solicitud: {str(e)}"
+        ) 
