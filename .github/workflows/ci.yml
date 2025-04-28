@@ -2,88 +2,70 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [develop, master]
+    branches: [ main, develop ]
   pull_request:
-    branches: [develop, master]
+    branches: [ main, develop ]
 
 jobs:
-  build-test-lint:
-    name: Build, Lint, Test
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.12]
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
-
+        python-version: ${{ matrix.python-version }}
+        
     - name: Install dependencies
       run: |
-        python -m venv .venv
-        source .venv/bin/activate
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install ruff black pytest pytest-cov
-
+        
     - name: Lint with Ruff
       run: |
-        source .venv/bin/activate
-        ruff .
-
-    - name: Check formatting with Black
+        ruff check .
+        
+    - name: Format with Black
       run: |
-        source .venv/bin/activate
-        black --check .
-
-    - name: Run tests with pytest
+        black . --check
+        
+    - name: Run tests
       run: |
-        source .venv/bin/activate
-        pytest --cov=app --cov-report=term-missing
+        pytest --cov=app --cov-report=xml
+        
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: true
 
-  docker-build-push:
-    name: Docker Build and Push
-    needs: build-test-lint
+  build-and-push:
+    needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master'
-
+    if: github.ref == 'refs/heads/main'
+    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Log in to Docker Hub
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Login to Docker Hub
       uses: docker/login-action@v3
       with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Build and tag Docker image
-      run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/multi-agent-ia:${{ github.sha }} .
-        docker tag ${{ secrets.DOCKER_USERNAME }}/multi-agent-ia:${{ github.sha }} ${{ secrets.DOCKER_USERNAME }}/multi-agent-ia:latest
-
-    - name: Push Docker image
-      run: |
-        docker push ${{ secrets.DOCKER_USERNAME }}/multi-agent-ia:${{ github.sha }}
-        docker push ${{ secrets.DOCKER_USERNAME }}/multi-agent-ia:latest
-
-  deploy-to-env:
-    name: Deploy to Server
-    needs: docker-build-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master'
-
-    steps:
-    - name: Deploy via SSH
-      uses: appleboy/ssh-action@v1.0.3
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
+    - name: Build and push
+      uses: docker/build-push-action@v5
       with:
-        host: ${{ secrets.SERVER_HOST }}
-        username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SERVER_SSH_KEY }}
-        script: |
-          docker pull ${{ secrets.DOCKER_USERNAME }}/multi-agent-ia:latest
-          docker stop multi-agent-ia || true
-          docker rm multi-agent-ia || true
-          docker run -d --env-file /path/to/your/.env --name multi-agent-ia -p 8000:8000 ${{ secrets.DOCKER_USERNAME }}/multi-agent-ia:latest
+        context: .
+        push: true
+        tags: |
+          ${{ secrets.DOCKERHUB_USERNAME }}/multi-agent-mcp:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/multi-agent-mcp:${{ github.sha }}

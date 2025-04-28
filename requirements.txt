@@ -1,0 +1,28 @@
+# Framework principal
+fastapi>=0.109.0
+uvicorn>=0.27.0
+pydantic>=2.6.0
+
+# LangChain y LangGraph
+langchain>=0.1.0
+langgraph>=0.0.15
+openai>=1.12.0
+
+# Testing
+pytest>=8.0.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.23.0
+
+# Linting y formateo
+ruff>=0.2.0
+black>=24.1.0
+
+# Observabilidad
+sentry-sdk>=1.40.0
+prometheus-client>=0.19.0
+python-json-logger>=2.0.7
+
+# Utilidades
+python-dotenv>=1.0.0
+httpx>=0.26.0
+tenacity>=8.2.0 
