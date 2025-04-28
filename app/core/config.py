@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -49,9 +49,20 @@ class Settings(BaseSettings):
     # Configuración Prometheus para métricas
     METRICS_ENABLED: bool = os.getenv("METRICS_ENABLED", "True").lower() == "true"
     
+    # Compatibilidad con nombres antiguos de variables
+    API_V1_STR: str = API_PREFIX
+    PROJECT_NAME: str = APP_NAME
+    ENABLE_METRICS: bool = METRICS_ENABLED
+    METRICS_PORT: int = int(os.getenv("METRICS_PORT", "9090"))
+    ORCHESTRATOR_MAX_RETRIES: int = int(os.getenv("ORCHESTRATOR_MAX_RETRIES", "3"))
+    ORCHESTRATOR_TIMEOUT: int = int(os.getenv("ORCHESTRATOR_TIMEOUT", "30"))
+    ORCHESTRATOR_CONFIDENCE_THRESHOLD: float = float(os.getenv("ORCHESTRATOR_CONFIDENCE_THRESHOLD", "0.7"))
+    ANTHROPIC_API_KEY: Optional[str] = os.getenv("ANTHROPIC_API_KEY", None)
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Permite campos adicionales en .env sin causar errores
 
 
 @lru_cache()

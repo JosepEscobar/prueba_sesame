@@ -25,36 +25,34 @@ class RouterAgent(BaseAgent):
         # Definir los agentes disponibles y sus capacidades
         self.available_agents = {
             "analysis_agent": {
-                "description": "Analiza información compleja y proporciona resúmenes detallados.",
+                "description": "Especialista en análisis de información compleja.",
                 "capabilities": [
-                    "análisis de datos", 
-                    "extracción de insights", 
-                    "procesamiento de documentos", 
-                    "resumen de información",
+                    "análisis de datos",
+                    "procesamiento de documentos",
+                    "extracción de insights",
                     "identificación de patrones",
+                    "resumen de información",
                     "análisis FODA"
                 ]
             },
             "action_agent": {
-                "description": "Ejecuta acciones concretas y tareas operativas.",
+                "description": "Especialista en recomendaciones y acciones concretas.",
                 "capabilities": [
-                    "automatización de tareas", 
-                    "ejecución de procesos", 
-                    "seguimiento de procedimientos", 
-                    "implementación de soluciones",
-                    "gestión de flujos de trabajo",
-                    "optimización de operaciones"
+                    "planificación estratégica",
+                    "recomendaciones tácticas",
+                    "planes de implementación",
+                    "priorización de acciones",
+                    "definición de procesos"
                 ]
             },
             "summary_agent": {
-                "description": "Genera resúmenes concisos y puntos clave de información extensa.",
+                "description": "Especialista en síntesis de información.",
                 "capabilities": [
-                    "condensación de contenido", 
-                    "extracción de puntos clave", 
-                    "síntesis de información", 
+                    "condensación de contenido",
+                    "extracción de puntos clave",
+                    "síntesis de información",
                     "jerarquización de datos",
-                    "resumen ejecutivo",
-                    "priorización de información"
+                    "resumen ejecutivo"
                 ]
             },
             "finance_agent": {
@@ -137,172 +135,186 @@ class RouterAgent(BaseAgent):
             Donde "nombre_del_agente" debe ser exactamente uno de: "marketing", "finance", "operations", o "data_lookup".
             No incluyas comentarios adicionales, solo el objeto JSON.
             """),
-            ("human", """Consulta del usuario:
-            
-            {query}
-            
-            Contenido adicional (si está disponible):
-            {content}
-            
-            Solicitud de acción (si está disponible):
-            {action_request}
-            """)
+            ("human", "{query}")
         ])
-        
+    
     def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Implementa la lógica para determinar qué agente debe manejar la consulta.
+        Ejecuta el análisis de la consulta y determina qué agente debe procesarla.
         
         Args:
-            input_data: Datos de entrada que contienen la consulta y contexto
-            
+            input_data: Diccionario con los datos de entrada, que debe incluir 'query' y 
+                      opcionalmente 'context' y 'agent_preference'
+        
         Returns:
-            Diccionario con el agente seleccionado, input original y nivel de confianza
+            Diccionario con el agente seleccionado, la consulta original y confianza
         """
         start_time = time.time()
-        query = input_data.get("query", "")
-        logger.info(f"Router procesando consulta: {query[:100]}...")
-        
-        # Preparar input para el prompt
-        prompt = self._prepare_router_prompt(query, input_data)
-        
-        # Invocar el modelo para decidir el agente más adecuado
-        response = self.llm.invoke(prompt)
-        
-        # Procesar la respuesta para extraer el agente seleccionado
-        selected_agent = self._extract_agent_from_response(response.content)
-        
-        # Verificar que el agente existe
-        if selected_agent not in self.available_agents:
-            logger.warning(f"Agente seleccionado '{selected_agent}' no válido, usando default 'analysis_agent'")
-            selected_agent = "analysis_agent"
-            confidence = 0.5
-        else:
-            confidence = 0.8  # Confianza predeterminada para decisiones de enrutamiento
-            logger.info(f"Consulta enrutada a: {selected_agent} (confianza: {confidence})")
-        
-        processing_time = time.time() - start_time
-        logger.info(f"Decisión de enrutamiento tomada en {processing_time:.2f} segundos")
-        
-        return {
-            "agent": selected_agent,
-            "input": input_data,
-            "confidence": confidence
-        }
+        try:
+            # Extraer la consulta y el contexto
+            query = input_data.get("query", "")
+            context = input_data.get("context", {})
+            agent_preference = input_data.get("agent_preference")
+            
+            logger.info(f"RouterAgent analizando consulta: {query[:50]}...")
+            
+            # Si hay una preferencia de agente, respetarla si el agente existe
+            if agent_preference:
+                agent_key = f"{agent_preference}"
+                if agent_key in self.available_agents:
+                    logger.info(f"Usando agente preferido por el usuario: {agent_key}")
+                    return {
+                        "agent": agent_key,
+                        "input": input_data,
+                        "confidence": 1.0,
+                        "reasoning": "Seleccionado por preferencia explícita del usuario"
+                    }
+                else:
+                    logger.warning(f"Agente preferido '{agent_key}' no encontrado, realizando selección automática")
+            
+            # Preparar el prompt con la consulta y contexto
+            prompt_input = self._prepare_router_prompt(query, context)
+            
+            # Invocar el LLM para obtener una decisión
+            response = self.llm.invoke(prompt_input)
+            response_content = response.content
+            
+            # Extraer la decisión del agente
+            decision = self._extract_agent_decision(response_content)
+            
+            # Verificar si el agente existe
+            agent = decision.get("agent", "")
+            if not agent.endswith("_agent"):
+                agent = f"{agent}_agent"
+                decision["agent"] = agent
+                
+            logger.info(f"RouterAgent seleccionó {agent} con confianza {decision.get('confidence', 0)}")
+            
+            # Incluir el input original para que el agente tenga acceso a los datos completos
+            decision["input"] = input_data
+            
+            # Decidir si se necesita un resumen después del procesamiento
+            if len(query) > 500 or context.get("summarize_result", False):
+                decision["needs_summary"] = True
+                
+            return decision
+            
+        except Exception as e:
+            logger.error(f"Error en RouterAgent: {str(e)}")
+            return {
+                "error": f"Error en enrutamiento: {str(e)}",
+                "agent": "error",
+                "input": input_data,
+                "confidence": 0.0
+            }
     
     def _prepare_router_prompt(self, query: str, context: Dict[str, Any]) -> str:
         """
-        Prepara el prompt para el modelo de enrutamiento.
+        Prepara el prompt para el router.
         
         Args:
             query: La consulta del usuario
-            context: Contexto adicional
+            context: Contexto adicional para la consulta
             
         Returns:
-            Prompt formateado
+            Prompt formateado para el LLM
         """
-        # Construir la descripción de los agentes para el prompt
-        agents_description = ""
-        for agent_name, details in self.available_agents.items():
-            capabilities = ", ".join(details["capabilities"])
-            agents_description += f"* {agent_name}: {details['description']}\n  Capacidades: {capabilities}\n\n"
+        # Incluir información de contexto si está disponible
+        context_text = ""
+        if context:
+            context_text = "\n\nContexto adicional:\n"
+            for key, value in context.items():
+                context_text += f"- {key}: {value}\n"
         
-        prompt = f"""
-        Como sistema de enrutamiento, tu tarea es determinar qué agente especializado 
-        debe manejar la siguiente consulta. Analiza cuidadosamente la naturaleza de 
-        la solicitud y selecciona el agente más adecuado.
+        # Combinar consulta y contexto
+        full_query = f"{query}{context_text}"
         
-        ## Consulta a clasificar:
-        {query}
-        
-        ## Contexto adicional:
-        {context}
-        
-        ## Agentes disponibles:
-        {agents_description}
-        
-        ## Instrucciones:
-        1. Analiza la consulta y determina su naturaleza principal
-        2. Identifica los requerimientos específicos y el área de especialización necesaria
-        3. Selecciona UN SOLO agente entre las opciones disponibles que mejor se adapte
-        4. Proporciona una breve explicación de por qué ese agente es el más adecuado
-        
-        ## Formato de respuesta:
-        Responde SOLAMENTE con el nombre del agente seleccionado seguido de una breve justificación, en este formato exacto:
-        AGENTE: [nombre_del_agente]
-        JUSTIFICACIÓN: [breve explicación de 1-2 oraciones]
-        """
-        
-        return prompt
+        return full_query
     
     def _extract_agent_from_response(self, response: str) -> str:
         """
-        Extrae el nombre del agente seleccionado desde la respuesta del modelo.
+        Extrae el nombre del agente de la respuesta del LLM.
         
         Args:
-            response: Respuesta del modelo LLM
+            response: Respuesta en texto del LLM
             
         Returns:
             Nombre del agente seleccionado
         """
+        # Intentar extraer JSON de la respuesta
         try:
-            # Buscar el formato "AGENTE: [nombre_del_agente]" en la respuesta
-            for line in response.split('\n'):
-                if line.strip().startswith('AGENTE:'):
-                    agent_name = line.split(':', 1)[1].strip().lower()
-                    # Eliminar cualquier carácter no alfanumérico y convertir a snake_case
-                    agent_name = ''.join(c if c.isalnum() or c == '_' else '' for c in agent_name)
-                    if not agent_name.endswith('_agent'):
-                        agent_name += '_agent'
-                    return agent_name
-            
-            # Si no se encontró el formato esperado, usar análisis heurístico
-            response_lower = response.lower()
-            for agent_name in self.available_agents.keys():
-                agent_base = agent_name.replace('_agent', '')
-                if agent_base in response_lower or agent_name in response_lower:
-                    return agent_name
-            
-            # Default fallback
-            logger.warning(f"No se pudo extraer un agente válido de la respuesta: {response[:100]}...")
-            return "analysis_agent"
+            # Intentar encontrar un objeto JSON en la respuesta
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                decision = json.loads(json_str)
+                return decision.get("agent", "analysis_agent")
+        except:
+            pass
         
-        except Exception as e:
-            logger.error(f"Error al extraer agente de respuesta: {str(e)}")
-            return "analysis_agent"
+        # Fallback - buscar menciones de agentes en el texto
+        agent_mapping = {
+            "marketing": "marketing_agent",
+            "finanzas": "finance_agent", 
+            "financiero": "finance_agent",
+            "análisis": "analysis_agent",
+            "acción": "action_agent",
+            "resumen": "summary_agent"
+        }
+        
+        for keyword, agent in agent_mapping.items():
+            if keyword.lower() in response.lower():
+                return agent
+                
+        # Por defecto, usar el agente de análisis
+        return "analysis_agent"
     
     def _extract_agent_decision(self, response_content: str) -> Dict[str, Any]:
-        """Extrae la decisión del agente desde la respuesta en formato JSON."""
-        # Intentar extraer el JSON
+        """
+        Extrae la decisión completa (agente, razonamiento, confianza) de la respuesta.
+        
+        Args:
+            response_content: Respuesta en texto del LLM
+            
+        Returns:
+            Diccionario con la decisión extraída
+        """
         try:
-            # Buscar contenido JSON entre llaves
+            # Intentar encontrar un objeto JSON en la respuesta
             json_match = re.search(r'\{.*\}', response_content, re.DOTALL)
             if json_match:
-                agent_info = json.loads(json_match.group(0))
+                json_str = json_match.group(0)
+                decision = json.loads(json_str)
                 
-                # Validar campos requeridos
-                if "agent" not in agent_info or "confidence" not in agent_info:
-                    raise ValueError("Faltan campos requeridos en la respuesta")
+                # Validar y normalizar la decisión
+                agent = decision.get("agent", "")
+                if agent:
+                    # Convertir nombres simplificados a formato completo
+                    agent_mapping = {
+                        "marketing": "marketing_agent",
+                        "finance": "finance_agent",
+                        "analysis": "analysis_agent",
+                        "action": "action_agent",
+                        "summary": "summary_agent",
+                        "data_lookup": "data_lookup_agent"
+                    }
+                    
+                    if agent in agent_mapping:
+                        decision["agent"] = agent_mapping[agent]
+                    
+                # Asegurar que hay un valor de confianza
+                if "confidence" not in decision:
+                    decision["confidence"] = 0.8
+                    
+                return decision
                 
-                # Asegurar que el agente es uno de los válidos
-                valid_agents = ["marketing", "finance", "operations", "data_lookup", "analysis", "action", "summary"]
-                if agent_info["agent"].lower() not in valid_agents:
-                    raise ValueError(f"Agente no válido: {agent_info['agent']}")
-                
-                # Estandarizar la respuesta
-                return {
-                    "agent": agent_info["agent"].lower(),
-                    "reasoning": agent_info.get("reasoning", "No se proporcionó razonamiento"),
-                    "confidence": float(agent_info["confidence"])
-                }
-                
-        except (json.JSONDecodeError, ValueError, KeyError) as e:
-            logger.error(f"Error al extraer decisión del agente: {str(e)}")
-            logger.error(f"Contenido de la respuesta: {response_content}")
-        
-        # Si hay algún error, devolver una respuesta por defecto
+        except Exception as e:
+            logger.error(f"Error al extraer decisión JSON: {str(e)}")
+            
+        # Fallback - crear una decisión básica
+        default_agent = self._extract_agent_from_response(response_content)
         return {
-            "agent": "marketing",  # Agente por defecto
-            "reasoning": "Decisión por defecto debido a error en procesamiento",
-            "confidence": 0.5
+            "agent": default_agent,
+            "reasoning": "Extraído por análisis de texto (fallback)",
+            "confidence": 0.6
         } 

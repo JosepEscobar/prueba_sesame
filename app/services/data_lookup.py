@@ -7,8 +7,9 @@ from urllib.parse import urlencode
 
 from app.core.logging import logger
 from app.core.metrics import MetricsCollector
-from app.core.settings import settings
+from app.core.config import get_settings
 
+settings = get_settings()
 
 class DataLookupService:
     """
