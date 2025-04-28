@@ -41,7 +41,7 @@ class Orchestrator:
         
         logger.info(f"Orchestrator inicializado con {len(self.agents)} agentes")
     
-    async def process_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    def process_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """
         Procesa una solicitud completa, desde el enrutamiento hasta la ejecución
         del agente especializado.

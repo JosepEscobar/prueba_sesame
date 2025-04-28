@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 import time
 
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from app.agents.base import BaseAgent
 from app.core.logging import logger
 from app.core.config import settings

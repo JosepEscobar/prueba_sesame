@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 import time
-from langchain.agents import AgentExecutor
-from langchain.chat_models import ChatOpenAI
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_openai import ChatOpenAI
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.core.metrics import MetricsCollector
@@ -55,7 +55,7 @@ class BaseAgent:
         """Obtiene un valor de la memoria del agente."""
         return self.memory.get(key)
         
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Método base para la ejecución del agente. Debe ser implementado por las clases hijas."""
         start_time = time.time()
         
@@ -69,7 +69,7 @@ class BaseAgent:
             )
             
             # Llamar al método específico de la clase hija
-            result = await self._execute_impl(input_data)
+            result = self._execute_impl(input_data)
             
             # Calcular tiempo de ejecución
             execution_time = time.time() - start_time
@@ -134,6 +134,6 @@ class BaseAgent:
             
             raise
     
-    async def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Implementación específica del método execute. Debe ser implementado por las clases hijas."""
         raise NotImplementedError("Los agentes deben implementar el método _execute_impl") 

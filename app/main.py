@@ -6,7 +6,7 @@ import time
 import uuid
 from prometheus_client import make_asgi_app
 from app.core.config import get_settings
-from app.api.v1.router import api_router
+from app.api.router import api_router
 from app.core.logging import logger, setup_logging
 from app.core.metrics import MetricsMiddleware
 from app.core.orchestrator import Orchestrator
@@ -53,7 +53,7 @@ orchestrator = Orchestrator()
 
 # Middleware para logging de solicitudes
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
+def log_requests(request: Request, call_next):
     request_id = str(uuid.uuid4())
     start_time = time.time()
     
@@ -73,7 +73,7 @@ async def log_requests(request: Request, call_next):
     
     try:
         # Procesar la solicitud
-        response = await call_next(request)
+        response = call_next(request)
         
         # Calcular tiempo de procesamiento
         process_time = time.time() - start_time
@@ -121,7 +121,7 @@ async def log_requests(request: Request, call_next):
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
-async def root():
+def root():
     logger.info("Acceso a la ruta raíz")
     return {
         "message": "Bienvenido al Sistema Multi-Agente MCP",
@@ -132,7 +132,7 @@ async def root():
     }
 
 @app.get("/health")
-async def health_check():
+def health_check():
     logger.info("Verificación de salud")
     return {
         "status": "healthy",
@@ -142,7 +142,7 @@ async def health_check():
 
 # Endpoint para procesar consultas
 @app.post("/api/query", response_model=QueryResponse)
-async def process_query(request: QueryRequest, request_obj: Request):
+def process_query(request: QueryRequest, request_obj: Request):
     """
     Procesa una consulta utilizando el sistema multi-agente.
     
@@ -165,7 +165,7 @@ async def process_query(request: QueryRequest, request_obj: Request):
     
     try:
         # Procesar la consulta a través del orquestador
-        result = await orchestrator.process_request(query_data)
+        result = orchestrator.process_request(query_data)
         
         # Si hay un error, lanzar excepción
         if not result.get("success", True):

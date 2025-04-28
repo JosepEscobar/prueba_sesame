@@ -5,6 +5,8 @@ from typing import Optional
 class Settings(BaseSettings):
     # Configuración general
     APP_NAME: str = "Multi-Agent System"
+    PROJECT_NAME: str = "Sistema Multi-Agente de Consultoría Empresarial"
+    ENVIRONMENT: str = "dev"
     DEBUG: bool = False
     API_V1_STR: str = "/api/v1"
     
@@ -13,6 +15,9 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4-turbo-preview"
     TEMPERATURE: float = 0.7
     MAX_TOKENS: int = 2000
+    
+    # Configuración de Anthropic (opcional)
+    ANTHROPIC_API_KEY: Optional[str] = None
     
     # Configuración de logging
     LOG_LEVEL: str = "INFO"
@@ -36,5 +41,6 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+@lru_cache()
 def get_settings() -> Settings:
     return settings 
