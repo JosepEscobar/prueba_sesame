@@ -1,0 +1,490 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Memoria Técnica – Sistema Multi‑Agente con LangGraph y MCP
+[README.md](mdc:README.md) [CONTRIBUTING.md](mdc:CONTRIBUTING.md)
+
+## 1. Arquitectura Base: FastAPI + Uvicorn como Servidor ASGI
+
+El sistema se construye sobre una arquitectura de **API web REST** utilizando **FastAPI** como framework web y **Uvicorn** como servidor ASGI. FastAPI permite definir endpoints de forma sencilla y tipada, a la vez que aprovecha la alta concurrencia de Uvicorn para manejar múltiples solicitudes de usuarios en paralelo. Uvicorn, al ser un servidor ASGI eficiente, garantiza que nuestra aplicación pueda escalar y responder rápidamente a las peticiones entrantes incluso mientras los agentes de IA realizan tareas intensivas. La **estructura general** del servicio es la siguiente:
+
+- **FastAPI** expone endpoints HTTP (por ejemplo, `POST /consulta`) que reciben las solicitudes de los clientes (usuarios o sistemas externos). Cada petición incluye la información necesaria para que los agentes la procesen (p. ej., la pregunta del usuario, contexto adicional, etc.).
+- **Uvicorn** ejecuta la aplicación FastAPI. Podemos configurarlo para producción con workers múltiples (por ejemplo, usando Gunicorn con workers Uvicorn) para aprovechar sistemas multi-núcleo y asegurar alta disponibilidad. Uvicorn se encargará del loop de evento asíncrono, ideal para coordinar llamadas a modelos y herramientas externas sin bloquear la ejecución.
+- Al llegar una solicitud, la lógica del endpoint FastAPI invoca nuestro **sistema multi-agente** interno (descrito en las siguientes secciones) para procesar la petición. Esto implica crear un **grafo de agentes** y herramientas utilizando LangGraph, inicializar el estado del flujo y ejecutar el ciclo de agentes.
+- Finalmente, FastAPI retorna la respuesta generada por los agentes al cliente en formato JSON (u otro formato esperado), con el contenido generado (por ejemplo, la respuesta a la consulta del usuario).
+
+Esta arquitectura desacopla la capa de entrada de solicitudes (API REST) de la lógica de los agentes de IA. **FastAPI** maneja autenticación, validación básica de datos de entrada y formato de respuesta, mientras que la coordinación compleja de IA ocurre en el motor multi-agente por debajo. Gracias a Uvicorn, obtenemos un manejo asíncrono óptimo: mientras un agente llama a una herramienta externa (lo cual podría implicar I/O de red), el servidor puede seguir atendiendo otras solicitudes.
+
+En cuanto a la organización del código, se sigue una estructura modular clara: un módulo para la **definición del grafo de agentes** (y sus comportamientos), otro para los **endpoints FastAPI**, y otros módulos para integración de herramientas, configuración, etc. Esto permite mantener la separación de responsabilidades. Por ejemplo, en `main.py` se inicializa la aplicación FastAPI y se incluye la ruta que utilizará el sistema de agentes; en `agents/` estarán las definiciones de agentes y su orquestación con LangGraph; en `tools/` las definiciones de herramientas MCP, etc.
+
+**Ventajas clave de esta arquitectura**: 
+- Aprovecha las capacidades de FastAPI (documentación automática con OpenAPI, validación) y el rendimiento de Uvicorn.
+- Escalable horizontalmente (podemos ejecutar múltiples instancias en contenedores detrás de un balanceador) y verticalmente (añadiendo workers).
+- Preparada para producción con soporte ASGI, pudiendo añadir middlewares de seguridad, autenticación, rate limiting, etc., sin interferir con la lógica interna de los agentes.
+
+## 2. Sistema Multi-Agente con LangGraph (Grafo de Agentes y Router Dinámico)
+
+Para la coordinación interna de la lógica de IA, utilizamos **LangGraph**, una librería construida sobre LangChain que permite definir flujos de agentes en forma de **grafo dirigido cíclico** ([Building AI agent systems with LangGraph | by Vishnu Sivan | The Pythoneers | Medium](https://medium.com/pythoneers/building-ai-agent-systems-with-langgraph-9d85537a6326#:~:text=,persistent%20data%20across%20execution%20cycles)). A diferencia de las ejecuciones lineales tradicionales, LangGraph posibilita topologías de grafo flexibles, incluso con bucles, de modo que los agentes puedan **iterar o volver atrás según lo requiera la lógica** (por ejemplo, para refinar una búsqueda o replantear una pregunta) ([Building AI agent systems with LangGraph | by Vishnu Sivan | The Pythoneers | Medium](https://medium.com/pythoneers/building-ai-agent-systems-with-langgraph-9d85537a6326#:~:text=LangGraph%20is%20an%20advanced%20library,flexible%2C%20and%20adaptive%20agent%20systems)). Los **componentes principales** de este grafo de agentes son:
+
+- **Nodos (Agentes y Herramientas)**: Cada nodo del grafo representa una unidad de cómputo o acción. En nuestro caso, la mayoría de nodos son **Agentes de LLM** encargados de sub-tareas específicas. Por ejemplo, podemos tener al menos **dos agentes especializados**: *Agente A* que realiza una tarea (p. ej. clasificar la intención del usuario) y *Agente B* que realiza otra (p. ej. generar una respuesta consultando una base de conocimiento). Cada agente tiene su propio prompt o instrucciones, posiblemente configura su propio modelo de lenguaje (LLM) y un conjunto de herramientas que puede usar. Además, existe un nodo especial **Agente Router**, descrito abajo. Otros nodos pueden representar directamente acciones de herramienta si las modelamos explícitamente en el grafo, aunque típicamente las herramientas se invocan desde los agentes.
+- **Agente Router (Router Dinámico)**: Actúa como orquestador o nodo decisor dentro del grafo. Es un agente cuyo propósito es **dirigir dinámicamente las solicitudes o los resultados intermedios al siguiente paso apropiado**. En otras palabras, el Router examina el estado actual (por ejemplo, el tipo de pregunta o si un agente ya produjo una respuesta suficiente) y decide:
+  - ¿Debe encargarse *Agente A* de esto, o *Agente B*?
+  - ¿Se debe llamar alguna herramienta externa en este punto?
+  - ¿Se debe finalizar el flujo con una respuesta al usuario, o necesitamos otro ciclo (bucle) de interacción?
+  
+  El Router tiene una lógica condicional. En implementación, puede ser un pequeño modelo o conjunto de reglas: por ejemplo, un LLM que recibe el estado resumido y devuelve una “acción” siguiente ("ruta a Agente B", "finalizar", "repetir Agente A", etc.). De esta manera, logramos un **flujo no lineal** donde, según el caso de uso (atención al cliente, investigación, revisión de código, etc.), el Router elige la secuencia de pasos. Esto cumple con el requisito de *router dinámico de contexto*, permitiendo escalar o repetir ciertas acciones según contexto (p. ej., si Agente B determina que la respuesta no es concluyente, el Router podría devolver el control a Agente A para más análisis adicional).
+- **Edges (Aristas)**: Las aristas del grafo definen el **flujo de información y control** entre nodos. Una arista conecta la **salida de un nodo** con la **entrada de otro**. En LangGraph, las aristas pueden ser condicionales, es decir, sólo se siguen si cierta condición se cumple en el estado. Por ejemplo, podemos tener:
+  - Una arista desde el nodo *Router* al *Agente A* que se toma cuando la solicitud inicial requiere clasificación.
+  - Otra arista desde *Router* a *Agente B* para cuando se requiere generar una respuesta a partir de FAQ.
+  - Aristas de retorno: desde Agente A o B de vuelta al Router con el estado actualizado (posiblemente marcadas como **cíclicas** o bucles). Estas permiten que, tras ejecutar un agente, el control regrese al Router quien decide el siguiente paso ([Building AI agent systems with LangGraph | by Vishnu Sivan | The Pythoneers | Medium](https://medium.com/pythoneers/building-ai-agent-systems-with-langgraph-9d85537a6326#:~:text=as%20the%20workflow%20continues,flexible%20and%20iterative%20agent%20behaviors)) ([Building AI agent systems with LangGraph | by Vishnu Sivan | The Pythoneers | Medium](https://medium.com/pythoneers/building-ai-agent-systems-with-langgraph-9d85537a6326#:~:text=If%20the%20decision%20is%20to,flexible%20and%20iterative%20agent%20behaviors)).
+  - Opcionalmente, podríamos tener una arista directa de *Router* a un estado final (respuesta final) si en algún punto el Router determina que ya no hace falta más procesamiento.
+- **Estado compartido (Memoria del Grafo)**: LangGraph permite que los nodos compartan y actualicen un estado global persistente a lo largo de la ejecución ([Building AI agent systems with LangGraph | by Vishnu Sivan | The Pythoneers | Medium](https://medium.com/pythoneers/building-ai-agent-systems-with-langgraph-9d85537a6326#:~:text=,where%20each%20node%20represents%20a)). Este estado puede incluir la pregunta original, resultados parciales de agentes, datos obtenidos de herramientas, etc. Por ejemplo, el estado inicial contiene la solicitud del usuario. Agente A puede agregar al estado la intención detectada; Agente B puede agregar la respuesta preliminar que generó; así el Router toma decisiones basadas en un contexto acumulativo. Este diseño facilita la **iteración y decisiones contextuales**: cada paso ve la información reunida hasta el momento.
+
+**Definición del Grafo**: Usando LangGraph, definimos el grafo declarativamente. Por ejemplo, podríamos definir los nodos Agente A, Agente B y Router, luego especificar aristas: Router->A, Router->B, A->Router, B->Router, etc., con condiciones. LangGraph proporciona una API inspirada en NetworkX para crear estos grafos y ejecutar un *graph executor*. Un pseudocódigo simplificado ilustrativo:
+
+```python
+from langgraph import Graph, AgentNode
+
+# Definir agentes (nodos) con sus roles
+agentA = AgentNode(name="AgenteA", llm=... , prompt_template="Clasifica intención...")
+agentB = AgentNode(name="AgenteB", llm=... , prompt_template="Genera respuesta...")
+
+router = AgentNode(name="Router", llm=..., prompt_template="Decide next step...")
+
+# Construir grafo y aristas
+graph = Graph()
+graph.add_node(router)
+graph.add_node(agentA)
+graph.add_node(agentB)
+# Aristas de router a agentes
+graph.add_edge(router, agentA, condition=lambda state: state["necesita_clasificar"])
+graph.add_edge(router, agentB, condition=lambda state: state["necesita_respuesta"])
+# Aristas de agentes de vuelta al router
+graph.add_edge(agentA, router)  # after A finishes, go back to router
+graph.add_edge(agentB, router)  # after B finishes, go back to router
+# ... (posibles aristas a fin del proceso)
+```
+
+En este pseudocódigo, `condition` determina si se sigue esa arista según el estado. Así, *Router* envía a *Agente A* si por ejemplo el estado indica que la consulta no está clasificada aún (`necesita_clasificar=True`). Tras *Agente A*, automáticamente el flujo regresa al *Router* (A->Router) con el estado ahora actualizado (el agente habrá puesto `necesita_clasificar=False` y quizás `necesita_respuesta=True`), y el Router entonces seguirá la arista hacia *Agente B*. Finalmente, tras B, el Router podría decidir terminar (no seguimos más aristas).
+
+**Bucle y terminación**: Dado que LangGraph soporta ciclos, debemos evitar bucles infinitos. El *Router* incluirá en el estado alguna indicación de finalización (p. ej., un contador de iteraciones, o una señal de que la respuesta ya está lista). Una condición de arista o una decisión interna del Router llevará a un nodo final que concluye el grafo, momento en que la respuesta final se devuelve al usuario.
+
+En resumen, **LangGraph** nos da una forma estructurada de coordinar múltiples agentes LLM de forma **modular y flexible**, permitiendo comportamientos más complejos que una simple cadena lineal ([Building AI agent systems with LangGraph | by Vishnu Sivan | The Pythoneers | Medium](https://medium.com/pythoneers/building-ai-agent-systems-with-langgraph-9d85537a6326#:~:text=Before%20LangGraph%2C%20the%20agent%20executor,dynamic%20and%20adaptable%20agent%20runtimes)) ([Building AI agent systems with LangGraph | by Vishnu Sivan | The Pythoneers | Medium](https://medium.com/pythoneers/building-ai-agent-systems-with-langgraph-9d85537a6326#:~:text=,persistent%20data%20across%20execution%20cycles)). Cada agente cumple una responsabilidad única (cohesión), y el Router asegura la **colaboración entre ellos adecuada según contexto**. Esto mejora escalabilidad del desarrollo (podemos añadir más agentes o herramientas sin reescribir todo el flujo, solo ajustando el grafo) y la capacidad de manejar casos complejos (ej. reintentar pasos, saltar según resultado, etc.).
+
+## 3. Integración de Herramientas Externas mediante MCP (Model Context Protocol)
+
+Para dotar a los agentes de capacidades más allá del conocimiento estático del modelo de lenguaje, integramos **herramientas externas** (APIs, bases de datos, servicios) a través de **Model Context Protocol (MCP)**. MCP es un **protocolo abierto** que estandariza la forma en que las aplicaciones de IA (en este caso, nuestros agentes) acceden a datos externos y funciones de forma estructurada ([Model Context Protocol (MCP): A comprehensive introduction for developers ](https://stytch.com/blog/model-context-protocol-introduction/#:~:text=Model%20Context%20Protocol%20,to%20see%20MCP%20in%20action)) ([Model Context Protocol (MCP): A comprehensive introduction for developers ](https://stytch.com/blog/model-context-protocol-introduction/#:~:text=What%20is%20Model%20Context%20Protocol,MCP)). En esencia, MCP actúa como un “**adaptador universal**” que permite que un agente invoque funciones o servicios externos mediante un lenguaje común (JSON-RPC) en lugar de depender de integraciones ad-hoc para cada API ([Model Context Protocol (MCP): A comprehensive introduction for developers ](https://stytch.com/blog/model-context-protocol-introduction/#:~:text=MCP%20acts%20as%20a%20universal,connects%20to%20many%20different%20systems)) ([Model Context Protocol (MCP): A comprehensive introduction for developers ](https://stytch.com/blog/model-context-protocol-introduction/#:~:text=these%20interactions)).
+
+**¿Cómo funciona MCP?** Cada herramienta externa se expone mediante un **servidor MCP**, que no es más que un servicio (que puede correr como proceso independiente o microservicio) que implementa una interfaz JSON-RPC estandarizada:
+- El servidor MCP mantiene una **lista de herramientas** disponibles (cada herramienta puede verse como una función que realiza una acción específica, por ejemplo: `buscar_documentos`, `obtener_clima`, `ejecutar_consulta_SQL`).
+- Cuando un cliente (nuestro sistema de agentes) se conecta, puede hacer una solicitud JSON-RPC `"tools/list"` para obtener la **descripción de las herramientas** que el servidor ofrece ([Model Context Protocol explained as simply as possible | sean goedecke](https://www.seangoedecke.com/model-context-protocol/#:~:text=So%20what%20does%20Domino%E2%80%99s%20have,model%20to%20do%20precise%20mathematics)). Esa descripción incluye típicamente el nombre de la herramienta, una descripción de lo que hace, y esquemas JSON para sus parámetros de entrada y formato de salida (similar a una especificación de función).
+- Para invocar una herramienta, el cliente envía una petición JSON-RPC `"tools/call"` indicando el nombre de la herramienta y pasando los argumentos necesarios según el esquema ([Model Context Protocol explained as simply as possible | sean goedecke](https://www.seangoedecke.com/model-context-protocol/#:~:text=So%20what%20does%20Domino%E2%80%99s%20have,model%20to%20do%20precise%20mathematics)). El servidor MCP ejecuta la acción (por ejemplo, llama a la API real o realiza la consulta en base de datos) y devuelve el resultado en una respuesta JSON estructurada.
+
+**Definición en esquemas JSON**: Cada herramienta está definida por un esquema JSON que describe su interfaz. Esto es análogo a cómo OpenAPI o las "funciones" de OpenAI definen qué parámetros esperan. En MCP, al consultar `"tools/list"`, podríamos recibir una respuesta como la siguiente (ejemplo simplificado):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "name": "buscar_articulos",
+      "description": "Busca artículos académicos dada una consulta de búsqueda.",
+      "inputs": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string", "description": "Términos de búsqueda"}
+        },
+        "required": ["query"]
+      },
+      "outputs": {
+        "type": "object",
+        "properties": {
+          "resultados": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    {
+      "name": "verificar_fuentes",
+      "description": "Verifica la calidad de una fuente dada una URL.",
+      "inputs": { "...": "..." },
+      "outputs": { "...": "..." }
+    }
+    // ... otras herramientas
+  ],
+  "id": 1
+}
+```
+
+En este ejemplo, el servidor MCP ofrece dos herramientas: `buscar_articulos` y `verificar_fuentes`. Cada una tiene un nombre único y un esquema JSON para entradas y salidas. **Nuestro sistema incluirá archivos JSON con la definición de cada herramienta MCP utilizada**, tal como se exige, que básicamente reflejan estas estructuras.
+
+**Consumo de las herramientas por agentes**: Los agentes, al necesitar usar una herramienta, lo harán a través de un **cliente MCP** integrado en el sistema. Podemos implementar un módulo `MCPClient` que sepa comunicarse con los servidores MCP. Ejemplo de uso dentro del código de un agente (pseudo-código ilustrativo):
+
+```python
+# Inicializar cliente MCP apuntando al servidor de herramientas
+mcp_client = MCPClient(server_url="http://localhost:4000/mcp")
+
+# Obtener lista de herramientas disponibles (podemos hacer esto al iniciar el agente o una sola vez)
+tools = mcp_client.list_tools()
+# Por ejemplo, verificar que exista la herramienta necesaria
+if "buscar_articulos" in [t.name for t in tools]:
+    # Llamar a la herramienta con los parámetros necesarios
+    respuesta = mcp_client.call_tool("buscar_articulos", {"query": "IA multiagente LangGraph MCP"})
+    resultados = respuesta.get("resultados", [])
+    # Usar 'resultados' en la lógica del agente (por ejemplo, resumirlos)
+```
+
+Detrás de escena, `MCPClient.list_tools()` haría una solicitud HTTP con JSON-RPC al servidor MCP de la herramienta, y `call_tool` haría la llamada con parámetros. En el contexto de LangGraph, un agente podría invocar estas funciones cuando decide usar la herramienta. Si estamos usando LangChain dentro del agente, podríamos envolver el MCPClient como una herramienta de LangChain (dado que LangChain originalmente usaba su propio mecanismo de herramientas). **La ventaja de MCP** es que desde el punto de vista del agente es irrelevante cómo está implementada la herramienta; siempre la invoca de la misma forma estructurada. Como señala Anthropic, *el modelo ya no llama APIs directamente sino que pasa por MCP, obteniendo un formato uniforme en todas las interacciones* ([Model Context Protocol (MCP): A comprehensive introduction for developers ](https://stytch.com/blog/model-context-protocol-introduction/#:~:text=,An%20MCP%20server%20can%20provide)).
+
+Por ejemplo, retomando un caso de uso: *Agente A* necesita clasificar la intención del usuario usando una herramienta de clasificación (digamos un servicio de NLP externo). Habrá un servidor MCP que expone, digamos, `clasificar_intencion` con un esquema de entrada (texto) y salida (categoría). Agente A, tras recibir la consulta del usuario, llama `mcp_client.call_tool("clasificar_intencion", {"texto": consulta})`. El resultado (ej. `{"categoria": "soporte_tecnico"}`) lo añade al estado y quizás el Router decidirá, con base en esa categoría, si pasar la tarea al Agente B o escalar a un humano.
+
+**Seguridad y autenticación**: MCP soporta autenticación unificada (incluso OAuth) para que las herramientas requieran credenciales de forma estándar ([Model Context Protocol (MCP): A comprehensive introduction for developers ](https://stytch.com/blog/model-context-protocol-introduction/#:~:text=external%20data%20and%20services%2C%20allowing,to%20see%20MCP%20in%20action)). En nuestro diseño, cualquier credencial necesaria (API keys) para las herramientas se configuraría en los servidores MCP respectivos, manteniendo el cliente MCP en el sistema de agentes agnóstico a ellas (simplemente envía la petición y recibe resultados).
+
+Cabe destacar que **MCP no se utiliza para la comunicación entre agentes**, sino únicamente para interacción con herramientas externas ([Prueba técnica Python IA- Actualizada - Sesame.pdf](file://file-HmdhmZBDBDzsvEgSTDrxav#:~:text=Model%20Context%20Protocol%20,bases%20de%20datos%2C%20funciones%2C%20etc)). La coordinación entre agentes es interna (vía LangGraph), mientras que cada agente usa MCP cuando requiere una funcionalidad externa específica. Esto mantiene el diseño coherente: LangGraph orquesta el *flujo*; MCP conecta funciones *externas* al flujo.
+
+En resumen, integrar MCP nos aporta:
+- **Estandarización**: Todos los llamados a herramientas siguen el mismo formato JSON, lo que facilita logging y debugging consistente ([Model Context Protocol (MCP): A comprehensive introduction for developers ](https://stytch.com/blog/model-context-protocol-introduction/#:~:text=,An%20MCP%20server%20can%20provide)).
+- **Reutilización**: Podemos añadir fácilmente nuevas herramientas MCP (por ejemplo, si mañana necesitamos una herramienta de traducción, solo agregamos su servidor MCP y los agentes podrían consumirla) sin cambios profundos en el agente, más que habilitar su uso.
+- **Desacoplamiento**: Los agentes no necesitan lógica específica de cada API; se configuran para llamar “herramientas” abstractas. Esto sigue el principio de invertir dependencias: el agente depende de una interfaz (MCP) y no de los detalles de implementación de cada servicio externo.
+
+Finalmente, proveeremos en la entrega **los archivos JSON de esquema de cada herramienta** y ejemplos de código (como el anterior) mostrando cómo los agentes consumen dichas herramientas, para evidenciar el cumplimiento de la integración MCP.
+
+## 4. Instrumentación del Sistema (Logs, Tokens y Métricas)
+
+Para operar un sistema de IA en producción de forma confiable, es fundamental contar con **instrumentación** que nos dé visibilidad sobre su comportamiento. Implementaremos varias capas de instrumentación:
+
+### 4.1 Logs Estructurados y Coloreados
+
+Usaremos un sistema de **logging estructurado** para que los logs puedan ser fácilmente parseados y enviados a herramientas de observabilidad. Por ejemplo, configuraremos el logger de Python (`logging`) para producir salida en **formato JSON** para ciertos handlers (como un archivo de log). Esto permite que sistemas como **Grafana Loki** ingieran los logs directamente y ofrezcan consultas ricas. Cada entrada de log incluirá campos clave como timestamp, nivel (INFO, ERROR, etc.), nombre del módulo, mensaje, e incluso IDs de correlación de la petición (útil para rastrear todo el flujo de una solicitud de usuario a través de los agentes).
+
+Además, para la salida en consola (en entornos de desarrollo o debug), habilitaremos **colores** para distinguir niveles y facilitar la lectura durante debugging. Podemos usar librerías como `colorlog` o `rich` para formatear mensajes con colores dependiendo del nivel de log. Por ejemplo, DEBUG en azul, INFO en verde, WARNING en amarillo, ERROR en rojo. Esto no afecta la estructura JSON en archivo, solo mejora la legibilidad en consola.
+
+El logger estará configurado con múltiples handlers:
+- **ConsoleHandler** (nivel DEBUG en dev, INFO en prod) con formato colorizado simple.
+- **FileHandler** (nivel DEBUG o INFO) volcando en un archivo `.log` con formato JSON line-delimited (cada línea un JSON). Este archivo podrá ser posteriormente enviado a un sistema centralizado.
+- **SentryHandler** para enviar errores/excepciones a Sentry (ver siguiente sección).
+- Podríamos también integrar un **Loki handler** directamente (usando la API de Loki para enviar logs), pero generalmente es más común que un agente (como Promtail) se encargue de leer el archivo JSON y enviarlo a Loki.
+
+En el código, esto podría verse así (simplificado):
+
+```python
+import logging, json, colorlog
+from pythonjsonlogger import jsonlogger
+
+logger = logging.getLogger("app")
+logger.setLevel(logging.INFO)
+
+# Console handler with color
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
+console_formatter = colorlog.ColoredFormatter(
+    "%(log_color)s%(levelname)s%(reset)s | %(message)s"
+)
+console_handler.setFormatter(console_formatter)
+logger.addHandler(console_handler)
+
+# File handler with JSON format
+file_handler = logging.FileHandler("app.log")
+file_handler.setLevel(logging.INFO)
+file_formatter = jsonlogger.JsonFormatter("%(asctime)s %(name)s %(levelname)s %(message)s")
+file_handler.setFormatter(file_formatter)
+logger.addHandler(file_handler)
+```
+
+Con esta configuración, un evento de log, por ejemplo `logger.info("Consulta recibida", extra={"user_id": uid})`, aparecería en el archivo como:
+```json
+{"asctime": "2025-04-23 21:30:00,123", "name": "app", "levelname": "INFO", "message": "Consulta recibida", "user_id": "abc123"}
+```
+y en la consola podría verse como texto verde con "INFO | Consulta recibida".
+
+### 4.2 Envío de Logs a Sistemas de Observabilidad (Sentry, Grafana Loki)
+
+Para **Sentry**, integraremos su SDK de Python (`sentry_sdk`). Sentry capturará automáticamente cualquier excepción no controlada y también nos permite capturar manualmente errores o advertencias relevantes. Configuraremos Sentry al iniciar la aplicación (por ejemplo, en `main.py` antes de arrancar FastAPI):
+
+```python
+import sentry_sdk
+sentry_sdk.init(
+    dsn="https://<clave>@o<org>.ingest.sentry.io/<project>",
+    environment="production",
+    integrations=[...]  # integraciones con FastAPI/Starlette si existen
+)
+```
+
+Con esto, si un agente lanza una excepción inesperada, Sentry la registrará con stacktrace y contexto. Incluso podemos utilizar `sentry_sdk.capture_exception(exc)` en bloques try-except para reportar errores manejados.
+
+Además, Sentry puede capturar **trazas de rendimiento** (APM). Podríamos habilitar performance monitoring de Sentry para ver la duración de cada request y, mediante spans personalizados, medir cuánto tardó cada agente o cada llamada de herramienta. Esto nos ayuda a identificar cuellos de botella.
+
+Para **Grafana Loki**, nos aseguramos de que nuestros logs estén en un formato adecuado (JSON estructurado) para ser recolectados. Dependiendo de la infraestructura, podríamos desplegar un agente *Promtail* junto al contenedor, configurado para leer `app.log` y enviarlo a Loki. En Loki, podremos filtrar por campos (e.g., `levelname="ERROR"` para ver errores, o `agent="AgenteA"` si incluimos tal campo). Esto complementa a Sentry pues Loki almacena *todos* los logs (no solo errores) y es excelente para depuración post-mortem o auditorías de qué sucedió en una conversación compleja.
+
+### 4.3 Medición de Consumo de Tokens y Costes
+
+Dado que nuestros agentes usan LLMs (posiblemente de OpenAI u otro proveedor con costo por token), es importante rastrear cuántos tokens consumimos por cada solicitud y estimar el coste asociado. Podemos lograrlo de dos formas:
+
+- **Callbacks de LangChain**: LangChain proporciona utilidades para esto. Por ejemplo, `langchain.callbacks.get_openai_callback()` nos da un contexto dentro del cual las llamadas a modelos cuentan sus tokens ([Model Context Protocol (MCP): A comprehensive introduction for developers ](https://stytch.com/blog/model-context-protocol-introduction/#:~:text=,An%20MCP%20server%20can%20provide)). Usaríamos algo así:
+
+  ```python
+  from langchain.callbacks import get_openai_callback
+  
+  with get_openai_callback() as cb:
+      resultado = agente_chain.run(input_usuario)
+      tokens_totales = cb.total_tokens
+      costo_usd = cb.total_cost
+  logger.info("Tokens usados", extra={"tokens": tokens_totales, "costo_usd": costo_usd})
+  ```
+  
+  Tras la ejecución, el objeto `cb` nos da `total_tokens`, `prompt_tokens`, `completion_tokens` y `total_cost` en dólares de la sesión. Podemos loguear esta info o enviarla a un sistema de métricas.
+- **API del proveedor**: Si usamos directamente la API de OpenAI, en cada respuesta ellos devuelven un campo `usage` con tokens usados. Podemos sumar esos. Si son múltiples llamadas (varios agentes), acumulamos en el estado de la conversación un contador.
+
+Registrar el consumo de tokens no solo ayuda a control de costes sino también a optimizar prompts. Por ejemplo, en los logs podríamos ver que cierto tipo de consulta siempre consume muchos tokens; podríamos investigar si el agente está dando rodeos innecesarios.
+
+### 4.4 Tracking de Performance y Métricas del Sistema
+
+Además de los logs y tokens, queremos **métricas cuantitativas** del rendimiento del sistema:
+- **Latencia de respuesta**: medir el tiempo desde que entra una solicitud hasta que se envía la respuesta final. Integrando middleware en FastAPI o usando la capacidad APM de Sentry/NewRelic, podemos obtener estas duraciones. Incluso podríamos instrumentar el código manualmente:
+  ```python
+  import time
+  start = time.monotonic()
+  # ... ejecutar flujo de agentes ...
+  duration = time.monotonic() - start
+  logger.info("Request duration", extra={"seconds": round(duration, 3)})
+  ```
+  y/o exponerla vía un endpoint de métricas Prometheus.
+- **Métricas de agentes**: tiempos individuales de cada agente (por ejemplo, cuánto tarda Agente A vs Agente B), conteo de cuántas veces cada agente o herramienta fue invocado por solicitud, etc. Esto nos indica qué tan a menudo se usan ciertos caminos del grafo. Podemos instrumentar el comienzo y fin de cada nodo del LangGraph. LangGraph en sí podría permitir hooks al entrar/salir de nodos; de no ser así, podemos envolver las llamadas a cada agente en funciones que midan tiempo y capturen excepciones.
+- **Uso de recursos**: monitoreo de CPU, memoria del proceso, etc., a través de contenedores (Docker stats) o integrando con Prometheus Node Exporter/CAdvisor si estuviera orquestado en Kubernetes.
+- **Métricas personalizadas**: Por ejemplo, número de solicitudes procesadas, tasa de errores por agente, etc. Utilizando **Prometheus** y su cliente Python, podemos definir contadores o histogramas. Por ejemplo, un contador para solicitudes totales, un contador separado para errores manejados, etc. FastAPI tiene integración con Prometheus mediante middleware o se puede exponer un `/metrics` si se prefiere.
+
+Todas estas métricas ayudan a tener un **dashboard** en Grafana u otra herramienta donde observemos la salud del sistema: si la latencia sube, si hay muchos errores repentinos (también Sentry nos alertaría), si el uso de tokens se dispara, etc.
+
+### 4.5 Resumen de Instrumentación
+
+En conjunto, la instrumentación propuesta garantiza:
+- **Trazabilidad**: podemos seguir el rastro de una petición a través de logs correlacionados (usando un ID de petición único en todos los logs de esa petición, por ejemplo).
+- **Observabilidad**: errores reportados a Sentry con contexto, logs centralizados en Loki para análisis detallado, métricas numéricas en Prometheus/Grafana para tendencias y alertas.
+- **Costo controlado**: monitorizando tokens y optimizando en base a datos.
+- **Diagnóstico proactivo**: con métricas de performance podemos detectar si cierto agente es lento o falla a menudo y mejorarlo.
+
+## 5. Pipeline de Integración Continua (GitHub Actions)
+
+Para asegurar calidad y facilitar colaboraciones, configuraremos un pipeline CI usando **GitHub Actions** que automaticen tareas en cada push y pull request. Los componentes principales del pipeline serán:
+
+- **Linting con Ruff**: Antes de ejecutar tests, el pipeline corre la herramienta Ruff (un linter rápido para Python que combina funcionalidades de flake8, isort, etc.). Esto garantiza que el código sigue estándares de estilo y no tiene errores comunes. Por ejemplo, en `.github/workflows/ci.yml` tendremos un paso:
+  ```yaml
+  - name: Lint code with Ruff
+    run: ruff . --exit-zero
+  ```
+  (Se puede usar `--exit-zero` inicialmente para no fallar, solo reportar, pero idealmente se forzará a pasar limpio). También podríamos usar `ruff --fix` en un modo de chequeo para asegurarnos que el code style está ordenado (importes, etc.).
+- **Formateo con Black**: Black formatea el código automáticamente. En el pipeline, incluimos un paso:
+  ```yaml
+  - name: Check formatting with Black
+    run: black --check .
+  ```
+  Esto fallará si algún archivo no cumple con el formato Black (significa que un desarrollador olvidó formatearlo). En desarrollo, configuramos Black en pre-commit o en el editor (VSCode) para evitar este punto, pero el CI actúa como guardián final. Mantener el código formateado garantiza consistencia y diffs limpios.
+- **Ejecutar Tests (unitarios e integración)**: Usamos Pytest para nuestros tests. El pipeline ejecutará:
+  ```yaml
+  - name: Run tests
+    run: pytest --maxfail=1 --disable-warnings -q
+  ```
+  Quizá con `-q` (quiet) para no saturar logs. Si algún test falla, el pipeline marca la build como falla. Además, mediremos la **cobertura de código**:
+  ```yaml
+  - name: Run tests with coverage
+    run: pytest --cov=app --cov-report=xml
+  ```
+  Generando un reporte (XML o HTML) de cobertura. Podemos configurar un mínimo de cobertura, por ejemplo, `--cov-fail-under=80` para exigir al menos 80% de líneas cubiertas. Un alto porcentaje de cobertura es señal de un código bien testeado.
+- **Validación de Pull Requests**: Configuraremos la rama principal (`master`/`main`) y `develop` con **branch protection** requiriendo que este pipeline pase exitosamente antes de permitir merge. Esto asegura que ninguna nueva contribución rompe lint, formato o tests. En cada PR, GitHub Actions correrá el pipeline automáticamente. También se puede integrar **CodeQL** analysis para seguridad, pero dado el alcance, nos centramos en lint/test.
+
+Adicionalmente, se pueden agregar jobs paralelos:
+- **Build Docker (stagging)**: En push a `develop`, construir la imagen Docker (ver sección Despliegue) y quizás subirla a un registro (GitHub Container Registry, Docker Hub privado...). No se desplegará a producción aún, pero confirma que la imagen se construye correctamente. 
+- **Build Docker (production)**: En merge a `master`, similar build (quizá con un tag `latest` o versión semántica) y push al registro.
+- **Deploy**: Si tenemos un entorno de test automatizado (por ejemplo, un servidor test o Kubernetes dev), un paso podría desplegar la imagen de `develop` allí para pruebas integrales. Y otro para producción en merges a master. (Esto se detalla en la sección Despliegue).
+
+El pipeline también incluirá posiblemente **notificaciones** (p. ej., comentar en el PR si tests fallan) y **cachés** para acelerar (cache de pip dependencies entre runs). Pero lo fundamental es: **integración continua** que garantice que el código cumple estándares y que nuevas contribuciones no rompen nada existente, todo antes de que el código se integre.
+
+Este enfoque refleja las mejores prácticas: "shift-left" en calidad (atrapar problemas pronto). Cada push es validado. Los desarrolladores así reciben feedback inmediato de formateo o tests. Al final, la rama principal siempre está en estado desplegable.
+
+## 6. Configuración del Entorno de Desarrollo (VSCode) y Debugging
+
+Para facilitar a los desarrolladores trabajar con este proyecto, proveemos configuraciones predeterminadas de Visual Studio Code (VSCode), incluyendo **perfiles de ejecución y depuración**, así como ajustes que aseguran la consistencia del entorno.
+
+### 6.1 Perfiles de Ejecución y Depuración (launch.json)
+
+En el archivo `.vscode/launch.json` definimos varias configuraciones:
+- **"Debug"**: Ejecuta la aplicación en modo depuración, lanzando nuestro script principal (por ejemplo `main.py` que inicia el server FastAPI) con las opciones adecuadas. Por ejemplo, podemos usar:
+  ```json
+  {
+    "name": "Debug API",
+    "type": "python",
+    "request": "launch",
+    "program": "main.py",
+    "console": "integratedTerminal",
+    "justMyCode": true,
+    "env": {
+      "DEBUG_MODE": "true"
+    }
+  }
+  ```
+  Aquí `DEBUG_MODE=true` es una variable de entorno que nuestra aplicación reconocerá para, por ejemplo, habilitar logs de depuración adicionales, desactivar ciertas optimizaciones, etc. Esta configuración permite presionar F5 en VSCode y que el servidor FastAPI arranque en el terminal integrado con el debugger adjunto, de modo que podemos poner breakpoints en el código Python y pararnos en ellos cuando se alcanza.
+- **"Run"**: Similar al anterior, pero pensado para ejecutar sin modo debug (o con `DEBUG_MODE=false`). Útil para simplemente lanzar la app rápidamente. No inicia el depurador, por lo que es más cercano a producción.
+- **"Attach"**: En caso de que querramos depurar un proceso ya corriendo (por ejemplo, si el servidor se ejecutó vía Uvicorn directamente o dentro de Docker con debug habilitado), esta configuración permite adjuntar el debugger de VSCode al proceso Python en un host:puerto dado. Por ejemplo:
+  ```json
+  {
+    "name": "Attach to Uvicorn",
+    "type": "python",
+    "request": "attach",
+    "connect": {
+      "host": "localhost",
+      "port": 5678
+    },
+    "pathMappings": [
+      {
+        "localRoot": "${workspaceFolder}",
+        "remoteRoot": "/app"
+      }
+    ]
+  }
+  ```
+  Esto supone que Uvicorn inició el server con la opción `--reload` o con `debugpy` escuchando en 5678, y que el código en el contenedor (remoteRoot `/app`) corresponde al code local. Es muy útil para depurar en entornos containerizados.
+
+Con estas configuraciones, el desarrollador puede alternar entre ejecutar normalmente o depurar sin tener que modificar código. Todo está predefinido en el repositorio.
+
+### 6.2 Configuración de Editor (settings.json y Extensiones)
+
+Incluimos un `.vscode/settings.json` para compartir ciertas preferencias:
+- **Formateo y linting**: Podríamos habilitar `"editor.formatOnSave": true` para que Black formatee al guardar. Además, configurar la extensión de **PyLance** o el servidor de lenguaje para usar el entorno virtual del proyecto (de modo que reconozca las dependencias instaladas en `.venv`).
+- **Espacios vs tabs, longitud de línea**: Asegurar que está alineado con Black (Black usa 88 caracteres por línea por defecto) por ejemplo, y usar indentación de 4 espacios.
+- **Extensiones recomendadas**: En `.vscode/extensions.json` enumeramos las extensiones útiles para este proyecto:
+  - *Python* (la oficial de Microsoft, para debugging y IntelliSense).
+  - *Pylance* (el motor de IntelliSense avanzado, a menudo incluido con Python ext).
+  - *Black Formatter* (opcional, o rely en formatOnSave).
+  - *ruff* (si hay ext. para mostrar problemas de lint en tiempo real).
+  - *GitLens* (para ver histórico, aunque no obligatorio).
+  - *PrompTy* (mencionada en el README proporcionado, parece ser una extensión relacionada con prompts AI, podría ayudar a editar prompt templates).
+  
+Estas recomendaciones hacen que al abrir el proyecto, VSCode sugiera instalarlas para replicar la experiencia de desarrollo.
+
+### 6.3 Depuración Completa desde el Editor
+
+Gracias a la configuración de *launch.json*, podemos depurar *todo el stack* desde VSCode. Un escenario típico:
+- Ejecutamos "Debug API" (F5). Se detiene en la primera línea de `main.py` o en un breakpoint explícito.
+- Podemos colocar breakpoints en funciones de agentes, por ejemplo en la lógica del Router o justo antes/después de una llamada MCP.
+- Iniciamos una solicitud desde, digamos, *Thunder Client* o *cURL* hacia nuestro endpoint FastAPI. La petición llega y si toca un breakpoint, la ejecución se pausa y podemos inspeccionar variables (por ejemplo, ver el contenido del estado del grafo, la respuesta de una herramienta MCP, etc.).
+- Luego, paso a paso, podemos ejecutar para ver la secuencia de agentes. Esto es invaluable para entender el flujo en LangGraph, que de otro modo ocurre dentro de una librería. Podemos incluso depurar dentro de LangGraph si es necesario, o revisar las estructuras del grafo.
+
+Otra facilidad: se configura posiblemente en `settings.json` la opción `"python.envFile": ".env"` para que VSCode cargue automáticamente variables de entorno definidas (como keys API, etc.) en las sesiones de debug. Así, si hemos puesto nuestras API keys en `.env`, al depurar no hace falta exportarlas manualmente; el agente podrá usarlas (por ejemplo, la clave de OpenAI para que el LLM funcione, o claves de las herramientas MCP).
+
+En suma, el entorno de desarrollo está preparado para **maximizar la productividad**: formateo, linting, y debugging a un clic. Esto reduce fricción al desarrollar o extender el sistema multi-agente. Cualquier nuevo integrante del equipo puede clonar el repo, instalar dependencias, abrir VSCode y con las configuraciones incluidas tendrá todos los atajos y herramientas listos para entender y trabajar en el proyecto.
+
+## 7. Patrón de Diseño de Arquitectura Robusto (Clean/Hexagonal Architecture)
+
+Para la organización interna del código y la separación de responsabilidades, adoptamos un patrón de arquitectura **robusto y mantenible**, siguiendo principios de **Arquitectura Limpia / Hexagonal (Ports and Adapters)**. Estas arquitecturas están alineadas con tendencias industriales actuales, especialmente para proyectos de IA modularizados, ya que facilitan agregar nuevas capacidades (nuevos agentes, nuevas herramientas MCP) sin quebrantar el sistema existente, y promueven la testabilidad.
+
+En una **Arquitectura Hexagonal**, situamos el **núcleo de la lógica** (dominio) en el centro, aislado de detalles externos; la comunicación con el "mundo exterior" se hace vía interfaces (puertos) que tienen implementaciones concretas (adaptadores) ([Hexagonal Architecture vs Layered and Microservices](https://www.linkedin.com/advice/1/how-do-you-compare-hexagonal-architecture#:~:text=La%20arquitectura%20hexagonal%20permite%20poner,puede%20ser%20relacional%20o%20no)). En nuestro contexto:
+- El **núcleo de negocio** podría considerarse la lógica de orquestación de agentes y el manejo del flujo conversacional. Aquí definimos conceptos como *Consulta* (petición del usuario), *Respuesta*, *Agente* (abstracción), *Herramienta* (abstracción), y cómo se conectan. También las reglas de decisión del Router podrían entrar en esta capa de dominio. Este núcleo no depende de *cómo* invocamos un LLM o *cómo* llamamos una API externa; solo define que un Agente tiene la capacidad de `obtenerRespuesta(input, estado)` y que una Herramienta tiene una operación `ejecutar(parametros)`.
+- Los **puertos** son interfaces que el dominio usa para interactuar con la tecnología:
+  - Por ejemplo, un puerto `ILLMService` que define métodos como `generar_respuesta(prompt, contexto)` que el dominio llama cuando un agente necesita obtener respuesta de un modelo de lenguaje.
+  - Un puerto `IToolService` o más específicamente `IWeatherTool` o `IFaqTool` que define la interfaz para una herramienta externa. Podríamos generalizarlo a un puerto `IExternalTool` con método `invocar_herramienta(nombre, params)` o similares.
+  - Un puerto `ILogger` podría incluso definirse si queremos abstraer la forma de logging en el dominio (para test unitarios del dominio no depender de logging real).
+- Los **adaptadores** son las implementaciones de esos puertos:
+  - Una implementación de `ILLMService` podría ser `OpenAIService` que internamente usa la API de OpenAI (o LangChain) para implementar `generar_respuesta`. Otra implementación podría ser `LocalLLMService` que usa un modelo local. Gracias al puerto, el núcleo no cambia si decidimos usar otro modelo; solo enchufamos un adaptador distinto (por ejemplo, en tests unitarios del flujo de agentes podríamos usar un stub que implementa `ILLMService` y devuelve respuestas predefinidas, así testeamos la orquestación sin costos de API).
+  - La implementación de `IToolService` en este proyecto clave es `MCPClient` – este adaptador se conecta vía MCP a las herramientas. En otro contexto, podríamos tener implementaciones directas (por ejemplo, llamar a una librería Python local para la herramienta si existiera). MCP nos da flexibilidad, pero lo envolvemos en un adaptador para que el dominio llame a una interfaz genérica.
+  - Adaptadores de entrada/salida: FastAPI en sí actúa como un adaptador de entrada (entradas HTTP hacia el caso de uso) y la salida HTTP es adaptador de salida al usuario. En hexagonal, FastAPI estaría en la periferia, tomando la petición HTTP, convirtiéndola a un objeto de dominio (p. ej. `Consulta`) y llamando a un **servicio de aplicación** o **caso de uso** central.
+
+Podemos estructurar el repositorio siguiendo Clean Architecture en capas:
+- `app/domain/` – contiene entidades (clases/estructuras como `Consulta`, `Respuesta`, tal vez `EstadoConversacion`), interfaces (puertos) y quizás casos de uso (`AtenderConsulta` que orquesta agentes).
+- `app/infra/` – contiene implementaciones tecnológicas: `openai_service.py` implementa `ILLMService`, `mcp_client.py` implementa `IToolService`, `fastapi_controller.py` implementa la interfaz HTTP (controlador que convierte HTTP a llamadas de caso de uso).
+- `app/agents/` – podría residir en dominio si los consideramos parte de la lógica central, o separado. Aquí definimos las clases que representan Agentes específicos, sus prompts, y lógica de post-procesado quizá. Dado que los agentes en sí dependen de LLMService y ToolService, podríamos inyectárselos via constructor (inversión de control) para que no dependan directamente de implementaciones.
+- `app/core/langgraph/` – La configuración del grafo LangGraph quizás la escribimos aquí, orquestando los agentes del dominio con la librería. Podría verse como parte del dominio (la “regla de negocio” de cómo encadenar agentes).
+- `app/tests/` – conteniendo tests unitarios de dominio (donde se utilizan stubs en vez de adaptadores reales) y tests de integración (donde quizá levantamos un MCP falso, etc.).
+
+Al iniciar la aplicación (por ejemplo, en `main.py`), **ensamblamos** las piezas: creamos instancias de adaptadores concretos (ej: `llm_service = OpenAIService(api_key=...)` , `tool_service = MCPClient(url=config.mcp_url)` ), luego creamos la instancia del caso de uso principal `atencion = AtenderConsulta(llm_service, tool_service, ...)`. El endpoint FastAPI simplemente hace `respuesta = atencion.ejecutar(consulta)` y devuelve el resultado serializado.
+
+Este patrón asegura que si mañana cambiamos OpenAI por otro LLM, solo tocamos `OpenAIService` o lo reemplazamos por `AnthropicService` que implemente `ILLMService`. El caso de uso *AtenderConsulta* y la lógica de flujo de LangGraph *no cambian*, pues no saben de detalles, solo llaman interfaces.
+
+Igualmente, si se decide no usar LangGraph y probar otra librería, esa dependencia estaría aislada en un módulo; el dominio seguiría describiendo la secuencia lógica, y LangGraph sería una herramienta para implementarla.
+
+En la industria, este tipo de separación (Clean Architecture) es visto como buena práctica en proyectos de IA *modernos*, porque:
+- Facilita **testeabilidad**: podemos hacer tests de la secuencia de agentes simulando respuestas de las herramientas (porque hemos abstraído vía puertos). Esto cumple con la modularidad y manejo de estados requerido ([Prueba técnica Python IA- Actualizada - Sesame.pdf](file://file-HmdhmZBDBDzsvEgSTDrxav#:~:text=%E2%97%8F%20Uso%20de%20LangGraph%3A%20Estructura%2C,manejo%20de%20estados%2C%20modularidad)).
+- Permite **extensión y mantenimiento**: nuevos agentes o herramientas agregan nuevas implementaciones pero poco cambio en lo existente. El sistema es menos propenso a efectos colaterales.
+- Claridad conceptual: cada módulo tiene una responsabilidad bien definida (Single Responsibility Principle). Por ejemplo, el módulo de MCP sabe cómo comunicarse con herramientas (y manejar errores de red, timeouts), mientras que el módulo de dominio decide *cuándo* usar la herramienta y qué hacer con el resultado, sin preocuparse del protocolo.
+
+Podemos decir que seguimos una arquitectura hexagonal: "la arquitectura hexagonal permite poner como núcleo la lógica del negocio e interactuar con el mundo externo mediante puertos e implementaciones (adaptadores) para cada externo" ([Hexagonal Architecture vs Layered and Microservices](https://www.linkedin.com/advice/1/how-do-you-compare-hexagonal-architecture#:~:text=La%20arquitectura%20hexagonal%20permite%20poner,puede%20ser%20relacional%20o%20no)). Esto está alineado con tener un *core* de LangGraph+Reglas, y adaptadores para LLMs (OpenAI) y herramientas (MCP), e interfaz web (FastAPI).
+
+En términos de diagrama de capas (abstracto):
+```
+[ Presentación (FastAPI) ]  -->  [ Caso de uso AtenderConsulta ]  -->  [ Agentes/LangGraph (Dominio) ]  -->  [ Puertos: ILLMService, IToolService ]  -->  [ Adaptadores: OpenAI API, MCP, DB, etc. ]
+```
+Las flechas indican dependencia unidireccional. Todo apunta hacia el dominio, nunca al revés. Por ejemplo, los agentes pueden invocar puerto IToolService, pero no conocen la existencia de MCPClient; es el adaptador el que conoce MCP. FastAPI conoce el caso de uso, pero el caso de uso no sabe de FastAPI.
+
+Implementando este patrón, logramos una arquitectura **sólida, desacoplada y preparada para cambios**, tal como se esperaría en un proyecto de IA moderno y complejo.
+
+## 8. Despliegue en Producción con Docker y Workflow de CI/CD
+
+La aplicación está preparada para ejecutarse en contenedores Docker, lo que facilita la implementación consistente en distintos entornos (testing, staging, producción). 
+
+### 8.1 Dockerfile para Producción
+
+Se construyó un `Dockerfile` optimizado para producción siguiendo buenas prácticas:
+- **Imagen base mínima**: Usamos por ejemplo `python:3.10-slim` como base, para reducir tamaño y superficie de ataque. 
+- **Multi-stage build**: En una primera etapa, copiamos el código y instalamos dependencias (ejecutando `pip install -r requirements.txt`). Luego en la etapa final, partimos de `python:3.10-slim` limpia y copiamos solo los artefactos necesarios (el código de la app y los paquetes instalados desde la etapa anterior, usualmente usando `pip install --target=/app` pattern o copiando desde `--from=builder` los site-packages). Esto produce una imagen final mucho más pequeña sin herramientas de compilación innecesarias.
+- **Usuario no root**: Se crea un usuario de sistema (`useradd`) y se usa `USER` para que el proceso de Uvicorn no corra como root dentro del contenedor, mejorando la seguridad.
+- **Configuración**: La imagen espera que se suministren ciertas variables de entorno (como `OPENAI_API_KEY`, `MCP_SERVER_URL`, etc.) al correr el contenedor. No se incluyen credenciales en la imagen. Esto es fundamental para no comprometer secretos y para configurar distinto por entorno.
+- **Exposición de puerto**: Por convenio exponemos el puerto 8000 (donde Uvicorn correrá).
+- **Entry point**: Usamos `CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]`. En producción podríamos ajustar a usar `--workers 2` o más, o incluso usar `gunicorn` (`gunicorn -k uvicorn.workers.UvicornWorker`) para mayor robustez en manejo de múltiples workers. Pero Uvicorn solo es aceptable para un servicio de tamaño moderado y simplifica cosas. No habilitamos `--reload` en producción (solo en dev), para evitar reinicios innecesarios; en cambio, cualquier cambio requerirá re-deploy (lo cual en CI/CD está automatizado).
+- **Healthcheck (opcional)**: Podríamos agregar en Dockerfile un `HEALTHCHECK` para que la plataforma compruebe la salud (por ejemplo, haciendo GET a `/docs` o a alguna ruta de ping en la API, retornando 200 OK). Esto ayuda a orquestadores a detectar contenedores enfermos y reiniciarlos.
+
+### 8.2 Workflow de Despliegue Automatizado (GitHub Actions)
+
+Extendiendo el pipeline CI, configuramos workflows para **Continuous Deployment**:
+- **Deploy a Testing (develop branch)**: Cada vez que hay un push a la rama `develop`, GitHub Actions ejecutará un workflow de despliegue a entorno de testing. Este workflow hará:
+  1. Construir la imagen Docker con la versión correspondiente (podemos etiquetarla como `:develop-<commit>`).
+  2. Empujar la imagen a un **registro de contenedores** (por ejemplo, GHCR or DockerHub privado).
+  3. Desplegar la imagen en el entorno de testing. Dependiendo de la infraestructura, esto podría hacerse de varias formas:
+     - Si usamos Kubernetes: El workflow podría aplicar un manifiesto/Helm chart apuntando a la nueva imagen (usando kubectl via Action or Helm action). Para seguridad, se usan tokens o OIDC to auth with the cluster.
+     - Si usamos una simple VM Docker: Podríamos usar SSH para conectarnos y ejecutar `docker pull` y `docker run` (aunque manual, es viable). O utilizar something like Docker Swarm with an auto-update on image push.
+     - O usar a platform-as-a-service like Heroku/Fly.io where push to a branch triggers deploy.
+     
+     Supongamos un escenario con Kubernetes: Al push a develop, se despliega en un namespace de staging. 
+  4. Ejecutar tests de integración en ese entorno test (por ejemplo, llamar a ciertos endpoints con curl para verificar comportamiento básico).
+  
+  Este flujo garantiza que la rama develop esté **siempre desplegada en un entorno controlado** para que el equipo (o QAs) puedan hacer pruebas manuales o automáticas de más alto nivel.
+  
+- **Deploy a Producción (merge a master)**: Cuando se fusiona a `master` (o `main`), asumimos que esa versión ha pasado QA. El workflow entonces:
+  1. Construye la imagen de nuevo (posiblemente solo cambiando la etiqueta a `:latest` o una versión semántica, e.g. `v1.0.0`).
+  2. Empuja al registro.
+  3. Despliega a producción. Similar a antes, pero apuntando al entorno de producción (ej. namespace "prod" en k8s). Podría actualizar un Deployment en k8s para usar la nueva imagen, lo que lanza rolling update sin downtime. O reiniciar un container en a VM, etc., según setup.
+  4. Post-deploy, podría haber un paso de verificación (como hitting a healthcheck endpoint) y notificar al equipo que el despliegue fue exitoso.
+
+- **Seguridad en CI/CD**: Nos aseguramos de que secretos (como credenciales del registro Docker, credenciales de cluster) estén almacenados en GitHub Actions Secrets, no en el repo. Y usar OIDC JWTs donde posible (GH -> Cloud auth) para minimizar manejo de secretos.
+
+### 8.3 Prácticas de Seguridad y Estabilidad en Producción
+
+Además de los puntos mencionados (no root, no secrets en código, healthchecks), aplicamos:
+- **Escaneo de vulnerabilidades**: Integrar en CI una etapa con herramientas como Trivy o Snyk para escanear la imagen Docker construida en busca de vulnerabilidades en las dependencias. Si se encuentra un crítico, falla el build para que se atienda.
+- **Mínimos privilegios**: Si el contenedor no necesita escribir en disco, montarlo como readonly, usar seccomp/apparmor profiles (en k8s) para limitar llamadas peligrosas.
+- **Variables de entorno para entorno productivo**: Asegurar que en producción se use `DEBUG_MODE=false` para no filtrar información sensible en logs o errores detallados. Configurar niveles de log apropiados (INFO en lugar de DEBUG). 
+- **Monitoreo y Alertas**: Ya integrados Sentry y métricas. En producción, establecer alertas: si la latencia > X ms o tasa de error > Y, que avise al on-call.
+- **Tolerancia a fallos**: Correr múltiples réplicas del pod/containter para balanceo. Así, si un agente consume muchos recursos, el sistema sigue atendiendo con otros. En caso de que un LLM de terceros esté caído, quizás implementar reintentos exponenciales o fallback a otro modelo (posiblemente configurado en `ILLMService` adaptador).
+- **Documentación y conocimientos**: En producción, se define claramente cómo escalar (aumentar replicas), cómo hacer rollback (por ejemplo, re-etiquetar despliegue a versión anterior) en caso de problemas con la versión nueva.
+
+Finalmente, todo este proceso de despliegue automatizado nos brinda **confianza** para enviar cambios rápidamente a producción siguiendo las prácticas DevOps: cualquier commit en master está automáticamente testeado y desplegado. Hemos añadido las salvaguardas necesarias para que sea seguro y estable.
+
+## 9. Diagrama Arquitectónico del Sistema
+
+ *Diagrama de la arquitectura multi-agente propuesta, mostrando la interacción entre componentes internos y externos.*
+
+En la figura anterior se presenta la arquitectura global. Podemos seguir el flujo numerado:
+
+1. **Usuario (Cliente)** realiza una **solicitud HTTP** (por ejemplo, una pregunta al sistema) a nuestro servidor FastAPI (ejecutándose sobre Uvicorn). 
+2. FastAPI (**ASGI Server**) recibe la petición en un endpoint y la entrega al componente orquestador interno (nuestro *sistema multi-agente* basado en LangGraph) para su procesamiento. 
+3. El **Agente Router** actúa como primer nodo del grafo LangGraph, analizando la petición y el estado (inicialmente con la consulta del usuario) y decide a cuál agente o herramienta derivar el control. En el diagrama, se muestran dos caminos: “Enruta a Agente A” o “Enruta a Agente B”, según la lógica de contexto.
+4. Supongamos que el Router envía la tarea al **Agente A**. Este agente realiza su función (p. ej., clasificar la intención). Tras completarla, produce un **resultado parcial** y actualiza el **estado** (por ejemplo, añade la categoría de intención detectada). Luego cede el control de vuelta al Router (flecha de retorno).
+5. El Router, viendo el nuevo estado, puede ahora enviar el flujo al **Agente B** (p. ej., para generar una respuesta usando FAQs), siguiendo la arista correspondiente. El Agente B a su vez procesa la tarea y posiblemente actualiza el estado con la respuesta generada.
+6. Tanto Agente A como Agente B en algún punto necesitan utilizar **herramientas externas**. En el diagrama, Agente A llama a *Herramienta Externa 1* a través de MCP, y Agente B a *Herramienta Externa 2*. Las flechas etiquetadas "Llamada MCP a Herramienta" indican que los agentes usan el cliente MCP para enviar una petición JSON-RPC a los **Servidores MCP** correspondientes. Estos servidores ejecutan la acción (por ejemplo, consultar una base de conocimientos, realizar un cálculo) y devuelven la **Respuesta MCP** (flechas de respuesta punteadas) al agente. El agente entonces incorpora esos datos al estado o a su razonamiento.
+7. Durante todo este ciclo, existe instrumentación: las líneas punteadas hacia **Logs/Monitoring (Sentry, Grafana Loki)** ilustran que en cada componente clave (FastAPI, Agente A, Agente B) se están generando logs estructurados y métricas. Por ejemplo, FastAPI registró la llegada de la solicitud y el tiempo total; Agente A registró cuántos tokens gastó y si hubo errores en su herramienta; Agente B lo propio. Esos logs y métricas fluyen hacia nuestros sistemas de observabilidad (ya sea directamente o recogidos por agentes) para monitorización en tiempo real.
+8. Finalmente, cuando el **Router** determina que ya se completó la tarea (p. ej., Agente B produjo una respuesta satisfactoria), el Router envía esa **respuesta final** de vuelta al componente FastAPI (que estaba esperando el resultado). FastAPI entonces formatea la respuesta (por ej., en JSON HTTP) y la envía al **Usuario** como respuesta HTTP final. El ciclo concluye para esa solicitud.
+
+El diagrama destaca cómo **todos los componentes interactúan**: El Router centraliza la toma de decisiones dentro del sistema de agentes, los agentes colaboran (A y B) y usan herramientas vía MCP, y la entrada/salida está manejada por FastAPI. Mientras tanto, la instrumentación (logs/métricas) y la capa de infraestructura (Sentry/Loki, etc.) rodean el sistema asegurando confiabilidad y observabilidad. 
+
+Asimismo, el diagrama es coherente con la filosofía de arquitectura hexagonal adoptada: la lógica de negocio (agentes y router) está en el centro, interactuando con **puertos** hacia el exterior – en este caso, MCP para herramientas (puerto de salida) y FastAPI como puerto de entrada – cada uno con su adaptador concreto (implementación HTTP, implementación JSON-RPC). Esto permite que el núcleo de IA permanezca independiente de si la entrada vino por HTTP (podría venir por otra interfaz en el futuro) o si la herramienta era local o remota – todos esos son detalles periféricos.
+
+En conclusión, esta memoria técnica ha detallado la solución propuesta para construir un sistema multi-agente avanzado con LangGraph y MCP, cubriendo desde la arquitectura de alto nivel con FastAPI/Uvicorn, la orquestación de agentes y router dinámico, la integración estandarizada de herramientas externas, la instrumentación completa, hasta prácticas de CI/CD, entorno de desarrollo y un diseño de software robusto. La solución sigue estándares modernos de ingeniería de software y de sistemas de IA, buscando ser **clara, extensible y alineada a mejores prácticas** en cada uno de sus componentes.  ([Building AI agent systems with LangGraph | by Vishnu Sivan | The Pythoneers | Medium](https://medium.com/pythoneers/building-ai-agent-systems-with-langgraph-9d85537a6326#:~:text=,persistent%20data%20across%20execution%20cycles)) ([Model Context Protocol (MCP): A comprehensive introduction for developers ](https://stytch.com/blog/model-context-protocol-introduction/#:~:text=Model%20Context%20Protocol%20,to%20see%20MCP%20in%20action))

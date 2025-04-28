@@ -33,7 +33,7 @@ Queremos mantener una base de código limpia, escalable y de alta calidad. Por f
 4. **Documenta tu contribución**:
    - Actualiza el README o añade comentarios si tu cambio impacta la funcionalidad existente o agrega nueva.
 
-5. **Haz commits claros y descriptivos**:
+5. **Haz commits claros y descriptivos por cada funcionalidad que implementes**:
    - Usa mensajes de commit siguiendo el formato:
      ```
      feat: descripción de nueva funcionalidad
