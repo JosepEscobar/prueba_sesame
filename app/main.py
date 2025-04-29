@@ -1,6 +1,7 @@
 import time
 import uuid
 import contextlib
+import asyncio
 from fastapi import FastAPI, Request, Depends, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,7 @@ from app.core.logging import setup_logging, logger
 from app.core.metrics import setup_metrics
 from app.api.router import api_router
 from app.tools.register_tools import register_all_tools
+from app.tools.server.server_init import init_mcp_server
 
 # Configuración de logging
 setup_logging()
@@ -34,6 +36,9 @@ if settings.SENTRY_DSN:
         environment=settings.ENVIRONMENT,
     )
     logger.info("Sentry inicializado para captura de errores")
+
+# Variable para almacenar el servidor MCP
+mcp_server = None
 
 # Crear la aplicación FastAPI
 app = FastAPI(
@@ -123,7 +128,22 @@ async def log_requests(request: Request, call_next):
 @app.on_event("startup")
 async def startup_event():
     """Evento de inicio de la aplicación"""
+    global mcp_server
+    
     logger.info(f"Starting {settings.APP_NAME}...")
+    
+    # Iniciar el servidor MCP
+    try:
+        logger.info("Iniciando servidor MCP...")
+        mcp_server = await init_mcp_server(
+            host=settings.MCP_HOST if hasattr(settings, 'MCP_HOST') else "localhost",
+            port=settings.MCP_PORT if hasattr(settings, 'MCP_PORT') else 4000
+        )
+        await mcp_server.start_server()
+        logger.info("Servidor MCP iniciado correctamente")
+    except Exception as e:
+        logger.error(f"Error al iniciar el servidor MCP: {str(e)}")
+        mcp_server = None
     
     # Registrar herramientas disponibles para los agentes
     tool_stats = register_all_tools()
@@ -132,7 +152,18 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Evento de cierre de la aplicación"""
+    global mcp_server
+    
     logger.info(f"Shutting down {settings.APP_NAME}...")
+    
+    # Detener el servidor MCP si está en ejecución
+    if mcp_server and mcp_server.is_running():
+        logger.info("Deteniendo servidor MCP...")
+        try:
+            await mcp_server.stop_server()
+            logger.info("Servidor MCP detenido correctamente")
+        except Exception as e:
+            logger.error(f"Error al detener el servidor MCP: {str(e)}")
 
 # Incluir rutas
 app.include_router(api_router, prefix=settings.API_PREFIX)
@@ -178,9 +209,15 @@ async def health_check():
     - Estado actual del sistema ("ok" si funciona correctamente)
     - Marca de tiempo actual de la solicitud
     """
+    # Verificar si el servidor MCP está en ejecución
+    mcp_status = "running" if mcp_server and mcp_server.is_running() else "not_running"
+    
     return {
         "status": "healthy",
-        "timestamp": time.time()
+        "timestamp": time.time(),
+        "components": {
+            "mcp_server": mcp_status
+        }
     }
 
 # Personalizar el esquema OpenAPI para añadir más metadatos

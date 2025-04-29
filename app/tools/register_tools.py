@@ -2,10 +2,13 @@
 Script para registrar todas las implementaciones de herramientas en el sistema.
 """
 
+import asyncio
+from pathlib import Path
+
 from app.core.logging import logger
 from app.tools.tool_registry import tool_registry
 from app.tools.implementations import FinancialModelsImplementation
-from app.tools.mcp_client import MCPClient
+from app.tools.mcp_client_official import MCPClientOfficial
 
 def register_all_tools():
     """
@@ -28,29 +31,7 @@ def register_all_tools():
         logger.warning("No se pudo registrar la implementación de financial_models")
     
     # Registrar cliente MCP para otras herramientas
-    mcp_client = MCPClient()
-    
-    # Registrar implementación para query_kb a través del cliente MCP
-    async def query_kb_wrapper(params):
-        return await mcp_client.call_tool("query_kb", params)
-    
-    success = tool_registry.register_tool_implementation("query_kb", query_kb_wrapper)
-    if success:
-        logger.info("Implementación de query_kb registrada correctamente (via MCP)")
-    else:
-        logger.warning("No se pudo registrar la implementación de query_kb")
-    
-    # Registrar implementación para search_articles a través del cliente MCP
-    async def search_articles_wrapper(params):
-        return await mcp_client.call_tool("search_articles", params)
-    
-    success = tool_registry.register_tool_implementation("search_articles", search_articles_wrapper)
-    if success:
-        logger.info("Implementación de search_articles registrada correctamente (via MCP)")
-    else:
-        logger.warning("No se pudo registrar la implementación de search_articles")
-    
-    # Registrar herramientas adicionales aquí cuando se implementen
+    asyncio.create_task(_register_mcp_tools())
     
     # Mostrar resumen de herramientas registradas
     all_tools = tool_registry.list_tools()
@@ -65,4 +46,40 @@ def register_all_tools():
         "total_tools": len(all_tools),
         "implemented_tools": len(implemented_tools),
         "pending_tools": len(all_tools) - len(implemented_tools)
-    } 
+    }
+
+async def _register_mcp_tools():
+    """
+    Registra herramientas disponibles a través del cliente MCP.
+    
+    Esta función asíncrona se ejecuta en segundo plano para no bloquear
+    la inicialización de la aplicación.
+    """
+    try:
+        # Inicializar el cliente MCP oficial
+        mcp_client = MCPClientOfficial()
+        initialized = await mcp_client.initialize()
+        
+        if not initialized:
+            logger.warning("No se pudo inicializar el cliente MCP, las herramientas MCP no estarán disponibles")
+            return
+        
+        # Registrar las herramientas disponibles en el servidor MCP
+        tools = await mcp_client.list_tools()
+        logger.info(f"Herramientas disponibles en el servidor MCP: {len(tools)}")
+        
+        for tool in tools:
+            tool_name = tool["name"]
+            
+            # Obtener un wrapper para la herramienta
+            wrapper = await mcp_client.get_tool_wrapper(tool_name)
+            if wrapper:
+                # Registrar la herramienta con el wrapper
+                success = tool_registry.register_tool_implementation(tool_name, wrapper)
+                if success:
+                    logger.info(f"Implementación de {tool_name} registrada correctamente (via MCP oficial)")
+                else:
+                    logger.warning(f"No se pudo registrar la implementación de {tool_name}")
+    
+    except Exception as e:
+        logger.error(f"Error al registrar herramientas MCP: {str(e)}") 
