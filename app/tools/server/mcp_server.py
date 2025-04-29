@@ -181,11 +181,11 @@ class MCPToolServer:
             return True
         
         try:
-            # Configurar el servidor SSE
-            self.mcp_server.configure_sse(host=self.host, port=self.port)
-            
-            # Iniciar el servidor
-            asyncio.create_task(self.mcp_server.run_sse())
+            # En FastMCP 1.6.0, la forma correcta de iniciar el servidor es con start_server
+            asyncio.create_task(self.mcp_server.start_server(
+                host=self.host,
+                port=self.port
+            ))
             self._is_running = True
             
             logger.info(f"Servidor MCP iniciado en http://{self.host}:{self.port}")

@@ -13,6 +13,9 @@ langchain-core==0.3.55
 langchain-community==0.3.22
 mcp==1.6.0
 langchain-mcp-adapters==0.0.9
+langgraph-checkpoint==2.0.25
+langgraph-prebuilt==0.1.8
+langgraph-sdk==0.1.63
 
 # Testing
 pytest==8.0.1

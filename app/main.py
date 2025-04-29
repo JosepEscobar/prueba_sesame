@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from prometheus_client import make_asgi_app
 import logging
+from contextlib import asynccontextmanager
 from app.core.config import get_settings
 from app.core.logging import setup_logging, logger
 from app.core.metrics import setup_metrics
@@ -37,6 +38,46 @@ if settings.SENTRY_DSN:
 # Variable para almacenar el servidor MCP
 mcp_server = None
 
+# Manejador de ciclo de vida de la aplicación
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Código de inicialización (antes era startup_event)
+    global mcp_server
+    
+    logger.info(f"Starting {settings.APP_NAME}...")
+    
+    # Iniciar el servidor MCP
+    try:
+        logger.info("Iniciando servidor MCP...")
+        mcp_server = await init_mcp_server(
+            host=settings.MCP_HOST if hasattr(settings, 'MCP_HOST') else "localhost",
+            port=settings.MCP_PORT if hasattr(settings, 'MCP_PORT') else 4000
+        )
+        await mcp_server.start_server()
+        logger.info("Servidor MCP iniciado correctamente")
+    except Exception as e:
+        logger.error(f"Error al iniciar el servidor MCP: {str(e)}")
+        mcp_server = None
+    
+    # Registrar herramientas disponibles para los agentes
+    tool_stats = register_all_tools()
+    logger.info(f"Herramientas registradas: {tool_stats['implemented_tools']}/{tool_stats['total_tools']}")
+    
+    # Ceder el control a la aplicación
+    yield
+    
+    # Código de finalización (antes era shutdown_event)
+    logger.info(f"Shutting down {settings.APP_NAME}...")
+    
+    # Detener el servidor MCP si está en ejecución
+    if mcp_server and mcp_server.is_running():
+        logger.info("Deteniendo servidor MCP...")
+        try:
+            await mcp_server.stop_server()
+            logger.info("Servidor MCP detenido correctamente")
+        except Exception as e:
+            logger.error(f"Error al detener el servidor MCP: {str(e)}")
+
 # Crear la aplicación FastAPI
 app = FastAPI(
     title=settings.APP_NAME,
@@ -45,6 +86,7 @@ app = FastAPI(
     openapi_url=f"{settings.API_PREFIX}/openapi.json",
     docs_url=f"{settings.API_PREFIX}/docs",
     redoc_url=f"{settings.API_PREFIX}/redoc",
+    lifespan=lifespan
 )
 
 # Configuración de métricas
@@ -123,47 +165,6 @@ async def log_requests(request: Request, call_next):
                 "request_id": request_id
             }
         )
-
-# Eventos de inicio y cierre de la aplicación
-@app.on_event("startup")
-async def startup_event():
-    """Evento de inicio de la aplicación"""
-    global mcp_server
-    
-    logger.info(f"Starting {settings.APP_NAME}...")
-    
-    # Iniciar el servidor MCP
-    try:
-        logger.info("Iniciando servidor MCP...")
-        mcp_server = await init_mcp_server(
-            host=settings.MCP_HOST if hasattr(settings, 'MCP_HOST') else "localhost",
-            port=settings.MCP_PORT if hasattr(settings, 'MCP_PORT') else 4000
-        )
-        await mcp_server.start_server()
-        logger.info("Servidor MCP iniciado correctamente")
-    except Exception as e:
-        logger.error(f"Error al iniciar el servidor MCP: {str(e)}")
-        mcp_server = None
-    
-    # Registrar herramientas disponibles para los agentes
-    tool_stats = register_all_tools()
-    logger.info(f"Herramientas registradas: {tool_stats['implemented_tools']}/{tool_stats['total_tools']}")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Evento de cierre de la aplicación"""
-    global mcp_server
-    
-    logger.info(f"Shutting down {settings.APP_NAME}...")
-    
-    # Detener el servidor MCP si está en ejecución
-    if mcp_server and mcp_server.is_running():
-        logger.info("Deteniendo servidor MCP...")
-        try:
-            await mcp_server.stop_server()
-            logger.info("Servidor MCP detenido correctamente")
-        except Exception as e:
-            logger.error(f"Error al detener el servidor MCP: {str(e)}")
 
 # Incluir rutas
 app.include_router(api_router, prefix=settings.API_PREFIX)
