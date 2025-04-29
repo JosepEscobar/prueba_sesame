@@ -18,9 +18,6 @@ from app.tools.server.server_init import init_mcp_server
 # Configuración de logging
 setup_logging()
 
-# Configuración de métricas
-setup_metrics(app)
-
 # Rutas
 api_router = api_router
 
@@ -49,6 +46,9 @@ app = FastAPI(
     docs_url=f"{settings.API_PREFIX}/docs",
     redoc_url=f"{settings.API_PREFIX}/redoc",
 )
+
+# Configuración de métricas
+setup_metrics(app)
 
 # Middleware de CORS
 app.add_middleware(

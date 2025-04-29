@@ -36,6 +36,46 @@ ERROR_COUNT = Counter(
     ["agent_name", "error_type"]
 )
 
+# Métricas para herramientas
+TOOL_EXECUTION_TIME = Histogram(
+    "tool_execution_seconds",
+    "Tiempo de ejecución de herramientas",
+    ["tool_name"]
+)
+
+TOOL_CALLS_TOTAL = Counter(
+    "tool_calls_total",
+    "Número total de llamadas a herramientas",
+    ["tool_name", "status"]
+)
+
+# Objeto metrics que se puede importar desde otros módulos
+class Metrics:
+    """Clase que proporciona acceso a las métricas para otros módulos."""
+    
+    def __init__(self):
+        self.agent_execution_time = AGENT_EXECUTION_TIME
+        self.agent_execution_count = AGENT_EXECUTION_COUNT
+        self.agent_confidence = AGENT_CONFIDENCE
+        self.token_usage = TOKEN_USAGE
+        self.error_count = ERROR_COUNT
+        self.tool_execution_time = TOOL_EXECUTION_TIME
+        self.tool_calls_total = TOOL_CALLS_TOTAL
+
+# Instancia única de metrics para importar
+metrics = Metrics()
+
+def setup_metrics(app=None):
+    """Configura las métricas para la aplicación.
+    
+    Args:
+        app: Instancia de la aplicación FastAPI.
+    """
+    logger.info("Configurando métricas de Prometheus")
+    # Aquí puedes agregar configuración adicional de métricas
+    # Por ejemplo, configurar métricas específicas para la aplicación
+    return app
+
 class MetricsCollector:
     """Recolector de métricas para el sistema de agentes."""
     

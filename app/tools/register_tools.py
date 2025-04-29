@@ -2,13 +2,168 @@
 Script para registrar todas las implementaciones de herramientas en el sistema.
 """
 
-import asyncio
+from typing import List, Dict, Any, Optional
+import os
+import json
 from pathlib import Path
+import importlib
+import asyncio
+
+from langchain.tools import BaseTool, StructuredTool
+from pydantic import BaseModel, create_model
 
 from app.core.logging import logger
+from app.core.metrics import metrics
+from app.core.config import get_settings
+from app.tools.mcp_client import MCPClient
+from app.tools.server.server_init import init_mcp_server
 from app.tools.tool_registry import tool_registry
-from app.tools.implementations import FinancialModelsImplementation
-from app.tools.mcp_client_official import MCPClientOfficial
+from app.tools.implementations.financial_models import FinancialModelsImplementation
+
+# Obtener la configuración
+settings = get_settings()
+
+def load_tools_from_schemas():
+    """
+    Carga herramientas desde esquemas JSON locales y las registra en el sistema.
+    
+    Esta función puede ser utilizada durante la inicialización para asegurar
+    que todas las herramientas estén disponibles para los agentes.
+    """
+    try:
+        # Rutas para los ficheros de descripción de herramientas en formato JSON Schema
+        schema_dir = Path(__file__).parent / "schemas"
+        
+        # Verificar que el directorio existe
+        if not schema_dir.exists():
+            logger.warning(f"El directorio de schemas no existe: {schema_dir}")
+            return
+        
+        # Cargar todos los schemas JSON en el directorio
+        for schema_file in schema_dir.glob("*.json"):
+            try:
+                with open(schema_file, "r") as f:
+                    schema = json.load(f)
+                
+                # Extraer información del schema
+                name = schema.get("name", schema_file.stem)
+                description = schema.get("description", "")
+                category = schema.get("category", "general")
+                
+                # Crear una herramienta basada en el esquema
+                _register_schema_tool(name, description, schema, category)
+                logger.info(f"Herramienta local cargada: {name}")
+                
+            except Exception as e:
+                logger.error(f"Error cargando schema {schema_file}: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error cargando schemas: {str(e)}")
+
+def _register_schema_tool(name: str, description: str, schema: Dict[str, Any], category: str):
+    """
+    Registra una herramienta basada en un schema JSON.
+    
+    Args:
+        name: Nombre de la herramienta
+        description: Descripción de la herramienta
+        schema: Schema JSON que define la herramienta
+        category: Categoría de la herramienta
+    """
+    try:
+        # Crear un modelo Pydantic dinámico para los argumentos de entrada
+        input_props = schema.get("properties", {})
+        fields = {}
+        
+        for prop_name, prop_details in input_props.items():
+            prop_type = prop_details.get("type", "string")
+            prop_description = prop_details.get("description", "")
+            
+            # Mapear tipos JSON Schema a tipos Python
+            python_type = str
+            if prop_type == "number":
+                python_type = float
+            elif prop_type == "integer":
+                python_type = int
+            elif prop_type == "boolean":
+                python_type = bool
+            elif prop_type == "array":
+                python_type = List[str]
+            elif prop_type == "object":
+                python_type = Dict[str, Any]
+            
+            # Añadir el campo al modelo
+            fields[prop_name] = (Optional[python_type], None)
+        
+        # Crear el modelo dinámico
+        input_model = create_model(
+            f"{name}Input",
+            **fields
+        )
+        
+        # Función que implementa la herramienta
+        def tool_func(**kwargs):
+            try:
+                # Registrar inicio de ejecución para métricas
+                with metrics.tool_execution_time.labels(tool_name=name).time():
+                    # Implementación simulada para demostración
+                    logger.info(f"Ejecutando herramienta {name} con parámetros: {kwargs}")
+                    
+                    # Si existe una implementación real, la cargamos y ejecutamos
+                    impl_module_name = schema.get("implementation", "")
+                    if impl_module_name:
+                        try:
+                            module_path, class_name = impl_module_name.rsplit(".", 1)
+                            module = importlib.import_module(module_path)
+                            impl_class = getattr(module, class_name)
+                            
+                            # Instanciar e invocar
+                            impl = impl_class()
+                            result = impl.execute(**kwargs)
+                            metrics.tool_calls_total.labels(
+                                tool_name=name, 
+                                status="success"
+                            ).inc()
+                            return result
+                        except Exception as e:
+                            logger.error(f"Error en implementación de {name}: {str(e)}")
+                            metrics.tool_calls_total.labels(
+                                tool_name=name, 
+                                status="error"
+                            ).inc()
+                            return {"error": f"Error en implementación: {str(e)}"}
+                    
+                    # Si no hay implementación, devolvemos datos simulados
+                    metrics.tool_calls_total.labels(
+                        tool_name=name, 
+                        status="success"
+                    ).inc()
+                    return {
+                        "result": f"Simulación de resultados para {name}",
+                        "params": kwargs
+                    }
+            except Exception as e:
+                metrics.tool_calls_total.labels(
+                    tool_name=name, 
+                    status="error"
+                ).inc()
+                logger.error(f"Error ejecutando herramienta {name}: {str(e)}")
+                return {"error": str(e)}
+        
+        # Crear una herramienta estructurada
+        tool = StructuredTool.from_function(
+            func=tool_func,
+            name=name,
+            description=description,
+            args_schema=input_model
+        )
+        
+        # Registrar en el sistema global de LangChain
+        from langchain.tools import tool as langchain_tool_decorator
+        langchain_tool_decorator(name=name, description=description)(tool_func)
+        
+        logger.info(f"Herramienta {name} registrada como herramienta de LangChain")
+    except Exception as e:
+        logger.error(f"Error registrando herramienta {name}: {str(e)}")
 
 def register_all_tools():
     """
@@ -19,34 +174,44 @@ def register_all_tools():
     """
     logger.info("Iniciando registro de implementaciones de herramientas...")
     
-    # Registrar implementación de financial_models
-    financial_models_impl = FinancialModelsImplementation()
-    success = tool_registry.register_tool_implementation(
-        "financial_models", 
-        financial_models_impl.get_models
-    )
-    if success:
+    try:
+        # Cargar herramientas desde esquemas JSON
+        load_tools_from_schemas()
+        
+        # Registrar implementación de financial_models
+        financial_models_impl = FinancialModelsImplementation()
+        
+        # Crear una herramienta estructurada para financial_models
+        financial_tool = StructuredTool.from_function(
+            func=financial_models_impl.get_models,
+            name="financial_models",
+            description="Obtiene modelos o plantillas financieras para diferentes industrias"
+        )
+        
+        # Registrar en el sistema global de LangChain
+        from langchain.tools import tool as langchain_tool_decorator
+        langchain_tool_decorator(
+            name="financial_models", 
+            description="Obtiene modelos o plantillas financieras para diferentes industrias"
+        )(financial_models_impl.get_models)
+        
         logger.info("Implementación de financial_models registrada correctamente")
-    else:
-        logger.warning("No se pudo registrar la implementación de financial_models")
-    
-    # Registrar cliente MCP para otras herramientas
-    asyncio.create_task(_register_mcp_tools())
-    
-    # Mostrar resumen de herramientas registradas
-    all_tools = tool_registry.list_tools()
-    implemented_tools = tool_registry.list_tools_with_implementations()
-    
-    logger.info(f"Registro de herramientas completado:")
-    logger.info(f"  - Total de herramientas definidas: {len(all_tools)}")
-    logger.info(f"  - Herramientas con implementación: {len(implemented_tools)}")
-    logger.info(f"  - Herramientas pendientes: {len(all_tools) - len(implemented_tools)}")
-    
-    return {
-        "total_tools": len(all_tools),
-        "implemented_tools": len(implemented_tools),
-        "pending_tools": len(all_tools) - len(implemented_tools)
-    }
+        
+        # Registrar cliente MCP para otras herramientas
+        asyncio.create_task(_register_mcp_tools())
+        
+        # Mostrar resumen de herramientas
+        logger.info(f"Registro inicial de herramientas completado")
+        
+        return {
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error en registro de herramientas: {str(e)}")
+        return {
+            "error": str(e),
+            "status": "error"
+        }
 
 async def _register_mcp_tools():
     """
@@ -56,8 +221,8 @@ async def _register_mcp_tools():
     la inicialización de la aplicación.
     """
     try:
-        # Inicializar el cliente MCP oficial
-        mcp_client = MCPClientOfficial()
+        # Inicializar el cliente MCP
+        mcp_client = MCPClient()
         initialized = await mcp_client.initialize()
         
         if not initialized:
@@ -68,18 +233,30 @@ async def _register_mcp_tools():
         tools = await mcp_client.list_tools()
         logger.info(f"Herramientas disponibles en el servidor MCP: {len(tools)}")
         
-        for tool in tools:
-            tool_name = tool["name"]
-            
-            # Obtener un wrapper para la herramienta
-            wrapper = await mcp_client.get_tool_wrapper(tool_name)
-            if wrapper:
-                # Registrar la herramienta con el wrapper
-                success = tool_registry.register_tool_implementation(tool_name, wrapper)
-                if success:
-                    logger.info(f"Implementación de {tool_name} registrada correctamente (via MCP oficial)")
-                else:
-                    logger.warning(f"No se pudo registrar la implementación de {tool_name}")
+        for tool_info in tools:
+            try:
+                tool_name = tool_info.get("name")
+                tool_description = tool_info.get("description", "")
+                
+                # Función que llamará a la herramienta MCP
+                async def tool_func_async(tool_name=tool_name, **kwargs):
+                    return await mcp_client.call_tool(tool_name, kwargs)
+                
+                # Wrapper síncrono para la función asíncrona
+                def tool_func(**kwargs):
+                    loop = asyncio.get_event_loop()
+                    return loop.run_until_complete(tool_func_async(tool_name=tool_name, **kwargs))
+                
+                # Registrar en el sistema global de LangChain
+                from langchain.tools import tool as langchain_tool_decorator
+                langchain_tool_decorator(
+                    name=tool_name, 
+                    description=tool_description
+                )(tool_func)
+                
+                logger.info(f"Herramienta MCP registrada: {tool_name}")
+            except Exception as e:
+                logger.error(f"Error al registrar herramienta MCP {tool_info.get('name', 'desconocida')}: {str(e)}")
     
     except Exception as e:
         logger.error(f"Error al registrar herramientas MCP: {str(e)}") 
