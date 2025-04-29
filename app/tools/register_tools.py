@@ -239,35 +239,73 @@ async def _register_mcp_tools():
             return
         
         # Registrar las herramientas disponibles en el servidor MCP
-        tools = await mcp_client.list_tools()
-        logger.info(f"Herramientas disponibles en el servidor MCP: {len(tools)}")
-        
-        for tool_info in tools:
+        try:
+            # Obtener herramientas directamente del método asíncrono
+            tools = []
             try:
-                tool_name = tool_info.get("name")
-                tool_description = tool_info.get("description", "")
-                
-                # Función que llamará a la herramienta MCP
-                async def tool_func_async(tool_name=tool_name, **kwargs):
-                    return await mcp_client.call_tool(tool_name, kwargs)
-                
-                # Wrapper síncrono para la función asíncrona
-                def tool_func(**kwargs):
-                    loop = asyncio.get_event_loop()
-                    return loop.run_until_complete(tool_func_async(tool_name=tool_name, **kwargs))
-                
-                # Registrar en el sistema global de LangChain
-                from langchain.tools import tool as langchain_tool_decorator
-                
-                # Usar el decorador sin proporcionar name directamente
-                decorated_tool = langchain_tool_decorator(
-                    description=tool_description
-                )(tool_func)
-                decorated_tool.__name__ = tool_name
-                
-                logger.info(f"Herramienta MCP registrada: {tool_name}")
+                # Usar try/except específico para el método list_tools_async
+                tools = await mcp_client.list_tools_async()
             except Exception as e:
-                logger.error(f"Error al registrar herramienta MCP {tool_info.get('name', 'desconocida')}: {str(e)}")
-    
+                logger.error(f"Error específico al listar herramientas MCP de forma asíncrona: {str(e)}")
+                # Intentar de forma alternativa
+                tools = mcp_client.list_tools()
+            
+            if tools is None:
+                tools = []
+                
+            logger.info(f"Herramientas disponibles en el servidor MCP: {len(tools)}")
+            
+            for tool_info in tools:
+                try:
+                    tool_name = tool_info.get("name")
+                    tool_description = tool_info.get("description", "")
+                    
+                    # Creamos una función closure para cada herramienta específica
+                    # para mantener el contexto de tool_name
+                    def create_tool_func(specific_tool_name):
+                        # Función síncrona que llama a la herramienta MCP
+                        def tool_func(**kwargs):
+                            try:
+                                # Registrar inicio de ejecución para métricas
+                                with metrics.tool_execution_time.labels(tool_name=specific_tool_name).time():
+                                    logger.info(f"Ejecutando herramienta MCP {specific_tool_name} con parámetros: {kwargs}")
+                                    
+                                    # Llamar a la herramienta en el servidor MCP de forma síncrona
+                                    result = mcp_client.call_tool_sync(specific_tool_name, kwargs)
+                                    
+                                    metrics.tool_calls_total.labels(
+                                        tool_name=specific_tool_name, 
+                                        status="success"
+                                    ).inc()
+                                    
+                                    return result
+                            except Exception as e:
+                                metrics.tool_calls_total.labels(
+                                    tool_name=specific_tool_name, 
+                                    status="error"
+                                ).inc()
+                                logger.error(f"Error ejecutando herramienta MCP {specific_tool_name}: {str(e)}")
+                                return {"error": str(e)}
+                        
+                        return tool_func
+                    
+                    # Registrar la herramienta en LangChain
+                    from langchain.tools import tool as langchain_tool_decorator
+                    
+                    # Usar el decorador sin proporcionar name directamente
+                    func = create_tool_func(tool_name)
+                    decorated_tool = langchain_tool_decorator(
+                        description=tool_description
+                    )(func)
+                    decorated_tool.__name__ = tool_name
+                    
+                    logger.info(f"Herramienta MCP registrada: {tool_name}")
+                    
+                except Exception as e:
+                    logger.error(f"Error registrando herramienta MCP {tool_info.get('name', 'desconocida')}: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error al listar herramientas MCP: {str(e)}")
+            tools = []
     except Exception as e:
-        logger.error(f"Error al registrar herramientas MCP: {str(e)}") 
+        logger.error(f"Error al registrar herramientas MCP: {str(e)}")
+        return 

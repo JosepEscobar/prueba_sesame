@@ -53,13 +53,28 @@ async def lifespan(app: FastAPI):
             host=settings.MCP_HOST if hasattr(settings, 'MCP_HOST') else "localhost",
             port=settings.MCP_PORT if hasattr(settings, 'MCP_PORT') else 4000
         )
-        await mcp_server.start_server()
-        logger.info("Servidor MCP iniciado correctamente")
+        
+        # Iniciar el servidor con un timeout y manejo mejorado de errores
+        start_success = await asyncio.wait_for(
+            mcp_server.start_server(),
+            timeout=10.0  # 10 segundos de timeout
+        )
+        
+        if start_success:
+            logger.info("Servidor MCP iniciado correctamente")
+        else:
+            logger.error("No se pudo iniciar el servidor MCP")
+            mcp_server = None
+    except asyncio.TimeoutError:
+        logger.error("Timeout al iniciar el servidor MCP")
+        mcp_server = None
     except Exception as e:
         logger.error(f"Error al iniciar el servidor MCP: {str(e)}")
         mcp_server = None
     
     # Registrar herramientas disponibles para los agentes
+    # Ahora esperamos un corto tiempo para que el servidor MCP inicie completamente
+    await asyncio.sleep(1.0)  # Esperar 1 segundo
     tool_stats = register_all_tools()
     logger.info(f"Herramientas registradas: {tool_stats['implemented_tools']}/{tool_stats['total_tools']}")
     
@@ -73,8 +88,13 @@ async def lifespan(app: FastAPI):
     if mcp_server and mcp_server.is_running():
         logger.info("Deteniendo servidor MCP...")
         try:
-            await mcp_server.stop_server()
+            await asyncio.wait_for(
+                mcp_server.stop_server(),
+                timeout=5.0  # 5 segundos de timeout
+            )
             logger.info("Servidor MCP detenido correctamente")
+        except asyncio.TimeoutError:
+            logger.error("Timeout al detener el servidor MCP")
         except Exception as e:
             logger.error(f"Error al detener el servidor MCP: {str(e)}")
 

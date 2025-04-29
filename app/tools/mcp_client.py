@@ -44,16 +44,16 @@ class MCPClient:
             })
             
             # Cargar las herramientas disponibles
-            await self.list_tools()
+            await self.list_tools_async()
             logger.info(f"Cliente MCP inicializado correctamente en {self.base_url}")
             return True
         except Exception as e:
             logger.error(f"Error al inicializar cliente MCP en {self.base_url}: {str(e)}")
             return False
     
-    async def list_tools(self) -> List[Dict[str, Any]]:
+    async def list_tools_async(self) -> List[Dict[str, Any]]:
         """
-        Lista las herramientas disponibles en el servidor MCP.
+        Lista las herramientas disponibles en el servidor MCP (versión asíncrona).
         
         Returns:
             Lista de herramientas disponibles con sus esquemas
@@ -65,26 +65,96 @@ class MCPClient:
             if self._client is None:
                 await self.initialize()
                 
-            # Obtener herramientas del servidor MCP
-            tools = await self._client.get_tools()
-            
-            # Convertir herramientas a formato esperado
-            self._tools_cache = [
-                {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "inputs": {k: v for k, v in tool.args.items()},
-                    "outputs": {"result": {"type": "any", "description": "Resultado de la operación"}}
-                }
-                for tool in tools
-            ]
-            
-            logger.info(f"Herramientas MCP cargadas: {len(self._tools_cache)}")
-            return self._tools_cache
-            
+            # Detectar posibles problemas
+            if not hasattr(self._client, 'get_tools'):
+                logger.error("El cliente MCP no tiene el método get_tools")
+                return []
+                
+            try:
+                # Obtener herramientas del servidor MCP de manera segura
+                # A veces get_tools devuelve una lista directamente en lugar de una coroutine
+                get_tools_result = self._client.get_tools()
+                
+                # Comprobar si el resultado es una coroutine que podemos esperar
+                if hasattr(get_tools_result, '__await__'):
+                    # Es una coroutine, podemos usar await
+                    tools = await get_tools_result
+                else:
+                    # No es una coroutine, usamos directamente el resultado
+                    tools = get_tools_result
+                    
+                # Si es None o vacío, devolver lista vacía
+                if not tools:
+                    logger.warning("No se encontraron herramientas en el servidor MCP")
+                    return []
+                
+                # Convertir herramientas a formato esperado
+                self._tools_cache = [
+                    {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "inputs": {k: v for k, v in tool.args.items()},
+                        "outputs": {"result": {"type": "any", "description": "Resultado de la operación"}}
+                    }
+                    for tool in tools
+                ]
+                
+                logger.info(f"Herramientas MCP cargadas: {len(self._tools_cache)}")
+                return self._tools_cache
+                
+            except (AttributeError, TypeError) as e:
+                logger.error(f"Error al acceder a las propiedades de las herramientas: {str(e)}")
+                return []
+                
         except Exception as e:
             logger.error(f"Error al listar herramientas MCP: {str(e)}")
             return []
+    
+    def list_tools(self) -> List[Dict[str, Any]]:
+        """
+        Lista las herramientas disponibles en el servidor MCP (versión no asíncrona).
+        Usa el caché si está disponible para evitar llamadas asíncronas.
+        
+        Returns:
+            Lista de herramientas disponibles con sus esquemas
+        """
+        if self._tools_cache is not None:
+            return self._tools_cache
+        
+        try:
+            # Si no hay caché, intenta obtener herramientas de forma segura
+            # sin romper el bucle existente
+            try:
+                # Si el bucle ya está en ejecución, no podemos usar run_until_complete
+                asyncio.get_running_loop()
+                # Devolver una lista vacía por ahora, y una tarea en segundo plano
+                # actualizará el caché para futuras llamadas
+                if not hasattr(self, "_update_cache_task") or self._update_cache_task.done():
+                    # Crear tarea para actualizar caché en segundo plano
+                    self._update_cache_task = asyncio.create_task(self._update_tools_cache())
+                logger.warning("Operación asíncrona ejecutada durante bucle de eventos activo: se devuelve lista vacía")
+                return []
+            except RuntimeError:
+                # No hay bucle en ejecución, podemos usar run_until_complete
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    self._tools_cache = loop.run_until_complete(self.list_tools_async())
+                finally:
+                    loop.close()
+                return self._tools_cache
+                
+        except Exception as e:
+            logger.error(f"Error al listar herramientas MCP (modo síncrono): {str(e)}")
+            return []
+            
+    async def _update_tools_cache(self):
+        """Actualiza el caché de herramientas en segundo plano."""
+        try:
+            self._tools_cache = await self.list_tools_async()
+            logger.info(f"Caché de herramientas MCP actualizado en segundo plano: {len(self._tools_cache)}")
+        except Exception as e:
+            logger.error(f"Error al actualizar caché de herramientas MCP: {str(e)}")
     
     async def call_tool(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -153,6 +223,12 @@ class MCPClient:
             
             return {"error": f"Error en la llamada a la herramienta: {str(e)}"}
     
+    async def invoke_tool(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Alias para call_tool para mantener consistencia de nombres.
+        """
+        return await self.call_tool(tool_name, params)
+    
     async def get_tool_wrapper(self, tool_name: str) -> Optional[Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]]]:
         """
         Obtiene una función wrapper para una herramienta específica.
@@ -164,7 +240,7 @@ class MCPClient:
             Función wrapper que puede ser llamada con los parámetros de la herramienta
         """
         # Verificar que la herramienta existe
-        tools = await self.list_tools()
+        tools = await self.list_tools_async()
         tool_exists = any(tool["name"] == tool_name for tool in tools)
         
         if not tool_exists:
@@ -184,9 +260,8 @@ class MCPClient:
         return loop.run_until_complete(self.initialize())
     
     def list_tools_sync(self) -> List[Dict[str, Any]]:
-        """Versión síncrona de list_tools()."""
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(self.list_tools())
+        """Versión síncrona de list_tools_async()."""
+        return self.list_tools()
     
     def call_tool_sync(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Versión síncrona de call_tool()."""
