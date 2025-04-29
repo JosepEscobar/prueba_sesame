@@ -3,7 +3,7 @@ import uuid
 import contextlib
 import asyncio
 from fastapi import FastAPI, Request, Depends, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from prometheus_client import make_asgi_app
@@ -249,3 +249,8 @@ def custom_openapi():
     return app.openapi_schema
 
 app.openapi = custom_openapi 
+
+# Crear una aplicación para redirigir /docs a /api/v1/docs
+@app.get("/docs", include_in_schema=False)
+def redirect_to_docs():
+    return RedirectResponse(url="/api/v1/docs") 

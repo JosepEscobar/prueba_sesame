@@ -164,7 +164,60 @@ class MetricsCollector:
                 "error_type": error_type
             }
         )
+    
+    @staticmethod
+    def record_lookup_execution(lookup_type: str, success: bool = True, execution_time: float = None, error: str = None) -> None:
+        """Registra la ejecución de una búsqueda de datos."""
+        status_str = "success" if success else "failure"
+        agent_name = f"data_lookup_{lookup_type}"
         
+        if execution_time is None:
+            execution_time = 0.0
+            
+        AGENT_EXECUTION_TIME.labels(agent_name=agent_name).observe(execution_time)
+        AGENT_EXECUTION_COUNT.labels(agent_name=agent_name, status=status_str).inc()
+        
+        if error and not success:
+            ERROR_COUNT.labels(agent_name=agent_name, error_type=error).inc()
+        
+        logger.info(
+            f"Búsqueda de datos {lookup_type} realizada",
+            extra={
+                "lookup_type": lookup_type,
+                "execution_time": execution_time,
+                "status": status_str,
+                "error": error if error else None
+            }
+        )
+    
+    @staticmethod
+    def record_query_execution(success: bool = True, agent: str = "unknown", confidence: float = 0.0, execution_time: float = None, error: str = None) -> None:
+        """Registra la ejecución de una consulta al sistema multi-agente."""
+        status_str = "success" if success else "failure"
+        
+        if execution_time is None:
+            execution_time = 0.0
+            
+        AGENT_EXECUTION_TIME.labels(agent_name=agent).observe(execution_time)
+        AGENT_EXECUTION_COUNT.labels(agent_name=agent, status=status_str).inc()
+        
+        if confidence > 0:
+            AGENT_CONFIDENCE.labels(agent_name=agent).set(confidence)
+        
+        if error and not success:
+            ERROR_COUNT.labels(agent_name=agent, error_type=error).inc()
+        
+        logger.info(
+            f"Consulta procesada por agente {agent}",
+            extra={
+                "agent": agent,
+                "execution_time": execution_time,
+                "status": status_str,
+                "confidence": confidence,
+                "error": error if error else None
+            }
+        )
+    
     @staticmethod
     def record_data_lookup(lookup_type: str, success: bool, execution_time: float) -> None:
         """Registra una búsqueda de datos."""

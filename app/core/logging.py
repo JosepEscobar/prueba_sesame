@@ -1,7 +1,9 @@
 import logging
 import json
 import sys
+import os
 from typing import Any, Dict
+from logging.handlers import RotatingFileHandler
 from pythonjsonlogger import jsonlogger
 from app.core.config import get_settings
 
@@ -41,9 +43,6 @@ def setup_logging() -> None:
     # Eliminar handlers existentes
     logger.handlers = []
     
-    # Crear handler para consola
-    console_handler = logging.StreamHandler(sys.stdout)
-    
     # Configurar el formateador
     if settings.LOG_FORMAT == "json":
         formatter = CustomJsonFormatter(
@@ -54,8 +53,48 @@ def setup_logging() -> None:
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
     
+    # Crear directorio de logs si no existe
+    logs_dir = os.path.join(os.getcwd(), "logs")
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
+    
+    # Crear handler para consola
+    console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
+    
+    # Crear handler para archivo de logs general
+    general_log_file = os.path.join(logs_dir, "app.log")
+    file_handler = RotatingFileHandler(
+        general_log_file, 
+        maxBytes=10 * 1024 * 1024,  # 10 MB
+        backupCount=5
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    
+    # Crear handler para archivo de logs de errores
+    error_log_file = os.path.join(logs_dir, "error.log")
+    error_file_handler = RotatingFileHandler(
+        error_log_file, 
+        maxBytes=10 * 1024 * 1024,  # 10 MB
+        backupCount=5
+    )
+    error_file_handler.setLevel(logging.ERROR)
+    error_file_handler.setFormatter(formatter)
+    logger.addHandler(error_file_handler)
+    
+    # Crear handler para logs de servicios (como data_lookup)
+    services_log_file = os.path.join(logs_dir, "services.log")
+    services_file_handler = RotatingFileHandler(
+        services_log_file, 
+        maxBytes=10 * 1024 * 1024,  # 10 MB
+        backupCount=5
+    )
+    services_file_handler.setFormatter(formatter)
+    services_logger = logging.getLogger("app.services")
+    services_logger.propagate = True  # Los logs también van al logger principal
+    services_logger.addHandler(services_file_handler)
     
     # Configurar loggers de terceros
     logging.getLogger("uvicorn").setLevel(logging.INFO)

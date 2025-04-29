@@ -16,7 +16,6 @@ from app.api.endpoints import tools
 
 # Crear router de la API
 api_router = APIRouter()
-metrics = MetricsCollector()
 
 # Instancia del orquestador para procesar las consultas
 orchestrator = Orchestrator()
@@ -81,7 +80,7 @@ async def process_query(
         
         # Registrar métricas en segundo plano
         background_tasks.add_task(
-            metrics.record_query_execution,
+            MetricsCollector.record_query_execution,
             success=True,
             agent=result.get("agent", "unknown"),
             confidence=result.get("confidence", 0.0),
@@ -106,7 +105,7 @@ async def process_query(
         
         # Registrar métricas en segundo plano
         background_tasks.add_task(
-            metrics.record_query_execution,
+            MetricsCollector.record_query_execution,
             success=False,
             agent="error",
             confidence=0.0,
@@ -309,7 +308,7 @@ async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks
         
         # Registrar métricas en segundo plano
         background_tasks.add_task(
-            metrics.record_lookup_execution,
+            MetricsCollector.record_lookup_execution,
             lookup_type=lookup_type,
             success=True,
             execution_time=processing_time
@@ -317,14 +316,20 @@ async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks
         
         logger.info(f"Búsqueda '{lookup_type}' completada en {processing_time:.4f}s (request_id: {request_id})")
         
-        # Agregar metadatos a la respuesta
-        result["metadata"] = {
-            "request_id": request_id,
+        # Formatear la respuesta según el modelo DataLookupResponse
+        response = {
+            "success": True,
+            "result": result,
+            "query": {"term": query},
             "lookup_type": lookup_type,
-            "processing_time": processing_time
+            "metadata": {
+                "request_id": request_id,
+                "lookup_type": lookup_type,
+                "processing_time": processing_time
+            }
         }
         
-        return result
+        return response
         
     except Exception as e:
         # Calcular tiempo en caso de error
@@ -332,7 +337,7 @@ async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks
         
         # Registrar métricas en segundo plano
         background_tasks.add_task(
-            metrics.record_lookup_execution,
+            MetricsCollector.record_lookup_execution,
             lookup_type=lookup_type,
             success=False,
             execution_time=processing_time,
@@ -342,8 +347,10 @@ async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks
         logger.error(f"Error en búsqueda '{lookup_type}': {str(e)} (request_id: {request_id})")
         
         return {
-            "error": f"Error al realizar búsqueda de tipo '{lookup_type}'",
-            "detail": str(e),
+            "success": False,
+            "result": {"error": f"Error al realizar búsqueda de tipo '{lookup_type}'", "detail": str(e)},
+            "query": {"term": query},
+            "lookup_type": lookup_type,
             "metadata": {
                 "request_id": request_id,
                 "processing_time": processing_time,
