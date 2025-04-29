@@ -40,15 +40,46 @@ class MetricsCollector:
     """Recolector de métricas para el sistema de agentes."""
     
     @staticmethod
-    def record_agent_execution(agent_name: str, execution_time: float, status: str = "success") -> None:
+    def start_timer() -> float:
+        """Inicia un temporizador y retorna el tiempo de inicio."""
+        return time.time()
+    
+    @staticmethod
+    def stop_timer(start_time: float) -> float:
+        """Detiene un temporizador y retorna la duración."""
+        return time.time() - start_time
+    
+    @staticmethod
+    def record_agent_execution(agent_name: str, status: bool = True, execution_time: float = None) -> None:
         """Registra la ejecución de un agente."""
+        status_str = "success" if status else "failure"
+        if execution_time is None:
+            execution_time = 0.0
+            
         AGENT_EXECUTION_TIME.labels(agent_name=agent_name).observe(execution_time)
-        AGENT_EXECUTION_COUNT.labels(agent_name=agent_name, status=status).inc()
+        AGENT_EXECUTION_COUNT.labels(agent_name=agent_name, status=status_str).inc()
         
         logger.info(
             f"Agente {agent_name} ejecutado",
             extra={
                 "agent_name": agent_name,
+                "execution_time": execution_time,
+                "status": status_str
+            }
+        )
+    
+    @staticmethod
+    def record_execution(service_name: str, operation: str, execution_time: float, status: str = "success") -> None:
+        """Registra la ejecución de una operación de servicio."""
+        operation_name = f"{service_name}_{operation}"
+        AGENT_EXECUTION_TIME.labels(agent_name=operation_name).observe(execution_time)
+        AGENT_EXECUTION_COUNT.labels(agent_name=operation_name, status=status).inc()
+        
+        logger.info(
+            f"Operación {operation} en servicio {service_name} ejecutada",
+            extra={
+                "service_name": service_name,
+                "operation": operation,
                 "execution_time": execution_time,
                 "status": status
             }
@@ -91,6 +122,24 @@ class MetricsCollector:
             extra={
                 "agent_name": agent_name,
                 "error_type": error_type
+            }
+        )
+        
+    @staticmethod
+    def record_data_lookup(lookup_type: str, success: bool, execution_time: float) -> None:
+        """Registra una búsqueda de datos."""
+        status_str = "success" if success else "failure"
+        agent_name = f"data_lookup_{lookup_type}"
+        
+        AGENT_EXECUTION_TIME.labels(agent_name=agent_name).observe(execution_time)
+        AGENT_EXECUTION_COUNT.labels(agent_name=agent_name, status=status_str).inc()
+        
+        logger.info(
+            f"Búsqueda de datos {lookup_type} realizada",
+            extra={
+                "lookup_type": lookup_type,
+                "execution_time": execution_time,
+                "status": status_str
             }
         )
 

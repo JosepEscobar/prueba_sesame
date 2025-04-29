@@ -49,6 +49,41 @@ class Orchestrator:
         
         logger.info(f"Orchestrator inicializado con {len(self.agents)} agentes y servicio de búsqueda de datos")
     
+    def process_query(self, query: str, context: Optional[Dict[str, Any]] = None, agent_preference: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Procesa una consulta utilizando el sistema multi-agente.
+        
+        Args:
+            query: Texto de la consulta
+            context: Contexto adicional para enriquecer la consulta (opcional)
+            agent_preference: Preferencia de agente específico (opcional)
+            
+        Returns:
+            Resultado del procesamiento incluyendo agente utilizado, resultado y nivel de confianza
+        """
+        # Crear diccionario de solicitud
+        request = {
+            "query": query,
+            "context": context or {}
+        }
+        
+        if agent_preference:
+            request["agent_preference"] = agent_preference
+            
+        # Procesar la solicitud
+        result = self.process_request(request)
+        
+        # Adaptar el resultado al formato esperado por la API
+        if result.get("status") == "success":
+            return {
+                "result": result["result"],
+                "agent": result["selected_agent"],
+                "confidence": result.get("confidence", 0.0)
+            }
+        else:
+            # En caso de error, lanzar una excepción que será capturada en el router de la API
+            raise Exception(result.get("error", "Error desconocido en el procesamiento de la consulta"))
+    
     def process_request(self, request: Dict[str, Any], request_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Procesa una solicitud utilizando el sistema multi-agente.
@@ -131,7 +166,8 @@ class Orchestrator:
                 "result": final_result,
                 "request_id": self.request_id,
                 "processing_time": processing_time,
-                "selected_agent": selected_agent_name
+                "selected_agent": selected_agent_name,
+                "confidence": confidence
             }
             
             logger.info(f"Solicitud {self.request_id} procesada exitosamente en {processing_time:.2f} segundos")
@@ -148,4 +184,69 @@ class Orchestrator:
                 "error": error_msg,
                 "request_id": self.request_id,
                 "processing_time": processing_time
-            } 
+            }
+            
+    def get_available_agents(self) -> List[Dict[str, Any]]:
+        """
+        Retorna una lista de agentes disponibles en el sistema.
+        
+        Returns:
+            Lista de diccionarios con información de cada agente
+        """
+        agents_info = []
+        for agent_id, agent in self.agents.items():
+            agents_info.append({
+                "id": agent_id,
+                "name": agent.name,
+                "description": getattr(agent, "description", "Agente especializado del sistema multi-agente"),
+                "capabilities": getattr(agent, "capabilities", ["Procesamiento de consultas especializadas"])
+            })
+        return agents_info
+    
+    def get_agent_info(self, agent_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retorna información detallada sobre un agente específico.
+        
+        Args:
+            agent_id: Identificador del agente
+            
+        Returns:
+            Diccionario con información detallada del agente o None si no existe
+        """
+        if agent_id not in self.agents:
+            return None
+            
+        agent = self.agents[agent_id]
+        return {
+            "id": agent_id,
+            "name": agent.name,
+            "description": getattr(agent, "description", "Agente especializado del sistema multi-agente"),
+            "capabilities": getattr(agent, "capabilities", ["Procesamiento de consultas especializadas"]),
+            "configuration": {
+                "model": getattr(agent, "model_name", "default_model"),
+                "tools": list(getattr(agent, "tools", {}).keys())
+            }
+        }
+    
+    def get_system_stats(self) -> Dict[str, Any]:
+        """
+        Retorna estadísticas del sistema multi-agente.
+        
+        Returns:
+            Diccionario con estadísticas del sistema
+        """
+        # En una implementación real, estas estadísticas vendrían de un sistema
+        # de monitoreo como Prometheus. Aquí se simula con datos estáticos.
+        return {
+            "uptime": time.time() - 1682341200,  # Tiempo desde un momento arbitrario
+            "total_requests": 1250,
+            "success_rate": 0.95,
+            "average_response_time": 2.3,
+            "agent_distribution": {
+                "analysis_agent": 0.45,
+                "action_agent": 0.25,
+                "summary_agent": 0.15,
+                "finance_agent": 0.10,
+                "marketing_agent": 0.05
+            }
+        } 

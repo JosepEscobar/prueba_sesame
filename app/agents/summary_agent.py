@@ -4,10 +4,27 @@ Agent encargado de crear resúmenes concisos y claros de información compleja.
 
 from typing import Dict, Any, List, Optional
 import time
+import json
+
 from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
 from app.agents.base import BaseAgent
 from app.core.logging import logger
-from app.core.config import settings
+from app.core.config import get_settings
+
+# Obtener la configuración
+settings = get_settings()
+
+# Función para crear un LLM que puede ser reemplazado en los tests
+def create_llm():
+    return ChatOpenAI(
+        model_name=settings.OPENAI_MODEL,
+        temperature=settings.TEMPERATURE,
+        api_key=settings.OPENAI_API_KEY,
+    )
+
+# LLM global que puede ser sustituido desde los tests
+llm = create_llm()
 
 class SummaryAgent(BaseAgent):
     """
@@ -16,11 +33,15 @@ class SummaryAgent(BaseAgent):
     reportes de mercado o grandes volúmenes de información en puntos clave.
     """
     
-    def __init__(self, model_name: str = "gpt-3.5-turbo"):
+    def __init__(self, model=None):
         """Inicializa el SummaryAgent"""
-        super().__init__(name="summary_agent")
-        self.llm = ChatOpenAI(model_name=model_name, temperature=0.1)
-        logger.info(f"SummaryAgent inicializado con modelo {model_name}")
+        super().__init__(
+            name="summary_agent",
+            description="Especialista en síntesis de información."
+        )
+        # Asignar el LLM importado a la propiedad de la instancia
+        self.llm = llm
+        logger.info(f"SummaryAgent inicializado")
     
     def _execute_impl(self, input_data: Dict[Any, Any]) -> Dict[Any, Any]:
         """
@@ -68,8 +89,9 @@ class SummaryAgent(BaseAgent):
             logger.info(f"SummaryAgent completó la generación del resumen en {processing_time:.2f} segundos")
             
             return {
-                "result": response.content,
-                "input": query,
+                "summary_result": response.content,
+                "result": response.content,  # Para compatibilidad con la prueba
+                "input": input_data,
                 "confidence": 0.85,
                 "processing_time": processing_time
             }
@@ -78,6 +100,7 @@ class SummaryAgent(BaseAgent):
             logger.error(f"Error en SummaryAgent: {str(e)}")
             return {
                 "error": str(e),
-                "input": input_data.get("query", ""),
-                "confidence": 0.0
+                "input": input_data,
+                "confidence": 0.0,
+                "processing_time": 0.0
             } 

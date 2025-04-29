@@ -105,11 +105,12 @@ class MarketingAgent(BaseAgent):
             "services": self.services
         }
         
+        # Formatear el prompt usando el método de formato
+        formatted_prompt = self._format_marketing_prompt(prompt_input)
+        
         # Generar análisis de marketing utilizando el LLM
         logger.info("Generando análisis de marketing con el LLM")
-        response = self.llm.invoke(
-            self._format_marketing_prompt(prompt_input)
-        )
+        response = self.llm.invoke(formatted_prompt)
         
         # Estructurar la respuesta
         processing_time = time.time() - start_time

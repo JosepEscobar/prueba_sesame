@@ -4,9 +4,12 @@ import time
 from langchain.prompts import ChatPromptTemplate
 from app.agents.base import BaseAgent
 from app.core.logging import logger
-from app.core.config import settings
+from app.core.config import get_settings
 from app.tools.mcp_client import MCPClient
 from app.services.data_lookup import DataLookupService
+
+# Obtener la configuración
+settings = get_settings()
 
 class DataLookupAgent(BaseAgent):
     """
