@@ -181,45 +181,21 @@ class MCPToolServer:
             return True
         
         try:
-            # IMPORTANTE: Esta función no debe ejecutarse dentro de una aplicación FastAPI
-            # Se debe usar start_mcp_server_process desde server_init.py para iniciar 
-            # el servidor en un proceso separado
-            
-            # Verificar si estamos en un contexto donde ya hay asyncio en ejecución
-            try:
-                asyncio.get_running_loop()
-                logger.error(
-                    "Error: Ya existe un bucle de eventos asyncio en ejecución. "
-                    "No se puede iniciar el servidor MCP en el mismo hilo. "
-                    "Use start_mcp_server_process() de server_init.py para iniciar "
-                    "el servidor en un proceso separado."
-                )
-                return False
-            except RuntimeError:
-                # No hay bucle en ejecución, podemos continuar
-                pass
-                
             # Configurar el servidor
             self.mcp_server.server_host = self.host
             self.mcp_server.server_port = self.port
             
             # En un entorno sin FastAPI, podemos iniciar el servidor directamente
-            logger.info(f"Iniciando servidor MCP en http://{self.host}:{self.port}")
+            logger.info(f"Iniciando servidor MCP en {self.host}:{self.port}")
             
-            # Aquí se ejecutaría normalmente el servidor
-            # Pero usamos un enfoque más simple debido a posibles problemas con asyncio
+            # Marcar como en ejecución
             self._is_running = True
             
-            # Ejecutar en un nuevo bucle de eventos
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.create_task(self.mcp_server.run())
-            
-            logger.info(f"Servidor MCP iniciado en http://{self.host}:{self.port}")
             return True
             
         except Exception as e:
             logger.error(f"Error al iniciar servidor MCP: {str(e)}")
+            self._is_running = False
             return False
     
     async def stop_server(self) -> bool:
@@ -253,54 +229,38 @@ class MCPToolServer:
             True si el servidor está en ejecución, False en caso contrario
         """
         return self._is_running
+    
+    def get_registered_tools(self) -> List[str]:
+        """
+        Obtiene la lista de herramientas registradas en el servidor.
+        
+        Returns:
+            Lista de nombres de herramientas registradas
+        """
+        if not hasattr(self, "_tool_schemas"):
+            return []
+        
+        return list(self._tool_schemas.keys())
 
 
 # Función auxiliar para ejecutar el servidor en un proceso separado
 async def run_server(server: MCPToolServer):
     """
-    Inicia el servidor MCP y mantiene el proceso en ejecución.
+    Inicia el servidor MCP.
     
     Args:
         server: Instancia de MCPToolServer a iniciar
     """
     try:
-        # Verificar que las herramientas estén registradas
-        if not server.get_registered_tools():
-            logger.warning("No hay herramientas registradas en el servidor MCP")
-            logger.info("Intentando registrar herramientas predeterminadas...")
-            
-            # Registrar herramientas financieras
-            try:
-                from app.tools.implementations.financial_models import FinancialModelsImplementation
-                financial_impl = FinancialModelsImplementation()
-                server.register_tool_implementation("financial_models", financial_impl.execute)
-                logger.info("Herramienta financial_models registrada correctamente")
-            except Exception as e:
-                logger.error(f"Error al registrar herramienta financial_models: {str(e)}")
-            
-            # Registrar herramientas de búsqueda de datos
-            try:
-                from app.tools.implementations.data_lookup import DataLookupImplementation
-                data_lookup_impl = DataLookupImplementation()
-                server.register_tool_implementation("data_lookup", data_lookup_impl.execute)
-                logger.info("Herramienta data_lookup registrada correctamente")
-            except Exception as e:
-                logger.error(f"Error al registrar herramienta data_lookup: {str(e)}")
-        
-        # Iniciar el servidor
+        # Iniciar el servidor (esto bloqueará la ejecución hasta que se detenga)
         logger.info(f"Iniciando servidor MCP en {server.host}:{server.port}")
-        await server.start_server()
-        
-        # Mantener el servidor en ejecución
-        while server.is_running():
-            await asyncio.sleep(1)
+        await server.mcp_server.run()
             
     except KeyboardInterrupt:
         logger.info("Servidor MCP detenido por interrupción del teclado")
     except Exception as e:
         logger.error(f"Error en el servidor MCP: {str(e)}")
     finally:
-        # Asegurarse de detener el servidor al salir
-        if server.is_running():
-            await server.stop_server()
-            logger.info("Servidor MCP detenido correctamente") 
+        # Asegurarse de que el servidor se marca como detenido
+        server._is_running = False
+        logger.info("Servidor MCP detenido correctamente") 

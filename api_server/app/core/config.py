@@ -3,6 +3,10 @@ from typing import Dict, Any, List, Optional, Union
 from pydantic import field_validator, Field, AnyHttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde .env
+load_dotenv()
 
 
 class Settings(BaseSettings):
@@ -28,9 +32,9 @@ class Settings(BaseSettings):
     CORS_ALLOW_METHODS: List[str] = ["*"]
     CORS_ALLOW_HEADERS: List[str] = ["*"]
     
-    # Configuración de OpenAI
-    OPENAI_API_KEY: str = "sk-your-key-here"
-    OPENAI_MODEL: str = "gpt-4o"
+    # Configuración de OpenAI (no incluir claves en el código)
+    OPENAI_API_KEY: str = ""  # Será cargada desde .env
+    OPENAI_MODEL: str = "gpt-3.5-turbo"
     TEMPERATURE: float = 0.7
     MAX_TOKENS: int = 1000
     
@@ -49,9 +53,13 @@ class Settings(BaseSettings):
     ORCHESTRATOR_CONFIDENCE_THRESHOLD: float = 0.7
     
     # Configuración de servicios externos
-    ALPHA_VANTAGE_API_KEY: str = "your-alpha-vantage-key"
-    NEWS_API_KEY: str = "your-news-api-key"
-    BING_SEARCH_API_KEY: str = "your-bing-search-key"
+    ALPHA_VANTAGE_API_KEY: str = ""  # Será cargada desde .env
+    NEWS_API_KEY: str = ""  # Será cargada desde .env
+    BING_SEARCH_API_KEY: str = ""  # Será cargada desde .env
+    
+    # Configuración del servidor API
+    API_HOST: str = "0.0.0.0"
+    API_PORT: int = 8000
     
     # Configuración del servidor MCP
     MCP_ENABLED: bool = True
@@ -74,7 +82,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
-        env_file_encoding="utf-8"
+        env_file_encoding="utf-8",
+        extra="ignore"
     )
 
     @field_validator("API_PREFIX")
@@ -82,6 +91,10 @@ class Settings(BaseSettings):
         if not v.startswith("/"):
             return f"/{v}"
         return v
+
+    def is_openai_api_key_valid(self) -> bool:
+        """Verifica si la clave API de OpenAI es válida para su uso."""
+        return bool(self.OPENAI_API_KEY) and self.OPENAI_API_KEY != "sk-your-key-here" and self.OPENAI_API_KEY != ""
 
 
 @lru_cache()

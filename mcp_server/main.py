@@ -8,67 +8,39 @@ para que puedan ser consumidas por clientes como LangChain, LlamaIndex u otros a
 
 import os
 import sys
-import logging
-import argparse
-import asyncio
 from pathlib import Path
+import uvicorn
+from fastapi import FastAPI
 
-# Añadir el directorio raíz al path para poder importar módulos
-sys.path.insert(0, str(Path(__file__).parent))
+# Crear la aplicación FastAPI
+app = FastAPI(
+    title="Servidor MCP",
+    description="Servidor para exponer herramientas locales mediante MCP",
+    version="0.1.0"
+)
 
-from app.core.logging import setup_logging
-from app.tools.server.mcp_server import MCPToolServer, run_server
+@app.get("/")
+async def root():
+    """Ruta raíz del servidor."""
+    return {
+        "message": "¡Bienvenido al servidor MCP de Sesame!",
+        "docs": "/docs"
+    }
 
-# Configurar logging
-logs_dir = Path(__file__).parent / "logs"
-logs_dir.mkdir(exist_ok=True)
-setup_logging()
-
-logger = logging.getLogger("mcp_server")
-
-async def main():
-    """Punto de entrada principal para iniciar el servidor MCP."""
-    # Configurar argumentos de línea de comandos
-    parser = argparse.ArgumentParser(description="Servidor MCP para herramientas locales")
-    parser.add_argument("--host", default="0.0.0.0", help="Host para el servidor MCP (default: 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=4000, help="Puerto para el servidor MCP (default: 4000)")
-    args = parser.parse_args()
-    
-    # Inicializar el servidor
-    server = MCPToolServer(host=args.host, port=args.port)
-    
-    # Cargar herramientas desde el directorio de esquemas
-    schemas_dir = Path(__file__).parent / "app" / "tools" / "schemas"
-    server.register_tools_from_directory(schemas_dir)
-    
-    # Registrar implementaciones
-    try:
-        # Implementación de financial_models
-        from app.tools.implementations.financial_models import FinancialModelsImplementation
-        financial_models_impl = FinancialModelsImplementation()
-        server.register_tool_implementation("financial_models", financial_models_impl.execute)
-        logger.info("Herramienta financial_models registrada correctamente")
-        
-        # Implementación de data_lookup
-        from app.tools.implementations.data_lookup import DataLookupImplementation
-        data_lookup_impl = DataLookupImplementation()
-        server.register_tool_implementation("data_lookup", data_lookup_impl.execute)
-        logger.info("Herramienta data_lookup registrada correctamente")
-        
-        # Añadir más implementaciones aquí si es necesario
-        
-    except Exception as e:
-        logger.error(f"Error al registrar implementaciones: {str(e)}")
-    
-    # Ejecutar el servidor
-    await run_server(server)
+@app.get("/health")
+async def health_check():
+    """Verificar el estado del servidor."""
+    return {
+        "status": "healthy",
+        "version": "0.1.0"
+    }
 
 if __name__ == "__main__":
-    try:
-        logger.info("Iniciando servidor MCP")
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Servidor MCP detenido por el usuario")
-    except Exception as e:
-        logger.error(f"Error fatal en el servidor MCP: {str(e)}")
-        sys.exit(1) 
+    # Ejecutar la aplicación con uvicorn
+    print("Iniciando servidor simple para prueba...")
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=4000,
+        log_level="info"
+    ) 

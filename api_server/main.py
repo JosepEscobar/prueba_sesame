@@ -24,7 +24,7 @@ from app.api.routes import router
 # Configurar logging
 logs_dir = Path(__file__).parent / "logs"
 logs_dir.mkdir(exist_ok=True)
-setup_logging(logs_dir)
+setup_logging()
 
 logger = logging.getLogger("api_server")
 settings = get_settings()
@@ -46,7 +46,7 @@ app.add_middleware(
 )
 
 # Incluir rutas de la API
-app.include_router(router, prefix="/api")
+app.include_router(router, prefix=settings.API_PREFIX)
 
 @app.get("/")
 async def root():
@@ -69,8 +69,8 @@ if __name__ == "__main__":
     logger.info("Iniciando servidor API")
     uvicorn.run(
         "main:app",
-        host=settings.HOST,
-        port=settings.PORT,
+        host=settings.API_HOST,
+        port=settings.API_PORT,
         reload=settings.DEBUG,
         log_level="info"
     ) 
