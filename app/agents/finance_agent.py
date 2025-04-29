@@ -4,8 +4,10 @@ import time
 from langchain_openai import ChatOpenAI
 from app.agents.base import BaseAgent
 from app.core.logging import logger
-from app.core.config import settings
+from app.core.config import get_settings
 
+# Obtener la configuración
+settings = get_settings()
 
 class FinanceAgent(BaseAgent):
     """
@@ -91,11 +93,12 @@ class FinanceAgent(BaseAgent):
             "services": self.services
         }
         
+        # Formatear el prompt usando el método de formato
+        formatted_prompt = self._format_finance_prompt(prompt_input)
+        
         # Generar análisis financiero utilizando el LLM
         logger.info("Generando análisis financiero con el LLM")
-        response = self.llm.invoke(
-            self._format_finance_prompt(prompt_input)
-        )
+        response = self.llm.invoke(formatted_prompt)
         
         # Estructurar la respuesta
         processing_time = time.time() - start_time

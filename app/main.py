@@ -1,28 +1,31 @@
 import time
 import uuid
 import contextlib
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request, Depends, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from prometheus_client import make_asgi_app
+import logging
+from app.core.config import get_settings
+from app.core.logging import setup_logging, logger
+from app.core.metrics import setup_metrics
+from app.api.router import api_router
+from app.tools.register_tools import register_all_tools
 
 # Configuración de logging
-from app.core.logging import setup_logging, logger
-
-# Configuración de métricas
-from app.core.metrics import MetricsMiddleware
-
-# Rutas
-from app.api.router import api_router
-
-# Configuración
-from app.core.config import get_settings, Settings
-
-# Inicializar logger
 setup_logging()
 
-# Captura de errores con Sentry (si está configurado)
+# Configuración de métricas
+setup_metrics(app)
+
+# Rutas
+api_router = api_router
+
+# Configuración
 settings = get_settings()
+
+# Captura de errores con Sentry (si está configurado)
 if settings.SENTRY_DSN:
     import sentry_sdk
     sentry_sdk.init(
@@ -35,22 +38,21 @@ if settings.SENTRY_DSN:
 # Crear la aplicación FastAPI
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Sistema Multi-Agente basado en LangGraph para procesar consultas de forma inteligente",
+    description="API para el sistema multi-agente",
     version="0.1.0",
-    debug=settings.DEBUG
+    openapi_url=f"{settings.API_PREFIX}/openapi.json",
+    docs_url=f"{settings.API_PREFIX}/docs",
+    redoc_url=f"{settings.API_PREFIX}/redoc",
 )
 
 # Middleware de CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
-    allow_methods=settings.CORS_ALLOW_METHODS,
-    allow_headers=settings.CORS_ALLOW_HEADERS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-
-# Middleware de métricas
-app.add_middleware(MetricsMiddleware)
 
 # Ruta para métricas Prometheus
 metrics_app = make_asgi_app()
@@ -117,25 +119,95 @@ async def log_requests(request: Request, call_next):
             }
         )
 
+# Eventos de inicio y cierre de la aplicación
+@app.on_event("startup")
+async def startup_event():
+    """Evento de inicio de la aplicación"""
+    logger.info(f"Starting {settings.APP_NAME}...")
+    
+    # Registrar herramientas disponibles para los agentes
+    tool_stats = register_all_tools()
+    logger.info(f"Herramientas registradas: {tool_stats['implemented_tools']}/{tool_stats['total_tools']}")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Evento de cierre de la aplicación"""
+    logger.info(f"Shutting down {settings.APP_NAME}...")
+
 # Incluir rutas
 app.include_router(api_router, prefix=settings.API_PREFIX)
 
 # Endpoint raíz
-@app.get("/")
-def root():
-    """Endpoint raíz que muestra información básica de la API."""
+@app.get("/", 
+    tags=["system"],
+    summary="Punto de entrada principal",
+    description="Devuelve un mensaje de bienvenida con información básica sobre el sistema"
+)
+async def root():
+    """
+    Endpoint raíz que muestra información básica de la API.
+    
+    Proporciona detalles sobre:
+    - Nombre del sistema
+    - Estado actual
+    - Entorno de ejecución
+    - Versión de la API
+    """
     return {
-        "name": settings.APP_NAME,
-        "status": "online",
-        "environment": settings.ENVIRONMENT,
-        "api_version": "v1"
+        "message": f"Welcome to {settings.APP_NAME}",
+        "version": "0.1.0",
+        "docs": f"{settings.API_PREFIX}/docs"
     }
 
 # Endpoint de chequeo de salud
-@app.get("/health")
-def health_check():
-    """Endpoint para comprobar si el servicio está funcionando correctamente."""
+@app.get("/health", 
+    tags=["system"],
+    summary="Verificar estado del sistema",
+    description="Devuelve información sobre el estado de salud del sistema y sus componentes"
+)
+async def health_check():
+    """
+    Endpoint para comprobar si el servicio está funcionando correctamente.
+    
+    Utilizado para:
+    - Monitoreo de disponibilidad
+    - Verificación de estado en balanceadores de carga
+    - Comprobación de funcionamiento por parte de herramientas de supervisión
+    
+    Devuelve:
+    - Estado actual del sistema ("ok" si funciona correctamente)
+    - Marca de tiempo actual de la solicitud
+    """
     return {
-        "status": "ok",
+        "status": "healthy",
         "timestamp": time.time()
-    } 
+    }
+
+# Personalizar el esquema OpenAPI para añadir más metadatos
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+        
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    
+    # Añadir ejemplos adicionales, esquemas o metadatos según sea necesario
+    openapi_schema["info"]["x-logo"] = {
+        "url": "https://multiagentsystem.com/logo.png"
+    }
+    
+    # Añadir servidores de producción y desarrollo para pruebas
+    openapi_schema["servers"] = [
+        {"url": "https://api.multiagentsystem.com", "description": "Servidor de producción"},
+        {"url": "https://staging-api.multiagentsystem.com", "description": "Servidor de staging"},
+        {"url": "http://localhost:8000", "description": "Servidor local de desarrollo"}
+    ]
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi 

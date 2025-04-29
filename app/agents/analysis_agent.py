@@ -1,13 +1,33 @@
 from typing import Dict, Any
-from langchain.prompts import ChatPromptTemplate
+import time
+from langchain_core.prompts import ChatPromptTemplate
 from app.agents.base import BaseAgent
+from app.core.logging import logger
+from app.core.config import get_settings
+from langchain_openai import ChatOpenAI
+
+# Obtener la configuración
+settings = get_settings()
+
+# Función para crear un LLM que puede ser reemplazado en los tests
+def create_llm():
+    return ChatOpenAI(
+        model_name=settings.OPENAI_MODEL,
+        temperature=settings.TEMPERATURE,
+        api_key=settings.OPENAI_API_KEY,
+    )
+
+# LLM global que puede ser sustituido desde los tests
+llm = create_llm()
 
 class AnalysisAgent(BaseAgent):
-    def __init__(self):
+    def __init__(self, model=None):
         super().__init__(
-            name="Analysis Agent",
+            name="analysis_agent",
             description="Agente especializado en análisis detallado de datos y textos"
         )
+        # Asignar el LLM importado a la propiedad de la instancia
+        self.llm = llm
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """Eres un agente especializado en análisis detallado de datos y textos.
             Tu objetivo es proporcionar análisis profundos, identificar patrones, y extraer insights valiosos.
@@ -22,19 +42,25 @@ class AnalysisAgent(BaseAgent):
             ("human", "{input}")
         ])
         
-    async def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Ejecuta el análisis del contenido proporcionado."""
-        # Preparar el input para el prompt
-        prompt_input = {
-            "input": input_data.get("content", "")
-        }
+        start_time = time.time()
+        
+        # Extraer la consulta
+        query = input_data.get("query", "")
+        
+        # Formatear el prompt correctamente
+        formatted_prompt = self.prompt.format(input=query)
         
         # Obtener la respuesta del LLM
-        chain = self.prompt | self.llm
-        response = await chain.ainvoke(prompt_input)
+        response = self.llm.invoke(formatted_prompt)
+        
+        processing_time = time.time() - start_time
+        logger.info(f"AnalysisAgent completó el análisis en {processing_time:.2f} segundos")
         
         return {
-            "analysis": response.content,
-            "original_input": input_data,
-            "confidence": 0.9
+            "analysis_result": response.content,
+            "input": input_data,
+            "confidence": 0.9,
+            "processing_time": processing_time
         } 

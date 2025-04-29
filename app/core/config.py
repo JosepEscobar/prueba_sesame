@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api/v1"
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    VERSION: str = os.getenv("VERSION", "1.0.0")
     
     # Configuración de la base de datos
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./app.db")
