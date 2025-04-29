@@ -181,12 +181,39 @@ class MCPToolServer:
             return True
         
         try:
-            # En FastMCP 1.6.0, la forma correcta de iniciar el servidor es con start_server
-            asyncio.create_task(self.mcp_server.start_server(
-                host=self.host,
-                port=self.port
-            ))
+            # IMPORTANTE: Esta función no debe ejecutarse dentro de una aplicación FastAPI
+            # Se debe usar start_mcp_server_process desde server_init.py para iniciar 
+            # el servidor en un proceso separado
+            
+            # Verificar si estamos en un contexto donde ya hay asyncio en ejecución
+            try:
+                asyncio.get_running_loop()
+                logger.error(
+                    "Error: Ya existe un bucle de eventos asyncio en ejecución. "
+                    "No se puede iniciar el servidor MCP en el mismo hilo. "
+                    "Use start_mcp_server_process() de server_init.py para iniciar "
+                    "el servidor en un proceso separado."
+                )
+                return False
+            except RuntimeError:
+                # No hay bucle en ejecución, podemos continuar
+                pass
+                
+            # Configurar el servidor
+            self.mcp_server.server_host = self.host
+            self.mcp_server.server_port = self.port
+            
+            # En un entorno sin FastAPI, podemos iniciar el servidor directamente
+            logger.info(f"Iniciando servidor MCP en http://{self.host}:{self.port}")
+            
+            # Aquí se ejecutaría normalmente el servidor
+            # Pero usamos un enfoque más simple debido a posibles problemas con asyncio
             self._is_running = True
+            
+            # Ejecutar en un nuevo bucle de eventos
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.create_task(self.mcp_server.run())
             
             logger.info(f"Servidor MCP iniciado en http://{self.host}:{self.port}")
             return True

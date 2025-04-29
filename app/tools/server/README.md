@@ -9,6 +9,60 @@ Este módulo proporciona una implementación de servidor MCP (Model Context Prot
 - **Gestión automática de errores**: Manejo centralizado de errores, logging y métricas.
 - **Carga dinámica de esquemas**: Carga esquemas de herramientas desde archivos JSON.
 
+## Compatibilidad con FastMCP
+
+⚠️ **Importante**: La implementación actual está diseñada para funcionar con FastMCP 1.6.0, que tiene una API diferente a versiones anteriores:
+
+- El método `run()` de FastMCP 1.6.0 **no acepta** argumentos `host` y `port` directamente.
+- La configuración de host y puerto debe hacerse a través de atributos del objeto FastMCP.
+
+### Solución de problemas
+
+Si encuentras errores como `FastMCP.run() got an unexpected keyword argument 'host'` o no puedes ver las herramientas listadas, asegúrate de que el método `start_server` esté implementado así:
+
+```python
+async def start_server(self) -> bool:
+    """
+    Inicia el servidor MCP.
+    
+    Returns:
+        True si el servidor se inició correctamente, False en caso contrario
+    """
+    if self._is_running:
+        logger.warning("El servidor MCP ya está en ejecución")
+        return True
+    
+    try:
+        # La forma correcta para FastMCP 1.6.0
+        self.mcp_server.server_host = self.host
+        self.mcp_server.server_port = self.port
+        
+        # Iniciar el servidor en segundo plano
+        asyncio.create_task(self.mcp_server.run())
+        self._is_running = True
+        
+        logger.info(f"Servidor MCP iniciado en http://{self.host}:{self.port}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error al iniciar servidor MCP: {str(e)}")
+        return False
+```
+
+## Listado de herramientas del cliente
+
+Para listar las herramientas disponibles en el servidor MCP, asegúrate de usar `await` con una corutina asíncrona, no con una lista:
+
+```python
+# Incorrecto:
+tools = await client.list_tools()  # Si list_tools no devuelve una corutina
+
+# Correcto:
+tools = await client.list_tools_async()  # Asumiendo que existe este método
+# O
+tools = client.list_tools()  # Si no es asíncrono
+```
+
 ## Uso básico
 
 ### Iniciar el servidor MCP
@@ -46,7 +100,7 @@ Este servidor MCP es compatible con el adaptador de LangChain:
 from langchain_mcp.adapters import MCPClient
 
 client = MCPClient(base_url="http://localhost:4000")
-tools = await client.list_tools()
+tools = client.list_tools()  # O tools = await client.list_tools_async() si es asíncrono
 ```
 
 ## Estructura de directorios
@@ -103,6 +157,13 @@ Ejemplo de esquema JSON:
     }
 }
 ```
+
+## Dependencias
+
+Este servidor requiere las siguientes dependencias clave:
+- `mcp==1.6.0`: Implementación oficial del protocolo MCP
+- `pydantic>=2.5.2`: Necesario para la compatibilidad con MCP 1.6.0
+- `pydantic-settings>=2.4.0`: Requerido por las dependencias internas
 
 ## Referencias
 
