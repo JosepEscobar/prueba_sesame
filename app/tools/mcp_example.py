@@ -16,10 +16,10 @@ import argparse
 import json
 from typing import Dict, Any, List, Optional
 
-from app.tools.mcp_client_official import MCPClientOfficial
+from app.tools.mcp_client import MCPClient
 from app.core.config import get_settings
 
-async def list_tools(client: MCPClientOfficial) -> List[Dict[str, Any]]:
+async def list_tools(client: MCPClient) -> List[Dict[str, Any]]:
     """
     Lista las herramientas disponibles en el servidor MCP.
     
@@ -31,7 +31,7 @@ async def list_tools(client: MCPClientOfficial) -> List[Dict[str, Any]]:
     """
     return await client.list_tools()
 
-async def call_tool(client: MCPClientOfficial, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+async def call_tool(client: MCPClient, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Llama a una herramienta específica en el servidor MCP.
     
@@ -58,7 +58,7 @@ async def main():
     settings = get_settings()
     
     # Inicializar el cliente MCP
-    client = MCPClientOfficial(
+    client = MCPClient(
         base_url=args.url if args.url else settings.MCP_CLIENT_URL
     )
     

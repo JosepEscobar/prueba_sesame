@@ -30,7 +30,9 @@ class DataLookupAgent(BaseAgent):
         logger.info(f"DataLookupAgent inicializado con modelo: {settings.OPENAI_MODEL}")
         
         # Inicializar el cliente MCP para herramientas externas
-        self.mcp_client = MCPClient()
+        self.mcp_client = MCPClient(
+            base_url=settings.MCP_CLIENT_URL
+        )
         
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """Eres un agente especializado en buscar, filtrar y sintetizar información relevante de fuentes externas.
@@ -193,73 +195,57 @@ class DataLookupAgent(BaseAgent):
         
         return prompt
     
-    async def _search_external_information(self, query: str) -> str:
+    async def _search_external_information(self, query: str) -> Dict[str, Any]:
         """
-        Simula la búsqueda de información externa usando herramientas MCP.
-        En un caso real, aquí se llamaría a las herramientas MCP para obtener información.
+        Busca información externa usando herramientas MCP.
+        
+        Args:
+            query: Consulta para buscar información
+            
+        Returns:
+            Resultados de la búsqueda
         """
         try:
-            # Intentamos usar el cliente MCP para buscar artículos
-            # En este momento, solo simulamos la búsqueda para demostración
-            logger.info(
-                f"Buscando información externa para: {query}",
-                extra={"agent_name": self.name, "query": query}
+            # Inicializar el cliente si aún no se ha hecho
+            if not await self.mcp_client.initialize():
+                logger.warning("No se pudo inicializar el cliente MCP, usando respuesta simulada")
+                return {"error": "No se pudo conectar al servidor MCP"}
+            
+            # Buscar artículos relacionados
+            articles_result = await self.mcp_client.call_tool(
+                "search_articles", 
+                {"query": query, "max_results": 3}
             )
             
-            # Simulación de datos encontrados (en una implementación real, esto vendría de las herramientas MCP)
-            # Para áreas de consultoría empresarial
-            if "marketing" in query.lower():
-                return """
-                1. Artículo: "Tendencias de Marketing Digital 2023" - Harvard Business Review
-                   - Resumen: El artículo destaca el aumento del marketing de contenido, la personalización y el uso de IA en estrategias de marketing.
-                   - Fecha: Marzo 2023
-                   - URL: https://hbr.org/marketing/trends2023
-                
-                2. Informe: "Efectividad de Campañas en Redes Sociales" - Marketing Institute
-                   - Datos clave: Las campañas en Instagram tienen un ROI promedio 23% mayor que Facebook para productos B2C.
-                   - Fecha: Enero 2023
-                   - URL: https://marketinginstitute.com/reports/social2023
-                """
-            elif "finanzas" in query.lower() or "financiero" in query.lower():
-                return """
-                1. Artículo: "Estrategias de Inversión para Startups" - Financial Times
-                   - Resumen: Análisis de rondas de financiación, valoraciones y estrategias de exit para 2023.
-                   - Fecha: Abril 2023
-                   - URL: https://ft.com/startups/investment2023
-                
-                2. Modelo financiero: "Plantilla de Proyección Financiera para SaaS"
-                   - Detalles: Modelo en Excel con proyecciones a 5 años, cálculos de CAC, LTV y punto de equilibrio.
-                   - Autor: McKinsey & Company
-                   - URL: https://resources.mckinsey.com/financial-models/saas2023
-                """
-            elif "operaciones" in query.lower() or "procesos" in query.lower():
-                return """
-                1. Estudio: "Optimización de Cadena de Suministro Post-Pandemia" - MIT Supply Chain Review
-                   - Resumen: Nuevas prácticas de resiliencia en cadenas de suministro, automatización y gestión de inventario.
-                   - Fecha: Febrero 2023
-                   - URL: https://mitscr.edu/studies/supply-chain-resilience
-                
-                2. Guía: "Implementación de Lean Management en Empresas Medianas"
-                   - Puntos clave: Metodología paso a paso, casos de estudio y métricas de seguimiento.
-                   - Autor: Toyota Production System Institute
-                   - URL: https://tpsi.org/resources/lean-medium-business
-                """
-            else:
-                return """
-                1. Artículo: "Tendencias Empresariales 2023" - Business Insider
-                   - Resumen: Análisis de tendencias en digitalización, sostenibilidad y modelos de trabajo híbridos.
-                   - Fecha: Enero 2023
-                   - URL: https://businessinsider.com/trends2023
-                
-                2. Informe: "Estado de la Consultoría Empresarial" - Deloitte
-                   - Datos clave: Sectores de mayor crecimiento, tarifas promedio y especialidades emergentes.
-                   - Fecha: Marzo 2023
-                   - URL: https://deloitte.com/insights/consulting-state
-                """
+            # Consultar la base de conocimiento
+            kb_result = await self.mcp_client.call_tool(
+                "query_kb", 
+                {"query": query, "kb_name": "general"}
+            )
+            
+            # Combinar resultados
+            return {
+                "articles": articles_result.get("articles", []),
+                "kb_results": kb_result.get("results", [])
+            }
             
         except Exception as e:
-            logger.error(
-                f"Error buscando información externa: {str(e)}",
-                extra={"agent_name": self.name, "error": str(e)}
-            )
-            return "No se pudo obtener información externa debido a un error." 
+            logger.error(f"Error al buscar información externa: {str(e)}")
+            return {"error": str(e)}
+            
+    def _invoke_llm(self, prompt: str) -> str:
+        """
+        Invoca el LLM para generar una respuesta basada en el prompt dado.
+        
+        Args:
+            prompt: El prompt para el LLM
+            
+        Returns:
+            La respuesta generada por el LLM
+        """
+        try:
+            response = self.llm.invoke(prompt)
+            return response.content if hasattr(response, 'content') else str(response)
+        except Exception as e:
+            logger.error(f"Error al invocar LLM: {str(e)}")
+            return f"Error al generar síntesis: {str(e)}" 

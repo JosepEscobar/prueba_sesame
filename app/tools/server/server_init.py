@@ -6,7 +6,6 @@ import argparse
 
 from app.core.logging import logger
 from app.tools.server.mcp_server import MCPToolServer, run_server
-from app.tools.server.financial_models_impl import FinancialModelsMCPTool
 
 async def init_mcp_server(host: str = "localhost", port: int = 4000) -> MCPToolServer:
     """
@@ -27,6 +26,7 @@ async def init_mcp_server(host: str = "localhost", port: int = 4000) -> MCPToolS
     server.register_tools_from_directory(schemas_dir)
     
     # Registrar implementación de financial_models
+    from app.tools.server.financial_models_impl import FinancialModelsMCPTool
     financial_models_tool = FinancialModelsMCPTool(
         schema_path=str(schemas_dir / "financial_models.json")
     )

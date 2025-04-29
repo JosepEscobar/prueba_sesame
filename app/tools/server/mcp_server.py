@@ -5,8 +5,7 @@ from pathlib import Path
 import json
 import os
 
-import mcp
-from mcp.server import MCPToolRegistry, MCPServer
+from mcp.server.fastmcp import FastMCP
 from app.core.logging import logger
 from app.core.metrics import MetricsCollector
 
@@ -29,8 +28,8 @@ class MCPToolServer:
         self.host = host
         self.port = port
         self.metrics = MetricsCollector()
-        self.tool_registry = MCPToolRegistry()
-        self.server = None
+        # Inicializar FastMCP para crear un servidor más moderno
+        self.mcp_server = FastMCP("SesameTools")
         self._is_running = False
     
     def register_tool_from_json(self, schema_path: Union[str, Path]) -> bool:
@@ -56,15 +55,21 @@ class MCPToolServer:
             tool_name = schema["name"]
             description = schema.get("description", "")
             
-            # Registrar la herramienta sin implementación (solo esquema)
-            self.tool_registry.add_tool(
-                name=tool_name,
-                description=description,
-                input_schema=schema.get("inputs", {}),
-                output_schema=schema.get("outputs", {})
-            )
+            # Registrar la herramienta usando la nueva API de FastMCP
+            # Nota: Esto es una adaptación, ya que FastMCP tiene una API diferente
+            # para registrar herramientas. Aquí solo estamos almacenando el esquema
+            # para usar con register_tool_implementation más adelante.
             
-            logger.info(f"Herramienta '{tool_name}' registrada en el servidor MCP desde {schema_path}")
+            # Almacenar el esquema asociado al nombre de la herramienta
+            if not hasattr(self, "_tool_schemas"):
+                self._tool_schemas = {}
+            self._tool_schemas[tool_name] = {
+                "description": description,
+                "input_schema": schema.get("inputs", {}),
+                "output_schema": schema.get("outputs", {})
+            }
+            
+            logger.info(f"Esquema de herramienta '{tool_name}' registrado desde {schema_path}")
             return True
             
         except Exception as e:
@@ -73,7 +78,7 @@ class MCPToolServer:
     
     def register_tool_implementation(self, 
                                      tool_name: str, 
-                                     implementation: Callable[[Dict[str, Any]], Dict[str, Any]]) -> bool:
+                                     implementation: Callable[[Dict[str, Any]], Any]) -> bool:
         """
         Registra la implementación de una herramienta existente.
         
@@ -85,13 +90,15 @@ class MCPToolServer:
             True si la implementación se registró correctamente, False en caso contrario
         """
         try:
-            # Verificar que la herramienta existe en el registro
-            if tool_name not in [tool.name for tool in self.tool_registry.list_tools()]:
-                logger.warning(f"Intento de registrar implementación para herramienta no definida: {tool_name}")
+            # Verificar que tenemos un esquema para esta herramienta
+            if not hasattr(self, "_tool_schemas") or tool_name not in self._tool_schemas:
+                logger.warning(f"Intento de registrar implementación para herramienta sin esquema: {tool_name}")
+                # Podríamos continuar de todas formas, pero preferimos mantener la consistencia
                 return False
             
             # Crear un wrapper para la implementación que maneje métricas y logs
-            async def implementation_wrapper(params: Dict[str, Any]) -> Dict[str, Any]:
+            @self.mcp_server.tool(name=tool_name, description=self._tool_schemas[tool_name]["description"])
+            async def tool_wrapper(**params):
                 start_time = time.time()
                 
                 try:
@@ -103,41 +110,31 @@ class MCPToolServer:
                     execution_time = time.time() - start_time
                     
                     # Registrar métricas
-                    self.metrics.record_tool_execution(
-                        tool_name=f"mcp_server.{tool_name}",
-                        success=True,
+                    self.metrics.record_execution(
+                        service_name="mcp_server",
+                        operation=tool_name,
                         execution_time=execution_time
                     )
                     
                     logger.info(f"Herramienta MCP '{tool_name}' ejecutada exitosamente en {execution_time:.4f}s")
                     
-                    # Si la implementación devuelve un diccionario, devolverlo directamente
-                    if isinstance(result, dict):
-                        return result
-                    
-                    # Si la implementación devuelve otro tipo, envolverlo en un diccionario
-                    return {"result": result}
+                    return result
                     
                 except Exception as e:
                     # Calcular tiempo de ejecución
                     execution_time = time.time() - start_time
                     
                     # Registrar métricas
-                    self.metrics.record_tool_execution(
-                        tool_name=f"mcp_server.{tool_name}",
-                        success=False,
-                        execution_time=execution_time,
-                        error=str(e)
+                    self.metrics.record_error(
+                        agent_name=f"mcp_server.{tool_name}", 
+                        error_type=str(e)
                     )
                     
                     logger.error(f"Error al ejecutar herramienta MCP '{tool_name}': {str(e)}")
                     
-                    return {"error": str(e)}
+                    raise e
             
-            # Registrar la implementación
-            self.tool_registry.set_tool_implementation(tool_name, implementation_wrapper)
             logger.info(f"Implementación para herramienta '{tool_name}' registrada en el servidor MCP")
-            
             return True
             
         except Exception as e:
@@ -184,15 +181,11 @@ class MCPToolServer:
             return True
         
         try:
-            # Crear el servidor MCP
-            self.server = MCPServer(
-                host=self.host,
-                port=self.port,
-                tool_registry=self.tool_registry
-            )
+            # Configurar el servidor SSE
+            self.mcp_server.configure_sse(host=self.host, port=self.port)
             
             # Iniciar el servidor
-            await self.server.start()
+            asyncio.create_task(self.mcp_server.run_sse())
             self._is_running = True
             
             logger.info(f"Servidor MCP iniciado en http://{self.host}:{self.port}")
@@ -214,8 +207,8 @@ class MCPToolServer:
             return True
         
         try:
-            # Detener el servidor
-            await self.server.stop()
+            # En FastMCP no hay un método directo stop_server, 
+            # pero podemos finalizar el proceso de manera ordenada
             self._is_running = False
             
             logger.info("Servidor MCP detenido")
@@ -249,8 +242,12 @@ async def run_server(server: MCPToolServer):
         # Mantener el servidor en ejecución
         while server.is_running():
             await asyncio.sleep(1)
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        logger.info("Deteniendo servidor MCP...")
+    except KeyboardInterrupt:
+        logger.info("Deteniendo servidor MCP por interrupción del usuario")
         await server.stop_server()
-    
-    logger.info("Servidor MCP finalizado") 
+    except Exception as e:
+        logger.error(f"Error en el servidor MCP: {str(e)}")
+        await server.stop_server()
+    finally:
+        if server.is_running():
+            await server.stop_server() 
