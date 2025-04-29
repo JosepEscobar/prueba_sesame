@@ -1,59 +1,37 @@
-version: '3.8'
+version: '3'
 
 services:
-  app:
-    build: .
-    container_name: sesame_api
-    restart: always
+  api_server:
+    build: ./api_server
     ports:
       - "8000:8000"
-    environment:
-      - ENVIRONMENT=dev
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - SENTRY_DSN=${SENTRY_DSN}
-      - LOG_LEVEL=INFO
-      - API_V1_STR=/api/v1
     volumes:
-      - ./app:/app/app
+      - ./api_server/logs:/app/logs
+    env_file:
+      - ./api_server/.env
     depends_on:
-      - prometheus
+      - mcp_server
     networks:
       - sesame_network
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+      
+  mcp_server:
+    build: ./mcp_server
     ports:
-      - "9090:9090"
+      - "4000:4000"
     volumes:
-      - ./prometheus:/etc/prometheus
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
+      - ./mcp_server/logs:/app/logs
+    env_file:
+      - ./mcp_server/.env
     networks:
       - sesame_network
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    depends_on:
-      - prometheus
-    networks:
-      - sesame_network
+    restart: unless-stopped
 
 networks:
   sesame_network:
