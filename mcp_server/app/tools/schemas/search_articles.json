@@ -1,0 +1,35 @@
+{
+    "name": "search_articles",
+    "description": "Busca artículos académicos dada una consulta de búsqueda.",
+    "inputs": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Términos de búsqueda"},
+            "max_results": {"type": "integer", "description": "Número máximo de resultados", "default": 5},
+            "sort_by": {"type": "string", "description": "Criterio de ordenación", "enum": ["relevance", "date", "citations"], "default": "relevance"},
+            "date_range": {"type": "string", "description": "Rango de fechas para la búsqueda", "default": "all"}
+        },
+        "required": ["query"]
+    },
+    "outputs": {
+        "type": "object",
+        "properties": {
+            "articles": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Título del artículo"},
+                        "authors": {"type": "array", "items": {"type": "string"}, "description": "Autores del artículo"},
+                        "publication": {"type": "string", "description": "Nombre de la publicación"},
+                        "year": {"type": "integer", "description": "Año de publicación"},
+                        "summary": {"type": "string", "description": "Resumen del artículo"},
+                        "url": {"type": "string", "description": "URL del artículo"},
+                        "citations": {"type": "integer", "description": "Número de citas"}
+                    }
+                }
+            },
+            "total_results": {"type": "integer", "description": "Número total de resultados disponibles"}
+        }
+    }
+} 

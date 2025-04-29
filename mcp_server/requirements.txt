@@ -1,0 +1,13 @@
+# Dependencias del servidor MCP
+fastapi>=0.115.0
+uvicorn>=0.34.0
+langchain>=0.3.0
+langchain-openai>=0.1.0
+pydantic>=2.7.0
+pydantic-settings>=2.4.0
+mcp-python-sdk>=0.1.0,<0.2.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+tenacity>=8.2.0
+loguru>=0.7.0
+orjson>=3.9.0 
