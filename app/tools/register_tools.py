@@ -159,7 +159,10 @@ def _register_schema_tool(name: str, description: str, schema: Dict[str, Any], c
         
         # Registrar en el sistema global de LangChain
         from langchain.tools import tool as langchain_tool_decorator
-        langchain_tool_decorator(name=name, description=description)(tool_func)
+        
+        # Usar el decorador sin proporcionar name directamente
+        decorated_tool = langchain_tool_decorator(description=description)(tool_func)
+        decorated_tool.__name__ = name
         
         logger.info(f"Herramienta {name} registrada como herramienta de LangChain")
     except Exception as e:
@@ -190,10 +193,12 @@ def register_all_tools():
         
         # Registrar en el sistema global de LangChain
         from langchain.tools import tool as langchain_tool_decorator
-        langchain_tool_decorator(
-            name="financial_models", 
+        
+        # Usar el decorador sin proporcionar name directamente
+        decorated_tool = langchain_tool_decorator(
             description="Obtiene modelos o plantillas financieras para diferentes industrias"
         )(financial_models_impl.get_models)
+        decorated_tool.__name__ = "financial_models"
         
         logger.info("Implementación de financial_models registrada correctamente")
         
@@ -204,13 +209,17 @@ def register_all_tools():
         logger.info(f"Registro inicial de herramientas completado")
         
         return {
-            "status": "success"
+            "status": "success",
+            "implemented_tools": 3,  # Ajustar según el número real de herramientas implementadas
+            "total_tools": 3         # Ajustar según el número total de herramientas disponibles
         }
     except Exception as e:
         logger.error(f"Error en registro de herramientas: {str(e)}")
         return {
+            "status": "error",
             "error": str(e),
-            "status": "error"
+            "implemented_tools": 0,
+            "total_tools": 0
         }
 
 async def _register_mcp_tools():
@@ -249,10 +258,12 @@ async def _register_mcp_tools():
                 
                 # Registrar en el sistema global de LangChain
                 from langchain.tools import tool as langchain_tool_decorator
-                langchain_tool_decorator(
-                    name=tool_name, 
+                
+                # Usar el decorador sin proporcionar name directamente
+                decorated_tool = langchain_tool_decorator(
                     description=tool_description
                 )(tool_func)
+                decorated_tool.__name__ = tool_name
                 
                 logger.info(f"Herramienta MCP registrada: {tool_name}")
             except Exception as e:
