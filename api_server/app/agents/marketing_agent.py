@@ -6,7 +6,10 @@ from langchain_openai import ChatOpenAI
 from app.agents.base import BaseAgent
 from app.core.logging import logger
 from app.core.metrics import MetricsCollector
+from app.core.config import get_settings
 
+# Obtener la configuración
+settings = get_settings()
 
 class MarketingAgent(BaseAgent):
     """
@@ -31,7 +34,15 @@ class MarketingAgent(BaseAgent):
             name="marketing_agent",
             description="Especialista en estrategias de marketing y análisis de mercado."
         )
-        self.llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.3)
+        
+        # Comprobar si hay una clave API válida
+        if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "sk-your-key-here":
+            self.llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.3)
+        else:
+            # Crear un modelo ficticio para desarrollo
+            logger.warning("No hay clave API de OpenAI válida. Usando respuestas ficticias para desarrollo.")
+            self.llm = None
+            
         self.services = [
             "Estrategia de marketing",
             "Posicionamiento de marca",
@@ -61,6 +72,19 @@ class MarketingAgent(BaseAgent):
         context = input_data.get("context", {})
         
         logger.info(f"Procesando consulta de marketing: {query[:50]}...")
+        
+        # Si no hay un LLM configurado (por falta de API key), devolver un error
+        if self.llm is None:
+            logger.error("Error: No hay clave API de OpenAI válida. Imposible generar respuesta.")
+            processing_time = time.time() - start_time
+            return {
+                "result": "",
+                "input": query,
+                "confidence": 0.0,
+                "processing_time": processing_time,
+                "success": False,
+                "error": "No se ha configurado una clave API de OpenAI válida. Para utilizar este agente, configure la clave en el archivo .env"
+            }
         
         # Recopilar datos de marketing relevantes
         marketing_data = {}

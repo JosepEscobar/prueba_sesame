@@ -19,15 +19,19 @@ from app.agents.router_agent import RouterAgent
 from app.agents.analysis_agent import AnalysisAgent
 from app.agents.action_agent import ActionAgent
 from app.agents.summary_agent import SummaryAgent
+from app.agents.finance_agent import FinanceAgent
+from app.agents.marketing_agent import MarketingAgent
 from app.services.data_lookup import DataLookupService
 
 router = APIRouter()
 
 # Instancias de los agentes
-router_agent = RouterAgent(name="router_agent")
-analysis_agent = AnalysisAgent(name="analysis_agent")
-action_agent = ActionAgent(name="action_agent")
-summary_agent = SummaryAgent(name="summary_agent")
+router_agent = RouterAgent()
+analysis_agent = AnalysisAgent()
+action_agent = ActionAgent()
+summary_agent = SummaryAgent()
+finance_agent = FinanceAgent()
+marketing_agent = MarketingAgent()
 
 # Servicio de búsqueda de datos
 data_lookup_service = DataLookupService()
@@ -37,7 +41,9 @@ AGENTS = {
     "router": router_agent,
     "analysis": analysis_agent,
     "action": action_agent,
-    "summary": summary_agent
+    "summary": summary_agent,
+    "finance": finance_agent,
+    "marketing": marketing_agent
 }
 
 @router.post("/query", response_model=QueryResponse, responses={500: {"model": ErrorResponse}})
@@ -157,5 +163,173 @@ async def lookup_data(request: DataLookupRequest):
             result={},
             lookup_type=request.lookup_type,
             query=request.query,
+            error=str(e)
+        )
+
+@router.post("/finance", response_model=QueryResponse, responses={500: {"model": ErrorResponse}})
+async def process_finance_query(request: QueryRequest, background_tasks: BackgroundTasks):
+    """
+    Procesa una consulta utilizando el agente especializado en finanzas.
+    Este endpoint está optimizado para consultas financieras, análisis de inversiones,
+    presupuestos y otros temas relacionados con finanzas.
+    """
+    start_time = time.time()
+    request_id = str(uuid.uuid4())
+    
+    try:
+        logger.info(f"Procesando consulta financiera: {request.query}", extra={"request_id": request_id})
+        
+        # Forzar el uso del agente de finanzas
+        finance_agent_name = "finance"
+        
+        # Si tenemos un agente específico de finanzas en el diccionario, usarlo
+        # sino, usamos el router para encontrar el agente más adecuado con preferencia por finanzas
+        if finance_agent_name in AGENTS:
+            agent = AGENTS[finance_agent_name]
+            logger.info(f"Usando agente de finanzas", extra={"request_id": request_id})
+        else:
+            # Usar el agente de enrutamiento con preferencia por finanzas
+            logger.info("Consultando con preferencia al agente de finanzas", extra={"request_id": request_id})
+            router_result = router_agent.execute({
+                "query": request.query,
+                "context": request.context or {},
+                "agent_preference": "finance"
+            })
+            
+            agent_name = router_result["agent"].lower()
+            if agent_name not in AGENTS:
+                logger.warning(f"Agente no reconocido: {agent_name}, usando analysis_agent", 
+                              extra={"request_id": request_id})
+                agent_name = "analysis"
+            
+            agent = AGENTS[agent_name]
+            logger.info(f"Agente seleccionado para finanzas: {agent_name}", extra={"request_id": request_id})
+        
+        # Ejecutar el agente
+        result = agent.execute({
+            "query": request.query,
+            "context": request.context or {},
+            "domain": "finance"  # Añadir contexto de dominio
+        })
+        
+        processing_time = time.time() - start_time
+        
+        # Registro de métricas en segundo plano
+        background_tasks.add_task(
+            logger.info,
+            f"Consulta financiera completada en {processing_time:.2f}s",
+            extra={
+                "request_id": request_id,
+                "processing_time": processing_time,
+                "domain": "finance"
+            }
+        )
+        
+        return QueryResponse(
+            request_id=request_id,
+            result=result["result"],
+            agent_used=finance_agent_name,
+            confidence=result.get("confidence", 0.0),
+            processing_time=processing_time,
+            success=True,
+            sources=result.get("sources")
+        )
+        
+    except Exception as e:
+        logger.error(f"Error al procesar consulta financiera: {str(e)}", 
+                    extra={"request_id": request_id, "error": str(e)})
+        processing_time = time.time() - start_time
+        
+        return QueryResponse(
+            request_id=request_id,
+            result="",
+            agent_used="error",
+            confidence=0.0,
+            processing_time=processing_time,
+            success=False,
+            error=str(e)
+        )
+
+@router.post("/marketing", response_model=QueryResponse, responses={500: {"model": ErrorResponse}})
+async def process_marketing_query(request: QueryRequest, background_tasks: BackgroundTasks):
+    """
+    Procesa una consulta utilizando el agente especializado en marketing.
+    Este endpoint está optimizado para consultas relacionadas con estrategias de marketing,
+    posicionamiento de marca, análisis de mercado y campañas.
+    """
+    start_time = time.time()
+    request_id = str(uuid.uuid4())
+    
+    try:
+        logger.info(f"Procesando consulta de marketing: {request.query}", extra={"request_id": request_id})
+        
+        # Forzar el uso del agente de marketing
+        marketing_agent_name = "marketing"
+        
+        # Si tenemos un agente específico de marketing en el diccionario, usarlo
+        # sino, usamos el router para encontrar el agente más adecuado con preferencia por marketing
+        if marketing_agent_name in AGENTS:
+            agent = AGENTS[marketing_agent_name]
+            logger.info(f"Usando agente de marketing", extra={"request_id": request_id})
+        else:
+            # Usar el agente de enrutamiento con preferencia por marketing
+            logger.info("Consultando con preferencia al agente de marketing", extra={"request_id": request_id})
+            router_result = router_agent.execute({
+                "query": request.query,
+                "context": request.context or {},
+                "agent_preference": "marketing"
+            })
+            
+            agent_name = router_result["agent"].lower()
+            if agent_name not in AGENTS:
+                logger.warning(f"Agente no reconocido: {agent_name}, usando analysis_agent", 
+                              extra={"request_id": request_id})
+                agent_name = "analysis"
+            
+            agent = AGENTS[agent_name]
+            logger.info(f"Agente seleccionado para marketing: {agent_name}", extra={"request_id": request_id})
+        
+        # Ejecutar el agente
+        result = agent.execute({
+            "query": request.query,
+            "context": request.context or {},
+            "domain": "marketing"  # Añadir contexto de dominio
+        })
+        
+        processing_time = time.time() - start_time
+        
+        # Registro de métricas en segundo plano
+        background_tasks.add_task(
+            logger.info,
+            f"Consulta de marketing completada en {processing_time:.2f}s",
+            extra={
+                "request_id": request_id,
+                "processing_time": processing_time,
+                "domain": "marketing"
+            }
+        )
+        
+        return QueryResponse(
+            request_id=request_id,
+            result=result["result"],
+            agent_used=marketing_agent_name,
+            confidence=result.get("confidence", 0.0),
+            processing_time=processing_time,
+            success=True,
+            sources=result.get("sources")
+        )
+        
+    except Exception as e:
+        logger.error(f"Error al procesar consulta de marketing: {str(e)}", 
+                    extra={"request_id": request_id, "error": str(e)})
+        processing_time = time.time() - start_time
+        
+        return QueryResponse(
+            request_id=request_id,
+            result="",
+            agent_used="error",
+            confidence=0.0,
+            processing_time=processing_time,
+            success=False,
             error=str(e)
         ) 

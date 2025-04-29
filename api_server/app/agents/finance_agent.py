@@ -28,7 +28,15 @@ class FinanceAgent(BaseAgent):
             name="finance_agent",
             description="Especialista en análisis financiero y consultoría económica."
         )
-        self.llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.2)
+        
+        # Comprobar si hay una clave API válida
+        if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "sk-your-key-here":
+            self.llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.2)
+        else:
+            # Crear un modelo ficticio para desarrollo
+            logger.warning("No hay clave API de OpenAI válida. Usando respuestas ficticias para desarrollo.")
+            self.llm = None
+            
         self.services = [
             "Análisis financiero",
             "Planificación de presupuestos",
@@ -156,6 +164,19 @@ class FinanceAgent(BaseAgent):
             "financial_data": financial_data,
             "services": self.services
         }
+        
+        # Si no hay un LLM configurado (por falta de API key), devolver una respuesta ficticia
+        if self.llm is None:
+            logger.error("Error: No hay clave API de OpenAI válida. Imposible generar respuesta.")
+            processing_time = time.time() - start_time
+            return {
+                "result": "",
+                "input": query,
+                "confidence": 0.0,
+                "processing_time": processing_time,
+                "success": False,
+                "error": "No se ha configurado una clave API de OpenAI válida. Para utilizar este agente, configure la clave en el archivo .env"
+            }
         
         # Formatear el prompt usando el método de formato
         formatted_prompt = self._format_finance_prompt(prompt_input)

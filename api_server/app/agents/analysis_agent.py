@@ -11,11 +11,14 @@ settings = get_settings()
 
 # Función para crear un LLM que puede ser reemplazado en los tests
 def create_llm():
-    return ChatOpenAI(
-        model_name=settings.OPENAI_MODEL,
-        temperature=settings.TEMPERATURE,
-        api_key=settings.OPENAI_API_KEY,
-    )
+    if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "sk-your-key-here":
+        return ChatOpenAI(
+            model_name=settings.OPENAI_MODEL,
+            temperature=settings.TEMPERATURE,
+            api_key=settings.OPENAI_API_KEY,
+        )
+    logger.warning("No hay clave API de OpenAI válida configurada.")
+    return None
 
 # LLM global que puede ser sustituido desde los tests
 llm = create_llm()
@@ -49,6 +52,19 @@ class AnalysisAgent(BaseAgent):
         # Extraer la consulta
         query = input_data.get("query", "")
         
+        # Si no hay un LLM configurado (por falta de API key), devolver un error
+        if self.llm is None:
+            logger.error("Error: No hay clave API de OpenAI válida. Imposible generar respuesta de análisis.")
+            processing_time = time.time() - start_time
+            return {
+                "result": "",
+                "input": input_data,
+                "confidence": 0.0,
+                "processing_time": processing_time,
+                "success": False,
+                "error": "No se ha configurado una clave API de OpenAI válida. Para utilizar este agente, configure la clave en el archivo .env"
+            }
+        
         # Formatear el prompt correctamente
         formatted_prompt = self.prompt.format(input=query)
         
@@ -59,7 +75,7 @@ class AnalysisAgent(BaseAgent):
         logger.info(f"AnalysisAgent completó el análisis en {processing_time:.2f} segundos")
         
         return {
-            "analysis_result": response.content,
+            "result": response.content,
             "input": input_data,
             "confidence": 0.9,
             "processing_time": processing_time

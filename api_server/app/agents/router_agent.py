@@ -12,11 +12,14 @@ settings = get_settings()
 
 # Función para crear un LLM que puede ser reemplazado en los tests
 def create_llm():
-    return ChatOpenAI(
-        model_name=settings.OPENAI_MODEL,
-        temperature=settings.TEMPERATURE,
-        api_key=settings.OPENAI_API_KEY,
-    )
+    if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "sk-your-key-here":
+        return ChatOpenAI(
+            model_name=settings.OPENAI_MODEL,
+            temperature=settings.TEMPERATURE,
+            api_key=settings.OPENAI_API_KEY,
+        )
+    logger.warning("No hay clave API de OpenAI válida configurada.")
+    return None
 
 # LLM global que puede ser sustituido desde los tests
 llm = create_llm()
@@ -151,6 +154,17 @@ class RouterAgent(BaseAgent):
                     }
                 else:
                     logger.warning(f"Agente preferido '{agent_key}' no encontrado, realizando selección automática")
+            
+            # Si no hay un LLM configurado (por falta de API key), devolver un error
+            if self.llm is None:
+                logger.error("Error: No hay clave API de OpenAI válida. Imposible enrutar la consulta.")
+                return {
+                    "error": "No se ha configurado una clave API de OpenAI válida. Para utilizar este agente, configure la clave en el archivo .env",
+                    "agent": "error",
+                    "input": input_data,
+                    "confidence": 0.0,
+                    "success": False
+                }
             
             # Preparar el prompt con la consulta y contexto
             prompt_input = self._prepare_router_prompt(query, context)
