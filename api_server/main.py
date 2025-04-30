@@ -9,6 +9,8 @@ de asistencia empresarial.
 import os
 import sys
 import logging
+import time
+import httpx
 from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Body
@@ -265,7 +267,7 @@ app = FastAPI(
         },
         {
             "name": "MCP", 
-            "description": "Endpoints para interacción con el servidor MCP (Mission Control Platform)",
+            "description": "Endpoints para interacción con el servidor MCP (Model Context Protocol)",
             "externalDocs": {
                 "description": "Documentación sobre MCP",
                 "url": "https://sesame.example.com/docs/mcp"
@@ -405,7 +407,7 @@ async def health_check():
     description="""
     Proporciona información detallada sobre la conexión con el servidor MCP.
     
-    El servidor MCP (Mission Control Platform) es responsable de gestionar
+    El servidor MCP (Model Context Protocol) es responsable de gestionar
     las herramientas especializadas que utilizan los agentes de Sesame.
     
     Este endpoint permite verificar:
@@ -533,24 +535,183 @@ async def process_query(request: QueryRequest):
     El agente router analizará la consulta y determinará qué agente especializado
     debe procesarla. Retorna el resultado generado por el agente seleccionado.
     """
-    agent_name = "router_agent"
-    if "finanzas" in request.query.lower() or "financiero" in request.query.lower():
-        agent_name = "finance_agent"
-    elif "marketing" in request.query.lower() or "mercado" in request.query.lower():
-        agent_name = "marketing_agent"
-    elif "análisis" in request.query.lower() or "analizar" in request.query.lower():
-        agent_name = "analysis_agent"
-        
-    # Simulamos el procesamiento del agente
     import time
-    time.sleep(0.5)  # Simular tiempo de procesamiento
+    import httpx
     
-    return {
-        "result": f"Tu consulta '{request.query[:30]}...' ha sido procesada por el agente {agent_name}",
-        "agent": agent_name,
-        "confidence": 0.95,
-        "processing_time": 0.5
-    }
+    start_time = time.time()
+    logger.info(f"Recibida consulta: {request.query[:50]}...")
+    
+    try:
+        # Preparamos los datos
+        empresa = request.context.get("empresa", "MiEmpresa")
+        periodo = request.context.get("periodo", "último trimestre")
+        
+        # Enfoque de clasificación basado en palabras clave
+        consulta = request.query.lower()
+        
+        keywords_finanzas = ["financiero", "finanzas", "ingresos", "beneficio", "margen", 
+                            "roi", "ganancia", "rentabilidad", "balance", "contabilidad"]
+        keywords_marketing = ["marketing", "mercado", "campaña", "publicidad", "promoción", 
+                             "ventas", "clientes", "segmentación", "conversión"]
+        keywords_tendencias = ["tendencia", "análisis", "analiza", "predicción", "pronóstico",
+                              "proyección", "futuro", "evolución", "comparativa"]
+        
+        score_finanzas = sum(1 for kw in keywords_finanzas if kw in consulta)
+        score_marketing = sum(1 for kw in keywords_marketing if kw in consulta)
+        score_tendencias = sum(1 for kw in keywords_tendencias if kw in consulta)
+        
+        scores = {
+            "finanzas": score_finanzas,
+            "marketing": score_marketing,
+            "tendencias": score_tendencias
+        }
+        
+        # Determinar el tipo de agente basado en las puntuaciones
+        if scores["finanzas"] > scores["marketing"] and scores["finanzas"] > scores["tendencias"]:
+            agent_type = "finance_agent"
+        elif scores["marketing"] > scores["finanzas"] and scores["marketing"] > scores["tendencias"]:
+            agent_type = "marketing_agent"
+        else:
+            agent_type = "analysis_agent"
+            
+        logger.info(f"Clasificación de consulta: {agent_type} (scores: {scores})")
+        
+        # Procesamos la consulta según el tipo de agente identificado
+        async with httpx.AsyncClient() as client:
+            # Registramos la petición HTTP
+            logger.info(f"Obteniendo datos básicos para: {empresa}, {periodo}")
+            
+            # Obtenemos datos financieros base (útiles para varios tipos de consultas)
+            response = await client.post(
+                f"{mcp_url}/mcp/v1/tools/buscar_datos_financieros",
+                json={"empresa": empresa, "periodo": periodo}
+            )
+            logger.info(f"HTTP Request: POST {mcp_url}/mcp/v1/tools/buscar_datos_financieros \"{response.status_code} {response.reason_phrase}\"")
+            datos_financieros = response.json().get("result", {})
+            
+            # Procesamos según el tipo de agente identificado
+            if agent_type == "finance_agent":
+                # Análisis financiero usando herramientas MCP
+                finance_data = datos_financieros.get("datos", {})
+                
+                if "ingresos" in finance_data and "beneficio_neto" in finance_data and "activos_totales" in finance_data and "pasivos_totales" in finance_data:
+                    # Calcular ratios si tenemos todos los datos necesarios
+                    ratio_response = await client.post(
+                        f"{mcp_url}/mcp/v1/tools/calcular_ratios_financieros",
+                        json={
+                            "ingresos": finance_data.get("ingresos"),
+                            "beneficio_neto": finance_data.get("beneficio_neto"),
+                            "activos_totales": finance_data.get("activos_totales"),
+                            "pasivos_totales": finance_data.get("pasivos_totales")
+                        }
+                    )
+                    logger.info(f"HTTP Request: POST {mcp_url}/mcp/v1/tools/calcular_ratios_financieros \"{ratio_response.status_code} {ratio_response.reason_phrase}\"")
+                    ratios = ratio_response.json().get("result", {})
+                    
+                    resultado = f"Análisis financiero de {empresa}:\n- Ingresos: {finance_data.get('ingresos'):,.2f}\n- Beneficio: {finance_data.get('beneficio_neto'):,.2f}\n"
+                    
+                    if ratios:
+                        resultado += f"- Margen: {ratios.get('margen_beneficio', 0):.2%}\n"
+                        resultado += f"- ROE: {ratios.get('ROE', 0):.2%}\n"
+                        resultado += f"- ROA: {ratios.get('ROA', 0):.2%}\n"
+                    
+                    return {
+                        "result": resultado,
+                        "agent": "mcp_direct_finance",
+                        "confidence": 0.85,
+                        "processing_time": time.time() - start_time
+                    }
+                else:
+                    return {
+                        "result": f"Datos financieros para {empresa}: {datos_financieros}",
+                        "agent": "mcp_direct_finance",
+                        "confidence": 0.7,
+                        "processing_time": time.time() - start_time
+                    }
+            
+            elif agent_type == "marketing_agent":
+                # Si es una consulta de marketing, usar la herramienta apropiada
+                marketing_response = await client.post(
+                    f"{mcp_url}/mcp/v1/tools/recomendar_estrategia_marketing",
+                    json={
+                        "industria": request.context.get("industria", "General"),
+                        "presupuesto": request.context.get("presupuesto", 50000),
+                        "objetivo": request.context.get("objetivo", "awareness"),
+                        "publico_objetivo": request.context.get("publico_objetivo", "General")
+                    }
+                )
+                logger.info(f"HTTP Request: POST {mcp_url}/mcp/v1/tools/recomendar_estrategia_marketing \"{marketing_response.status_code} {marketing_response.reason_phrase}\"")
+                marketing_data = marketing_response.json().get("result", {})
+                
+                if "estrategia" in marketing_data:
+                    # Formateamos una respuesta básica con los datos obtenidos
+                    canales = ", ".join(marketing_data.get("canales_recomendados", ["No disponible"]))
+                    resultado = f"Estrategia de marketing: {marketing_data.get('estrategia')}\n"
+                    resultado += f"Público objetivo: {marketing_data.get('publico_objetivo', 'No especificado')}\n"
+                    resultado += f"Canales recomendados: {canales}\n"
+                    
+                    return {
+                        "result": resultado,
+                        "agent": "mcp_direct_marketing",
+                        "confidence": 0.8,
+                        "processing_time": time.time() - start_time
+                    }
+            
+            else:  # analysis_agent o cualquier otro tipo
+                # Si es una consulta de análisis, usar la herramienta de tendencia
+                # Intentaremos con los datos históricos si los proveen
+                datos_serie = request.context.get("datos", [100, 120, 150, 180, 210])
+                
+                trend_response = await client.post(
+                    f"{mcp_url}/mcp/v1/tools/analizar_tendencia",
+                    json={"datos": datos_serie}
+                )
+                logger.info(f"HTTP Request: POST {mcp_url}/mcp/v1/tools/analizar_tendencia \"{trend_response.status_code} {trend_response.reason_phrase}\"")
+                trend_data = trend_response.json().get("result", {})
+                
+                if "tendencia" in trend_data:
+                    resultado = f"Análisis de tendencia:\n"
+                    resultado += f"- Dirección: {trend_data.get('tendencia', {}).get('direccion', 'No disponible')}\n"
+                    resultado += f"- Cambio: {trend_data.get('tendencia', {}).get('cambio_porcentual', 0):.1f}%\n"
+                    resultado += f"- Análisis: {trend_data.get('analisis', 'No disponible')}"
+                    
+                    return {
+                        "result": resultado,
+                        "agent": "mcp_direct_analysis",
+                        "confidence": 0.75,
+                        "processing_time": time.time() - start_time
+                    }
+            
+            # Si llegamos aquí, es una consulta general
+            return {
+                "result": f"Tu consulta ha sido recibida y clasificada como {agent_type}. Por favor especifica más detalles para un análisis más preciso.",
+                "agent": agent_type,
+                "confidence": 0.6,
+                "processing_time": time.time() - start_time
+            }
+            
+    except Exception as e:
+        # Manejo de errores
+        logger.error(f"Error al procesar la consulta: {str(e)}")
+        return {
+            "result": f"Se produjo un error al procesar tu consulta: {str(e)}",
+            "agent": "error_handler",
+            "confidence": 0.1,
+            "processing_time": time.time() - start_time
+        }
+
+def simulate_agent_response(agent_name: str, query: str) -> str:
+    """
+    Genera una respuesta simulada para el modo de desarrollo sin API key.
+    """
+    query_preview = query[:30] + "..." if len(query) > 30 else query
+    
+    if agent_name == "finance_agent":
+        return f"[SIMULACIÓN] Análisis financiero para: {query_preview}\n\nEste es un resultado simulado para el agente financiero en modo desarrollo."
+    elif agent_name == "marketing_agent":
+        return f"[SIMULACIÓN] Análisis de marketing para: {query_preview}\n\nEste es un resultado simulado para el agente de marketing en modo desarrollo."
+    else:
+        return f"[SIMULACIÓN] Análisis general para: {query_preview}\n\nEste es un resultado simulado para el agente de análisis en modo desarrollo."
 
 @app.post(
     "/api/v1/finance/analyze",
@@ -947,7 +1108,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0", 
-        port=8000,
+        port=8008,
         reload=True,
         log_level="info"
     ) 
