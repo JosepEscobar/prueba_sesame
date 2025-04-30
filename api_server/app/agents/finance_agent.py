@@ -67,22 +67,29 @@ class FinanceAgent(BaseAgent):
                 # Inicializar el cliente MCP en mcp_integration
                 tools = get_mcp_tools_sync()
                 if tools:
-                    self.available_mcp_tools = [tool["name"] for tool in tools]
-                    logger.info(f"Cliente MCP inicializado. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
-                    self.mcp_initialized = True
+                    # Volver a intentar obtener el cliente global después de inicializar
+                    from app.agents.mcp_integration import _mcp_client
+                    self.mcp_client = _mcp_client  # Asignar el cliente global a self.mcp_client
+                    
+                    if self.mcp_client is not None:
+                        self.available_mcp_tools = [tool["name"] for tool in tools]
+                        logger.info(f"Cliente MCP inicializado. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
+                        self.mcp_initialized = True
+                    else:
+                        logger.warning("Cliente MCP global es None después de inicialización")
+                        self.available_mcp_tools = []
+                        self.mcp_initialized = False
                 else:
                     logger.warning("No se pudo inicializar el cliente MCP desde get_mcp_tools_sync")
                     self.available_mcp_tools = []
                     self.mcp_initialized = False
             else:
                 # Usar el cliente global existente
+                self.mcp_client = _mcp_client
                 self.mcp_initialized = True
                 tools = _mcp_client.list_tools_sync()
                 self.available_mcp_tools = [tool["name"] for tool in tools]
                 logger.info(f"Usando cliente MCP existente. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
-                
-            # Referencia al cliente global
-            self.mcp_client = _mcp_client
         except Exception as e:
             logger.error(f"Error al configurar cliente MCP: {str(e)}")
             self.mcp_client = None
@@ -171,7 +178,20 @@ class FinanceAgent(BaseAgent):
             
             try:
                 logger.info(f"Llamando a herramienta MCP '{tool_name}' con parámetros: {params}")
-                result = self.mcp_client.call_tool_sync(tool_name, params)
+                
+                # Verificar que existe el cliente MCP
+                if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                    # Intenta usar el cliente global como fallback
+                    from app.agents.mcp_integration import _mcp_client
+                    if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                        logger.info(f"Usando cliente MCP global como fallback")
+                        result = _mcp_client.call_tool_sync(tool_name, params)
+                    else:
+                        logger.error(f"No hay cliente MCP disponible para ejecutar '{tool_name}'")
+                        return False
+                else:
+                    # Usar el cliente propio del agente
+                    result = self.mcp_client.call_tool_sync(tool_name, params)
                 
                 if "error" in result:
                     logger.error(f"Error al ejecutar '{tool_name}': {result['error']}")
