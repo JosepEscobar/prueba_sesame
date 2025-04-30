@@ -293,9 +293,9 @@ class MarketingAgent(BaseAgent):
             # Ejemplo: Usar herramienta financial_models para tendencias de mercado
             if "industry" in context:
                 financial_params = {
-                    "industry": context["industry"],
-                    "model_type": "market_trends",
-                    "complexity": "simple"
+                    "industria": context["industry"],
+                    "metodo": "analisis_rentabilidad",
+                    "datos": None
                 }
                 
                 # Verificar que existe el cliente MCP
@@ -478,3 +478,41 @@ Incluye métricas relevantes cuando estén disponibles y destaca oportunidades c
             summary["market_trends_available"] = True
             
         return summary 
+
+    def _extract_industry(self, query: str) -> str:
+        """
+        Extrae la industria a partir del texto de la consulta.
+        
+        Args:
+            query: Texto de la consulta del usuario
+        
+        Returns:
+            Nombre de la industria extraída o 'tecnología' por defecto
+        """
+        # Palabras clave para detectar industrias comunes
+        industrias = {
+            "tecnología": ["tecnología", "tech", "software", "hardware", "aplicación", "app", "móvil", "web", "internet", "computadora", "informática"],
+            "finanzas": ["finanzas", "banco", "inversión", "seguros", "financiero", "contabilidad", "economía", "bolsa", "acciones"],
+            "salud": ["salud", "médico", "hospital", "farmacéutica", "medicina", "clínica", "sanitario", "healthcare"],
+            "educación": ["educación", "enseñanza", "escuela", "universidad", "colegio", "formación", "académico", "aprendizaje"],
+            "retail": ["retail", "comercio", "tienda", "venta", "minorista", "ecommerce", "comercio electrónico", "supermercado"],
+            "manufactura": ["manufactura", "fábrica", "producción", "industrial", "fabricación", "maquinaria"],
+            "energía": ["energía", "petróleo", "gas", "renovable", "solar", "eólica", "eléctrica", "combustible"],
+            "turismo": ["turismo", "hotel", "viaje", "restaurante", "hospitality", "alojamiento", "vacación", "aerolínea"],
+            "entretenimiento": ["entretenimiento", "media", "cine", "música", "juego", "deporte", "televisión", "streaming"],
+            "agricultura": ["agricultura", "alimento", "cultivo", "ganadería", "agrícola", "alimentos", "comida"]
+        }
+        
+        # Normalizar el texto a minúsculas
+        query_lower = query.lower()
+        
+        # Buscar palabras clave en el texto
+        for industria, keywords in industrias.items():
+            for keyword in keywords:
+                if keyword in query_lower:
+                    logger.info(f"Industria detectada: {industria} (keyword: {keyword})")
+                    return industria
+        
+        # Si no se detecta ninguna industria, devolver valor por defecto
+        logger.info("No se detectó industria específica, usando valor por defecto: tecnología")
+        return "tecnología"

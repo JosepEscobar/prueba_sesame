@@ -56,11 +56,12 @@ async def log_requests(request: Request, call_next):
     # Obtener el cuerpo de la solicitud si es POST o PUT
     if request.method in ("POST", "PUT"):
         try:
-            body_bytes = await request.body()
-            await request._body.seek(0)  # Reset body position for future handlers
-            if body_bytes:
+            # Crear una copia del cuerpo para no interferir con el procesamiento principal
+            body = await request.body()
+            # No intentamos hacer seek en el objeto bytes
+            if body:
                 # Limitar el tamaño del cuerpo en los logs
-                body_str = body_bytes.decode('utf-8')
+                body_str = body.decode('utf-8', errors='replace')
                 if len(body_str) > 500:
                     body_str = body_str[:500] + "... [truncado]"
                 logger.info(f"Cuerpo de la solicitud: {body_str}")
@@ -449,6 +450,234 @@ async def predecir_valores(datos: List[float], periodos_futuros: int = 3) -> Dic
     except Exception as e:
         return {"error": f"Error al calcular predicciones: {str(e)}"}
 
+@register_tool()
+async def financial_models(
+    industria: str,
+    metodo: str,
+    datos: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Proporciona modelos financieros y análisis para una industria específica.
+    
+    Args:
+        industria: Industria o sector para analizar
+        metodo: Tipo de análisis financiero a realizar
+        datos: Datos adicionales para el análisis (opcional)
+    
+    Returns:
+        Resultados del análisis financiero
+    """
+    # Datos de ejemplo para diferentes industrias
+    modelos_industria = {
+        "tecnología": {
+            "crecimiento_anual": 14.5,
+            "margen_beneficio_promedio": 22.3,
+            "inversion_id_promedio": 18.2,
+            "roi_esperado": 25.4,
+            "tiempo_recuperacion": 2.5
+        },
+        "finanzas": {
+            "crecimiento_anual": 8.2,
+            "margen_beneficio_promedio": 30.1,
+            "inversion_id_promedio": 5.3,
+            "roi_esperado": 18.7,
+            "tiempo_recuperacion": 3.8
+        },
+        "salud": {
+            "crecimiento_anual": 7.5,
+            "margen_beneficio_promedio": 15.8,
+            "inversion_id_promedio": 12.4,
+            "roi_esperado": 16.5,
+            "tiempo_recuperacion": 4.2
+        },
+        "retail": {
+            "crecimiento_anual": 4.8,
+            "margen_beneficio_promedio": 8.2,
+            "inversion_id_promedio": 3.1,
+            "roi_esperado": 12.3,
+            "tiempo_recuperacion": 3.1
+        }
+    }
+    
+    # Si la industria no está en nuestros datos, usar tecnología como default
+    industria_data = modelos_industria.get(industria.lower(), modelos_industria["tecnología"])
+    
+    # Procesar según el método solicitado
+    if metodo == "proyeccion_crecimiento":
+        # Proyección de crecimiento para los próximos 5 años
+        crecimiento_base = industria_data["crecimiento_anual"]
+        proyeccion = [
+            round(crecimiento_base * (1 + 0.05 * i), 2) for i in range(5)
+        ]
+        return {
+            "industria": industria,
+            "metodo": metodo,
+            "proyeccion_5_años": proyeccion,
+            "crecimiento_promedio": sum(proyeccion) / len(proyeccion)
+        }
+    
+    elif metodo == "analisis_rentabilidad":
+        # Análisis de rentabilidad
+        return {
+            "industria": industria,
+            "metodo": metodo,
+            "margen_beneficio": industria_data["margen_beneficio_promedio"],
+            "roi": industria_data["roi_esperado"],
+            "tiempo_recuperacion_años": industria_data["tiempo_recuperacion"]
+        }
+    
+    elif metodo == "comparativa_industria":
+        # Comparativa con otras industrias
+        comparativa = {}
+        for ind, data in modelos_industria.items():
+            comparativa[ind] = {
+                "crecimiento": data["crecimiento_anual"],
+                "margen": data["margen_beneficio_promedio"]
+            }
+        return {
+            "industria_base": industria,
+            "metodo": metodo,
+            "comparativa": comparativa
+        }
+    
+    else:
+        # Método no reconocido, devolver datos generales
+        return {
+            "industria": industria,
+            "datos_financieros": industria_data,
+            "nota": "Método no reconocido, se devuelven datos generales de la industria"
+        }
+
+@register_tool()
+async def search_articles(
+    tema: Optional[str] = None,
+    query: Optional[str] = None,
+    max_resultados: int = 5,
+    incluir_resumen: bool = True,
+    fuentes: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Busca artículos y noticias relacionados con un tema específico.
+    
+    Args:
+        tema: Tema o palabra clave para buscar (alternativa a query)
+        query: Tema o palabra clave para buscar (alternativa a tema)
+        max_resultados: Número máximo de resultados a devolver
+        incluir_resumen: Si se debe incluir un resumen de cada artículo
+        fuentes: Lista de fuentes específicas donde buscar (opcional)
+    
+    Returns:
+        Lista de artículos encontrados con metadatos
+    """
+    # Usar tema o query, dando prioridad a tema si ambos están presentes
+    tema_busqueda = tema if tema is not None else query
+    
+    if tema_busqueda is None:
+        return {
+            "error": "Debe proporcionar un parámetro 'tema' o 'query' para la búsqueda"
+        }
+    
+    # Limitar el número máximo de resultados
+    if max_resultados > 10:
+        max_resultados = 10
+    
+    # Datos simulados para diferentes temas
+    resultados_por_tema = {
+        "tecnología": [
+            {
+                "titulo": "Avances en inteligencia artificial generativa",
+                "fuente": "Tech Review",
+                "fecha": "2025-04-25",
+                "url": "https://ejemplo.com/ia-generativa",
+                "resumen": "Los últimos avances en IA generativa están transformando múltiples industrias, desde la creación de contenido hasta el diseño de productos."
+            },
+            {
+                "titulo": "El futuro de la computación cuántica",
+                "fuente": "Quantum World",
+                "fecha": "2025-04-20",
+                "url": "https://ejemplo.com/computacion-cuantica",
+                "resumen": "Las empresas tecnológicas compiten por lograr la supremacía cuántica con nuevos procesadores de más de 1000 qubits."
+            },
+            {
+                "titulo": "Tendencias en desarrollo web para 2025",
+                "fuente": "Web Developer Magazine",
+                "fecha": "2025-04-18",
+                "url": "https://ejemplo.com/tendencias-web-2025",
+                "resumen": "Las arquitecturas serverless y los componentes web están redefiniendo cómo se construyen aplicaciones modernas."
+            }
+        ],
+        "marketing": [
+            {
+                "titulo": "Estrategias de marketing basadas en IA",
+                "fuente": "Marketing Digital Today",
+                "fecha": "2025-04-26",
+                "url": "https://ejemplo.com/marketing-ia",
+                "resumen": "Las herramientas de IA están permitiendo personalización en tiempo real y optimización automática de campañas."
+            },
+            {
+                "titulo": "El auge del marketing contextual",
+                "fuente": "Brand Insights",
+                "fecha": "2025-04-22",
+                "url": "https://ejemplo.com/marketing-contextual",
+                "resumen": "Las marcas están utilizando señales contextuales para ofrecer mensajes más relevantes y menos intrusivos."
+            }
+        ],
+        "finanzas": [
+            {
+                "titulo": "Nuevas regulaciones para criptomonedas",
+                "fuente": "Financial Times",
+                "fecha": "2025-04-28",
+                "url": "https://ejemplo.com/regulacion-cripto",
+                "resumen": "Los reguladores globales avanzan hacia un marco común para activos digitales y criptomonedas."
+            },
+            {
+                "titulo": "Tendencias de inversión sostenible",
+                "fuente": "Sustainable Finance",
+                "fecha": "2025-04-24",
+                "url": "https://ejemplo.com/inversion-sostenible",
+                "resumen": "Los fondos ESG continúan atrayendo inversores mientras aumenta el escrutinio sobre el greenwashing."
+            }
+        ]
+    }
+    
+    # Normalizar tema (convertir a minúsculas)
+    tema_lower = tema_busqueda.lower()
+    
+    # Buscar resultados exactos primero
+    resultados = []
+    if tema_lower in resultados_por_tema:
+        resultados = resultados_por_tema[tema_lower][:max_resultados]
+    else:
+        # Buscar en todos los temas si no hay coincidencia exacta
+        for tema_clave, articulos in resultados_por_tema.items():
+            if tema_lower in tema_clave or tema_clave in tema_lower:
+                # Añadir artículos relacionados
+                resultados.extend(articulos)
+        
+        # Limitar resultados
+        resultados = resultados[:max_resultados]
+    
+    # Filtrar por fuentes si se especifican
+    if fuentes and isinstance(fuentes, list) and len(fuentes) > 0:
+        fuentes_lower = [f.lower() for f in fuentes]
+        resultados = [
+            articulo for articulo in resultados 
+            if articulo.get("fuente", "").lower() in fuentes_lower
+        ]
+    
+    # Eliminar resúmenes si no se solicitan
+    if not incluir_resumen:
+        for articulo in resultados:
+            if "resumen" in articulo:
+                del articulo["resumen"]
+    
+    return {
+        "tema": tema_busqueda,
+        "num_resultados": len(resultados),
+        "fecha_busqueda": datetime.now().strftime("%Y-%m-%d"),
+        "articulos": resultados
+    }
+
 # Status endpoint
 @app.get("/status")
 async def status():
@@ -462,6 +691,17 @@ async def status():
 
 # Incluir el router en la aplicación
 app.include_router(mcp_router)
+
+# Añadir endpoints compatibles en la ruta raíz
+@app.get("/tools")
+async def list_tools_root():
+    """Listar todas las herramientas disponibles (endpoint compatible)."""
+    return await list_tools()
+
+@app.post("/tools/{tool_name}")
+async def execute_tool_root(tool_name: str, request: Request):
+    """Ejecutar una herramienta específica (endpoint compatible)."""
+    return await execute_tool(tool_name, request)
 
 # Función de inicio del servidor
 def iniciar_servidor():
