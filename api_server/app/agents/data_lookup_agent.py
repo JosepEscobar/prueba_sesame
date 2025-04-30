@@ -34,7 +34,7 @@ class DataLookupAgent(BaseAgent):
         
         # Comprobar si hay una clave API válida
         if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "sk-your-key-here":
-            self.llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.1)
+            self.llm = ChatOpenAI(model_name="gpt-4.1-mini", temperature=0.1)
         else:
             # Crear un modelo ficticio para desarrollo
             logger.warning("No hay clave API de OpenAI válida. Usando respuestas ficticias para desarrollo.")
@@ -76,61 +76,6 @@ class DataLookupAgent(BaseAgent):
         query_preview = query[:50] + "..." if len(query) > 50 else query
         logger.info(f"Procesando consulta de datos ({lookup_type}): {query_preview}")
         
-        # Si no hay un LLM configurado (por falta de API key), usar método alternativo
-        if self.llm is None:
-            logger.warning("No hay LLM configurado, usando búsqueda de datos básica.")
-            processing_time = time.time() - start_time
-            
-            # En este caso, intentar usar directamente las herramientas MCP para la búsqueda
-            try:
-                # Inicializar el cliente MCP
-                initialized = self.mcp_client.initialize_sync()
-                
-                if initialized:
-                    logger.info("Cliente MCP inicializado correctamente. Realizando búsqueda de datos directa.")
-                    
-                    # Configurar parámetros según el tipo de búsqueda
-                    mcp_params = {
-                        "query": query,
-                        "lookup_type": lookup_type
-                    }
-                    
-                    # Si hay contexto adicional, añadirlo a los parámetros
-                    if context:
-                        mcp_params.update(context)
-                    
-                    # Realizar la búsqueda a través de MCP
-                    result = self.mcp_client.call_tool_sync("data_lookup", mcp_params)
-                    
-                    return {
-                        "result": result,
-                        "input": query,
-                        "lookup_type": lookup_type,
-                        "confidence": 0.7,  # Confianza media por ser búsqueda directa
-                        "processing_time": processing_time,
-                        "success": True
-                    }
-                else:
-                    logger.error("No se pudo inicializar el cliente MCP")
-                    return {
-                        "result": {},
-                        "input": query,
-                        "confidence": 0.0,
-                        "processing_time": processing_time,
-                        "success": False,
-                        "error": "No se pudo inicializar la conexión con el servidor MCP"
-                    }
-            except Exception as e:
-                logger.error(f"Error en búsqueda directa: {str(e)}")
-                return {
-                    "result": {},
-                    "input": query,
-                    "confidence": 0.0,
-                    "processing_time": processing_time,
-                    "success": False,
-                    "error": f"Error en búsqueda directa: {str(e)}"
-                }
-        
         # Preparar los datos para la búsqueda
         lookup_data = {}
         
@@ -141,66 +86,103 @@ class DataLookupAgent(BaseAgent):
             if initialized:
                 logger.info("Cliente MCP inicializado correctamente con StdioTransport. Ejecutando búsqueda de datos.")
                 
-                # Determinar qué tipo de datos necesitamos buscar
-                if lookup_type == "financial":
-                    # Buscar datos financieros específicos
-                    company = context.get("company", self._extract_entity(query, "company"))
+                # Usar LLM para categorizar y extraer parámetros de la consulta
+                if self.llm:
+                    categorization_prompt = f"""
+                    Analiza la siguiente consulta y categoriza el tipo de búsqueda que se necesita realizar.
                     
-                    if company:
-                        financial_params = {
-                            "empresa": company,
-                            "periodo": context.get("period", "actual")
-                        }
-                        financial_data = self.mcp_client.call_tool_sync("buscar_datos_financieros", financial_params)
-                        lookup_data["financial_data"] = financial_data
-                        logger.info(f"Datos financieros obtenidos para: {company}")
-                
-                elif lookup_type == "marketing":
-                    # Buscar datos de marketing
-                    campaign = context.get("campaign", self._extract_entity(query, "campaign"))
+                    Consulta: "{query}"
                     
-                    if campaign and "metrics" in context:
-                        metrics = context["metrics"]
-                        marketing_params = {
-                            "nombre_campania": campaign,
-                            "impresiones": metrics.get("impressions", 1000),
-                            "clics": metrics.get("clicks", 50),
-                            "conversiones": metrics.get("conversions", 10),
-                            "coste": metrics.get("cost", 500)
-                        }
-                        marketing_data = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", marketing_params)
-                        lookup_data["marketing_data"] = marketing_data
-                        logger.info(f"Datos de marketing obtenidos para: {campaign}")
-                
-                # Siempre realizar una búsqueda general de datos
-                general_params = {
-                    "lookup_type": lookup_type,
-                    "query": query
-                }
-                general_data = self.mcp_client.call_tool_sync("data_lookup", general_params)
-                lookup_data["general_data"] = general_data
-                logger.info(f"Búsqueda general completada para tipo: {lookup_type}")
-                
-                # Si se solicitan tendencias y tenemos datos numéricos
-                if lookup_type == "trends" and "numerical_data" in context:
-                    trends_params = {
-                        "datos": context["numerical_data"],
-                        "etiquetas": context.get("labels", None)
-                    }
-                    trends_data = self.mcp_client.call_tool_sync("analizar_tendencia", trends_params)
-                    lookup_data["trends_data"] = trends_data
-                    logger.info("Análisis de tendencias completado")
+                    Devuelve una respuesta en formato JSON con esta estructura:
+                    {{
+                        "lookup_category": "financial" | "marketing" | "trends" | "general",
+                        "parameters": {{
+                            // Parámetros específicos según la categoría
+                            // Para financial: empresa, periodo
+                            // Para marketing: campaign, metrics (clicks, impressions, conversions, cost)
+                            // Para trends: numerical_data, labels, predict, future_periods
+                            // Para general: solo tema principal
+                        }}
+                    }}
                     
-                    # Si se solicita además predicción
-                    if context.get("predict", False):
-                        predict_params = {
-                            "datos": context["numerical_data"],
-                            "periodos_futuros": context.get("future_periods", 3)
+                    Devuelve SOLAMENTE el JSON, sin texto adicional.
+                    """
+                    
+                    try:
+                        response = self.llm.invoke(categorization_prompt)
+                        categorization = json.loads(response.content.strip())
+                        logger.info(f"Categorización por LLM: {categorization}")
+                        
+                        lookup_category = categorization.get("lookup_category", "general")
+                        parameters = categorization.get("parameters", {})
+                        
+                        # Procesar según la categoría identificada por el LLM
+                        if lookup_category == "financial":
+                            company = parameters.get("empresa", context.get("company"))
+                            if company:
+                                financial_params = {
+                                    "empresa": company,
+                                    "periodo": parameters.get("periodo", context.get("period", "actual"))
+                                }
+                                financial_data = self.mcp_client.call_tool_sync("buscar_datos_financieros", financial_params)
+                                lookup_data["financial_data"] = financial_data
+                                logger.info(f"Datos financieros obtenidos para: {company}")
+                        
+                        elif lookup_category == "marketing":
+                            campaign = parameters.get("campaign", context.get("campaign"))
+                            metrics = parameters.get("metrics", context.get("metrics", {}))
+                            
+                            if campaign and metrics:
+                                marketing_params = {
+                                    "nombre_campania": campaign,
+                                    "impresiones": metrics.get("impressions", 1000),
+                                    "clics": metrics.get("clicks", 50),
+                                    "conversiones": metrics.get("conversions", 10),
+                                    "coste": metrics.get("cost", 500)
+                                }
+                                marketing_data = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", marketing_params)
+                                lookup_data["marketing_data"] = marketing_data
+                                logger.info(f"Datos de marketing obtenidos para: {campaign}")
+                        
+                        # Siempre realizar una búsqueda general de datos
+                        general_params = {
+                            "lookup_type": lookup_category,
+                            "query": query
                         }
-                        prediction_data = self.mcp_client.call_tool_sync("predecir_valores", predict_params)
-                        lookup_data["prediction_data"] = prediction_data
-                        logger.info("Predicción de valores completada")
-                
+                        general_data = self.mcp_client.call_tool_sync("data_lookup", general_params)
+                        lookup_data["general_data"] = general_data
+                        logger.info(f"Búsqueda general completada para tipo: {lookup_category}")
+                        
+                        # Procesar tendencias si están en la categorización
+                        if lookup_category == "trends":
+                            numerical_data = parameters.get("numerical_data", context.get("numerical_data"))
+                            
+                            if numerical_data:
+                                trends_params = {
+                                    "datos": numerical_data,
+                                    "etiquetas": parameters.get("labels", context.get("labels", None))
+                                }
+                                trends_data = self.mcp_client.call_tool_sync("analizar_tendencia", trends_params)
+                                lookup_data["trends_data"] = trends_data
+                                logger.info("Análisis de tendencias completado")
+                                
+                                # Si se solicita además predicción
+                                if parameters.get("predict", context.get("predict", False)):
+                                    predict_params = {
+                                        "datos": numerical_data,
+                                        "periodos_futuros": parameters.get("future_periods", context.get("future_periods", 3))
+                                    }
+                                    prediction_data = self.mcp_client.call_tool_sync("predecir_valores", predict_params)
+                                    lookup_data["prediction_data"] = prediction_data
+                                    logger.info("Predicción de valores completada")
+                    
+                    except Exception as e:
+                        logger.error(f"Error al procesar la categorización con LLM: {str(e)}")
+                        # Caer en el enfoque anterior como fallback
+                        lookup_data = self._legacy_lookup_processing(query, context)
+                else:
+                    # Si no hay LLM disponible, usar el enfoque anterior
+                    lookup_data = self._legacy_lookup_processing(query, context)
             else:
                 logger.warning("No se pudo inicializar el cliente MCP. Usando método alternativo.")
                 # Implementar lógica alternativa si es necesario
@@ -225,7 +207,7 @@ class DataLookupAgent(BaseAgent):
             "input": input_data.get("query", ""),
             "confidence": 0.85,  # Nivel de confianza para búsquedas de datos
             "processing_time": processing_time,
-            "model": "gpt-3.5-turbo" if self.llm else "direct_lookup"
+            "model": "gpt-4.1-mini" if self.llm else "direct_lookup"
         }
         
         logger.info(f"Búsqueda de datos completada en {processing_time:.2f} segundos")
@@ -296,4 +278,85 @@ class DataLookupAgent(BaseAgent):
                     return campaign
         
         # Si no encontramos nada, devolver una cadena vacía
-        return "" 
+        return ""
+
+    def _legacy_lookup_processing(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Método legacy para procesar consultas sin usar LLM para categorización.
+        Este método se usa como fallback cuando el LLM no está disponible o falla.
+        
+        Args:
+            query: La consulta del usuario
+            context: El contexto adicional
+            
+        Returns:
+            Diccionario con los datos obtenidos de las herramientas
+        """
+        lookup_data = {}
+        lookup_type = context.get("lookup_type", "general")
+        
+        try:
+            # Determinar qué tipo de datos necesitamos buscar
+            if lookup_type == "financial":
+                # Buscar datos financieros específicos
+                company = context.get("company", self._extract_entity(query, "company"))
+                
+                if company:
+                    financial_params = {
+                        "empresa": company,
+                        "periodo": context.get("period", "actual")
+                    }
+                    financial_data = self.mcp_client.call_tool_sync("buscar_datos_financieros", financial_params)
+                    lookup_data["financial_data"] = financial_data
+                    logger.info(f"Datos financieros obtenidos para: {company}")
+            
+            elif lookup_type == "marketing":
+                # Buscar datos de marketing
+                campaign = context.get("campaign", self._extract_entity(query, "campaign"))
+                
+                if campaign and "metrics" in context:
+                    metrics = context["metrics"]
+                    marketing_params = {
+                        "nombre_campania": campaign,
+                        "impresiones": metrics.get("impressions", 1000),
+                        "clics": metrics.get("clicks", 50),
+                        "conversiones": metrics.get("conversions", 10),
+                        "coste": metrics.get("cost", 500)
+                    }
+                    marketing_data = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", marketing_params)
+                    lookup_data["marketing_data"] = marketing_data
+                    logger.info(f"Datos de marketing obtenidos para: {campaign}")
+            
+            # Siempre realizar una búsqueda general de datos
+            general_params = {
+                "lookup_type": lookup_type,
+                "query": query
+            }
+            general_data = self.mcp_client.call_tool_sync("data_lookup", general_params)
+            lookup_data["general_data"] = general_data
+            logger.info(f"Búsqueda general completada para tipo: {lookup_type}")
+            
+            # Si se solicitan tendencias y tenemos datos numéricos
+            if lookup_type == "trends" and "numerical_data" in context:
+                trends_params = {
+                    "datos": context["numerical_data"],
+                    "etiquetas": context.get("labels", None)
+                }
+                trends_data = self.mcp_client.call_tool_sync("analizar_tendencia", trends_params)
+                lookup_data["trends_data"] = trends_data
+                logger.info("Análisis de tendencias completado")
+                
+                # Si se solicita además predicción
+                if context.get("predict", False):
+                    predict_params = {
+                        "datos": context["numerical_data"],
+                        "periodos_futuros": context.get("future_periods", 3)
+                    }
+                    prediction_data = self.mcp_client.call_tool_sync("predecir_valores", predict_params)
+                    lookup_data["prediction_data"] = prediction_data
+                    logger.info("Predicción de valores completada")
+        
+        except Exception as e:
+            logger.error(f"Error en el procesamiento legacy: {str(e)}")
+        
+        return lookup_data 

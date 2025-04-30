@@ -8,6 +8,7 @@ from langchain_openai import ChatOpenAI
 import os
 from pathlib import Path
 from app.tools.mcp_client import MCPClient
+import json
 
 # Obtener la configuración
 settings = get_settings()
@@ -113,50 +114,99 @@ class AnalysisAgent(BaseAgent):
             if hasattr(self, 'mcp_client') and self.mcp_client is not None:
                 self.mcp_client.initialize_sync()
             
-                # Invocar la herramienta MCP 'analizar_tendencia' si es relevante
-                if "datos" in context and isinstance(context["datos"], list):
+            # Usar LLM para categorizar el tipo de análisis necesario
+            if self.llm:
+                categorization_prompt = f"""
+                Analiza la siguiente consulta y determina qué tipo de análisis se necesita realizar.
+                
+                Consulta: "{query}"
+                
+                Devuelve SOLAMENTE un objeto JSON con esta estructura:
+                {{
+                    "analysis_type": "trend_analysis" | "article_search" | "general",
+                    "parameters": {{
+                        // Parámetros específicos según el tipo de análisis
+                    }}
+                }}
+                
+                Si es un análisis de tendencia (trend_analysis), incluye:
+                - has_numerical_data: true/false
+                - data_source: dónde se encuentran los datos numéricos
+                
+                Si es una búsqueda de artículos (article_search), incluye:
+                - search_query: la consulta de búsqueda refinada
+                
+                No incluyas texto adicional en tu respuesta, solo el JSON.
+                """
+                
+                try:
+                    response = self.llm.invoke(categorization_prompt)
+                    categorization = json.loads(response.content.strip())
+                    logger.info(f"Categorización por LLM: {categorization}")
+                    
+                    analysis_type = categorization.get("analysis_type", "general")
+                    parameters = categorization.get("parameters", {})
+                    
+                    # Ejecutar herramientas basadas en la categorización del LLM
+                    if analysis_type == "trend_analysis" and parameters.get("has_numerical_data", False):
+                        # Buscar los datos numéricos en el contexto o en la consulta
+                        numerical_data = context.get("datos", [])
+                        
+                        # Si hay datos numéricos, realizar análisis de tendencia
+                        if numerical_data and isinstance(numerical_data, list):
+                            # Verificar que existe el cliente MCP
+                            if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                                # Intenta usar el cliente global como fallback
+                                from app.agents.mcp_integration import _mcp_client
+                                if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                                    logger.info(f"Usando cliente MCP global como fallback")
+                                    trend_result = _mcp_client.call_tool_sync("analizar_tendencia", {
+                                        "datos": numerical_data,
+                                        "etiquetas": context.get("etiquetas", [])
+                                    })
+                                else:
+                                    logger.error(f"No hay cliente MCP disponible para ejecutar 'analizar_tendencia'")
+                                    trend_result = None
+                            else:
+                                # Usar el cliente propio del agente
+                                trend_result = self.mcp_client.call_tool_sync("analizar_tendencia", {
+                                    "datos": numerical_data,
+                                    "etiquetas": context.get("etiquetas", [])
+                                })
+                            
+                            if trend_result and "error" not in trend_result:
+                                mcp_data["tendencia"] = trend_result.get("result", {})
+                                logger.info("Datos de tendencia obtenidos de MCP")
+                    
+                    # Para cualquier tipo de análisis, considerar búsqueda de artículos relevantes
+                    search_query = parameters.get("search_query", query)
+                    
                     # Verificar que existe el cliente MCP
                     if not hasattr(self, 'mcp_client') or self.mcp_client is None:
                         # Intenta usar el cliente global como fallback
                         from app.agents.mcp_integration import _mcp_client
                         if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
                             logger.info(f"Usando cliente MCP global como fallback")
-                            trend_result = _mcp_client.call_tool_sync("analizar_tendencia", {
-                                "datos": context["datos"],
-                                "etiquetas": context.get("etiquetas", [])
-                            })
+                            search_result = _mcp_client.call_tool_sync("search_articles", {"query": search_query})
                         else:
-                            logger.error(f"No hay cliente MCP disponible para ejecutar 'analizar_tendencia'")
-                            trend_result = None
+                            logger.error(f"No hay cliente MCP disponible para ejecutar 'search_articles'")
+                            search_result = None
                     else:
                         # Usar el cliente propio del agente
-                        trend_result = self.mcp_client.call_tool_sync("analizar_tendencia", {
-                            "datos": context["datos"],
-                            "etiquetas": context.get("etiquetas", [])
-                        })
+                        search_result = self.mcp_client.call_tool_sync("search_articles", {"query": search_query})
                     
-                    if trend_result and "error" not in trend_result:
-                        mcp_data["tendencia"] = trend_result.get("result", {})
-                        logger.info("Datos de tendencia obtenidos de MCP")
-                
-                # Invocar la herramienta MCP 'search_articles' si es una consulta de búsqueda
-                # Verificar que existe el cliente MCP
-                if not hasattr(self, 'mcp_client') or self.mcp_client is None:
-                    # Intenta usar el cliente global como fallback
-                    from app.agents.mcp_integration import _mcp_client
-                    if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
-                        logger.info(f"Usando cliente MCP global como fallback")
-                        search_result = _mcp_client.call_tool_sync("search_articles", {"query": query})
-                    else:
-                        logger.error(f"No hay cliente MCP disponible para ejecutar 'search_articles'")
-                        search_result = None
-                else:
-                    # Usar el cliente propio del agente
-                    search_result = self.mcp_client.call_tool_sync("search_articles", {"query": query})
-                
-                if search_result and "error" not in search_result:
-                    mcp_data["articles"] = search_result.get("result", {})
-                    logger.info("Datos de artículos obtenidos de MCP")
+                    if search_result and "error" not in search_result:
+                        mcp_data["articles"] = search_result.get("result", {})
+                        logger.info("Datos de artículos obtenidos de MCP")
+                    
+                except Exception as e:
+                    logger.error(f"Error al procesar la categorización con LLM: {str(e)}")
+                    # Caer en el enfoque anterior como fallback
+                    mcp_data = self._legacy_get_mcp_data(query, context)
+            else:
+                # Si no hay LLM disponible, usar el enfoque anterior
+                mcp_data = self._legacy_get_mcp_data(query, context)
+            
         except Exception as e:
             logger.error(f"Error al obtener datos de MCP: {str(e)}")
         
@@ -236,3 +286,66 @@ class AnalysisAgent(BaseAgent):
                 "success": False,
                 "error": str(e)
             } 
+
+    def _legacy_get_mcp_data(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Método legacy para obtener datos de MCP sin usar LLM para categorización.
+        
+        Args:
+            query: La consulta del usuario
+            context: El contexto adicional
+            
+        Returns:
+            Diccionario con los datos obtenidos de MCP
+        """
+        mcp_data = {}
+        try:
+            # Invocar la herramienta MCP 'analizar_tendencia' si es relevante
+            if "datos" in context and isinstance(context["datos"], list):
+                # Verificar que existe el cliente MCP
+                if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                    # Intenta usar el cliente global como fallback
+                    from app.agents.mcp_integration import _mcp_client
+                    if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                        logger.info(f"Usando cliente MCP global como fallback")
+                        trend_result = _mcp_client.call_tool_sync("analizar_tendencia", {
+                            "datos": context["datos"],
+                            "etiquetas": context.get("etiquetas", [])
+                        })
+                    else:
+                        logger.error(f"No hay cliente MCP disponible para ejecutar 'analizar_tendencia'")
+                        trend_result = None
+                else:
+                    # Usar el cliente propio del agente
+                    trend_result = self.mcp_client.call_tool_sync("analizar_tendencia", {
+                        "datos": context["datos"],
+                        "etiquetas": context.get("etiquetas", [])
+                    })
+                
+                if trend_result and "error" not in trend_result:
+                    mcp_data["tendencia"] = trend_result.get("result", {})
+                    logger.info("Datos de tendencia obtenidos de MCP")
+            
+            # Invocar la herramienta MCP 'search_articles' si es una consulta de búsqueda
+            # Verificar que existe el cliente MCP
+            if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                # Intenta usar el cliente global como fallback
+                from app.agents.mcp_integration import _mcp_client
+                if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                    logger.info(f"Usando cliente MCP global como fallback")
+                    search_result = _mcp_client.call_tool_sync("search_articles", {"query": query})
+                else:
+                    logger.error(f"No hay cliente MCP disponible para ejecutar 'search_articles'")
+                    search_result = None
+            else:
+                # Usar el cliente propio del agente
+                search_result = self.mcp_client.call_tool_sync("search_articles", {"query": query})
+            
+            if search_result and "error" not in search_result:
+                mcp_data["articles"] = search_result.get("result", {})
+                logger.info("Datos de artículos obtenidos de MCP")
+            
+        except Exception as e:
+            logger.error(f"Error en el procesamiento legacy de MCP: {str(e)}")
+        
+        return mcp_data 

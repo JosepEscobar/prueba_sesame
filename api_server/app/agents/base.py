@@ -46,35 +46,22 @@ class BaseAgent(abc.ABC):
                 # Log para depuración
                 logger.info(f"Inicializando cliente OpenAI para {name} con API KEY: {settings.OPENAI_API_KEY[:5]}...{settings.OPENAI_API_KEY[-5:] if len(settings.OPENAI_API_KEY) > 10 else ''}")
                 
-                # Verificar que el cliente funciona con una prueba simple
-                response = self.client.chat.completions.create(
-                    model=settings.OPENAI_MODEL,
-                    messages=[
-                        {"role": "system", "content": "Responde con 'OK' si me estás recibiendo correctamente."},
-                        {"role": "user", "content": "Test de conexión"}
-                    ],
-                    temperature=0.0,
-                    max_tokens=5
-                )
+                # No hacemos la verificación de conexión aquí para ahorrar llamadas a la API
+                # y evitar errores 429 (Too Many Requests)
+                logger.info(f"Cliente OpenAI configurado para agente {name}")
                 
-                if response and response.choices and len(response.choices) > 0:
-                    logger.info(f"Cliente OpenAI verificado correctamente para agente {name}")
-                    
-                    # Ahora intentamos inicializar el LLM de LangChain con el cliente validado
-                    try:
-                        self.llm = ChatOpenAI(
-                            model_name=settings.OPENAI_MODEL,
-                            temperature=settings.TEMPERATURE,
-                            api_key=settings.OPENAI_API_KEY,
-                            max_tokens=settings.MAX_TOKENS
-                        )
-                        logger.info(f"LLM de LangChain inicializado correctamente para agente {name}")
-                    except Exception as e:
-                        logger.warning(f"No se pudo inicializar LangChain para {name}, usando cliente directo: {str(e)}")
-                        logger.info(f"Cliente OpenAI directo asignado a agente {name}")
-                else:
-                    logger.warning("La verificación del cliente OpenAI no devolvió una respuesta válida")
-                    self.client = None
+                # Inicializar el LLM de LangChain sin verificación previa
+                try:
+                    self.llm = ChatOpenAI(
+                        model_name=settings.OPENAI_MODEL,
+                        temperature=settings.TEMPERATURE,
+                        api_key=settings.OPENAI_API_KEY,
+                        max_tokens=settings.MAX_TOKENS
+                    )
+                    logger.info(f"LLM de LangChain inicializado correctamente para agente {name}")
+                except Exception as e:
+                    logger.warning(f"No se pudo inicializar LangChain para {name}, usando cliente directo: {str(e)}")
+                    logger.info(f"Cliente OpenAI directo asignado a agente {name}")
             except Exception as e:
                 logger.warning(f"No se pudo inicializar OpenAI para agente {name}: {str(e)}")
                 self.client = None

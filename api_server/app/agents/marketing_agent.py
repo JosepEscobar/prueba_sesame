@@ -39,7 +39,7 @@ class MarketingAgent(BaseAgent):
         
         # Comprobar si hay una clave API válida
         if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "sk-your-key-here":
-            self.llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.3)
+            self.llm = ChatOpenAI(model_name="gpt-4.1-mini", temperature=0.3)
         else:
             # Crear un modelo ficticio para desarrollo
             logger.warning("No hay clave API de OpenAI válida. Usando respuestas ficticias para desarrollo.")
@@ -103,183 +103,190 @@ class MarketingAgent(BaseAgent):
         query_preview = query[:50] + "..." if len(query) > 50 else query
         logger.info(f"Procesando consulta de marketing: {query_preview}")
         
-        # Reinicializar cliente MCP si es necesario
+        # Inicializar el cliente MCP para acceder a herramientas externas
         try:
-            from app.agents.mcp_integration import _mcp_client, get_mcp_tools_sync
-            mcp_tools = get_mcp_tools_sync()
-            if mcp_tools:
-                logger.info(f"MCP inicializado correctamente, {len(mcp_tools)} herramientas disponibles")
-                self.mcp_initialized = True
+            # Inicializar el cliente MCP si es necesario
+            if hasattr(self, 'mcp_client') and self.mcp_client is not None:
+                initialized = self.mcp_client.initialize_sync()
                 
-                # Intentar llamar directamente a recomendar_estrategia_marketing
-                if _mcp_client and _mcp_client.initialized:
-                    # Extraer datos relevantes del contexto
-                    industry = context.get("industry", self._extract_industry(query))
-                    budget = context.get("budget", 50000)
-                    goal = context.get("goal", "conversiones")
-                    target_audience = context.get("target_audience", "empresas")
+                if initialized:
+                    logger.info("Cliente MCP inicializado correctamente. Accediendo a herramientas de marketing.")
                     
-                    logger.info(f"Intentando llamar directamente a recomendar_estrategia_marketing con industria={industry}, presupuesto={budget}")
-                    
-                    # Llamar a la herramienta MCP
-                    mcp_result = _mcp_client.call_tool_sync(
-                        "recomendar_estrategia_marketing", 
-                        {
-                            "industria": industry,
-                            "presupuesto": budget,
-                            "objetivo": goal,
-                            "publico_objetivo": target_audience
-                        }
-                    )
-                    
-                    if "error" not in mcp_result:
-                        logger.info(f"Herramienta MCP recomendar_estrategia_marketing llamada exitosamente")
-                        # Usar directamente la respuesta de la herramienta MCP
-                        processing_time = time.time() - start_time
+                    # Usar LLM para categorizar y extraer parámetros de la consulta de marketing
+                    if self.llm:
+                        categorization_prompt = f"""
+                        Analiza la siguiente consulta de marketing y extrae los parámetros relevantes.
                         
-                        # Preparar el resultado final
-                        return {
-                            "result": f"Estrategia de marketing recomendada para {industry} con presupuesto de {budget}:\n" + 
-                                      f"Canales: {', '.join(mcp_result.get('result', {}).get('canales_recomendados', []))}\n" +
-                                      f"Distribución: {mcp_result.get('result', {}).get('distribucion_presupuesto', {})}",
-                            "input": query,
-                            "context": context,
-                            "data": mcp_result.get("result", {}),
-                            "confidence": 0.9,
-                            "processing_time": processing_time,
-                            "success": True,
-                            "mcp_used": True
-                        }
+                        Consulta: "{query}"
+                        
+                        Devuelve SOLAMENTE un objeto JSON con esta estructura:
+                        {{
+                            "marketing_actions": ["strategy", "trend_analysis", "campaign_analysis", "financial_analysis"],
+                            "parameters": {{
+                                "industry": "nombre de la industria si se menciona",
+                                "budget": número si se menciona un presupuesto,
+                                "goal": "objetivo de marketing mencionado (awareness, conversiones, tráfico, etc.)",
+                                "target_audience": "público objetivo mencionado",
+                                "campaign": {{
+                                    "name": "nombre de campaña si se menciona",
+                                    "impressions": número de impresiones si se mencionan,
+                                    "clicks": número de clics si se mencionan,
+                                    "conversions": número de conversiones si se mencionan,
+                                    "cost": costo si se menciona
+                                }}
+                            }}
+                        }}
+                        
+                        Cada acción debe ser incluida solo si es relevante para la consulta.
+                        No incluyas texto adicional en tu respuesta, solo el JSON.
+                        """
+                        
+                        try:
+                            response = self.llm.invoke(categorization_prompt)
+                            categorization = json.loads(response.content.strip())
+                            logger.info(f"Categorización por LLM: {categorization}")
+                            
+                            marketing_actions = categorization.get("marketing_actions", [])
+                            parameters = categorization.get("parameters", {})
+                            
+                            # Procesar acciones de marketing basadas en la categorización
+                            try:
+                                # 1. Análisis de tendencias si está en las acciones
+                                if "trend_analysis" in marketing_actions and context.get("datos"):
+                                    try:
+                                        trend_params = {
+                                            "datos": context["datos"],
+                                            "etiquetas": context.get("etiquetas", None)
+                                        }
+                                        
+                                        # Verificar que existe el cliente MCP
+                                        if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                                            # Intenta usar el cliente global como fallback
+                                            from app.agents.mcp_integration import _mcp_client
+                                            if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                                                logger.info(f"Usando cliente MCP global como fallback")
+                                                trend_data = _mcp_client.call_tool_sync("analizar_tendencia", trend_params)
+                                            else:
+                                                logger.error(f"No hay cliente MCP disponible para ejecutar 'analizar_tendencia'")
+                                                raise ValueError("No hay cliente MCP disponible")
+                                        else:
+                                            # Usar el cliente propio del agente
+                                            trend_data = self.mcp_client.call_tool_sync("analizar_tendencia", trend_params)
+                                        
+                                        marketing_data["trend_analysis"] = trend_data
+                                        logger.info("Análisis de tendencia obtenido a través de MCP")
+                                    except Exception as e:
+                                        logger.error(f"Error al obtener análisis de tendencia: {str(e)}")
+                                
+                                # 2. Estrategia de marketing si está en las acciones
+                                if "strategy" in marketing_actions and parameters.get("industry"):
+                                    try:
+                                        industry = parameters.get("industry")
+                                        strategy_params = {
+                                            "industria": industry,
+                                            "presupuesto": parameters.get("budget", context.get("budget", 50000)),
+                                            "objetivo": parameters.get("goal", context.get("goal", "awareness")),
+                                            "publico_objetivo": parameters.get("target_audience", context.get("target_audience", "general"))
+                                        }
+                                        
+                                        # Verificar que existe el cliente MCP
+                                        if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                                            # Intenta usar el cliente global como fallback
+                                            from app.agents.mcp_integration import _mcp_client
+                                            if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                                                logger.info(f"Usando cliente MCP global como fallback")
+                                                strategy_data = _mcp_client.call_tool_sync("recomendar_estrategia_marketing", strategy_params)
+                                            else:
+                                                logger.error(f"No hay cliente MCP disponible para ejecutar 'recomendar_estrategia_marketing'")
+                                                raise ValueError("No hay cliente MCP disponible")
+                                        else:
+                                            # Usar el cliente propio del agente
+                                            strategy_data = self.mcp_client.call_tool_sync("recomendar_estrategia_marketing", strategy_params)
+                                        
+                                        marketing_data["marketing_strategy"] = strategy_data
+                                        logger.info(f"Estrategia de marketing obtenida para {industry}")
+                                    except Exception as e:
+                                        logger.error(f"Error al obtener estrategia de marketing: {str(e)}")
+                                
+                                # 3. Análisis de campaña si está en las acciones
+                                if "campaign_analysis" in marketing_actions and parameters.get("campaign"):
+                                    try:
+                                        campaign_data = parameters.get("campaign", {})
+                                        if campaign_data:
+                                            campaign_params = {
+                                                "nombre_campania": campaign_data.get("name", "Campaña sin nombre"),
+                                                "impresiones": campaign_data.get("impressions", context.get("impressions", 0)),
+                                                "clics": campaign_data.get("clicks", context.get("clicks", 0)),
+                                                "conversiones": campaign_data.get("conversions", context.get("conversions", 0)),
+                                                "coste": campaign_data.get("cost", context.get("cost", 0))
+                                            }
+                                            
+                                            # Verificar que existe el cliente MCP
+                                            if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                                                # Intenta usar el cliente global como fallback
+                                                from app.agents.mcp_integration import _mcp_client
+                                                if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                                                    logger.info(f"Usando cliente MCP global como fallback")
+                                                    campaign_analysis = _mcp_client.call_tool_sync("analizar_rendimiento_campania", campaign_params)
+                                                else:
+                                                    logger.error(f"No hay cliente MCP disponible para ejecutar 'analizar_rendimiento_campania'")
+                                                    raise ValueError("No hay cliente MCP disponible")
+                                            else:
+                                                # Usar el cliente propio del agente
+                                                campaign_analysis = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", campaign_params)
+                                            
+                                            marketing_data["campaign_analysis"] = campaign_analysis
+                                            logger.info(f"Análisis de campaña obtenido para {campaign_params['nombre_campania']}")
+                                    except Exception as e:
+                                        logger.error(f"Error al obtener análisis de campaña: {str(e)}")
+                                
+                                # 4. Análisis financiero para marketing si está en las acciones
+                                if "financial_analysis" in marketing_actions and parameters.get("industry"):
+                                    try:
+                                        industry = parameters.get("industry")
+                                        financial_params = {
+                                            "industria": industry,
+                                            "metodo": "analisis_rentabilidad",
+                                            "datos": None
+                                        }
+                                        
+                                        # Verificar que existe el cliente MCP
+                                        if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                                            # Intenta usar el cliente global como fallback
+                                            from app.agents.mcp_integration import _mcp_client
+                                            if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                                                logger.info(f"Usando cliente MCP global como fallback")
+                                                financial_data = _mcp_client.call_tool_sync("financial_models", financial_params)
+                                            else:
+                                                logger.error(f"No hay cliente MCP disponible para ejecutar 'financial_models'")
+                                                raise ValueError("No hay cliente MCP disponible")
+                                        else:
+                                            # Usar el cliente propio del agente
+                                            financial_data = self.mcp_client.call_tool_sync("financial_models", financial_params)
+                                        
+                                        marketing_data["market_trends"] = financial_data
+                                        logger.info(f"Datos financieros obtenidos a través de MCP para industria: {industry}")
+                                    except Exception as e:
+                                        logger.error(f"Error al obtener datos financieros: {str(e)}")
+                            
+                            except Exception as e:
+                                logger.error(f"Error al procesar acciones de marketing: {str(e)}")
+                        
+                        except Exception as e:
+                            logger.error(f"Error al procesar la categorización con LLM: {str(e)}")
+                            # Caer en el enfoque anterior como fallback
+                            marketing_data = self._legacy_marketing_processing(query, context)
                     else:
-                        logger.warning(f"Error al llamar a herramienta MCP: {mcp_result.get('error')}")
-            else:
-                logger.warning("No se pudo inicializar MCP o no hay herramientas disponibles")
-        except Exception as e:
-            logger.error(f"Error al intentar utilizar MCP: {str(e)}")
-        
-        # Si no tenemos un LLM configurado, devolver un error
-        if self.llm is None:
-            logger.error("Error: No hay clave API de OpenAI válida. Imposible generar respuesta.")
-            processing_time = time.time() - start_time
-            return {
-                "result": "",
-                "input": query,
-                "confidence": 0.0,
-                "processing_time": processing_time,
-                "success": False,
-                "error": "No se ha configurado una clave API de OpenAI válida. Para utilizar este agente, configure la clave en el archivo .env"
-            }
-        
-        # Recopilar datos de marketing relevantes usando herramientas MCP
-        marketing_data = {}
-        
-        try:
-            # Inicializar el cliente MCP (esto creará una tarea en segundo plano si es necesario)
-            initialized = self.mcp_client.initialize_sync()
-            
-            if initialized:
-                logger.info("Cliente MCP inicializado correctamente. Buscando datos con herramientas MCP.")
-                
-                # Ejemplo: Usar directamente la herramienta data_lookup a través de MCP
-                try:
-                    # Usar herramienta de análisis de mercado si está disponible
-                    try:
-                        # Llamar a la herramienta analizar_tendencia del MCP server
-                        trend_params = {
-                            "datos": [100, 120, 150, 130, 170],
-                            "etiquetas": ["Ene", "Feb", "Mar", "Abr", "May"]
-                        }
-                        
-                        # Verificar que existe el cliente MCP
-                        if not hasattr(self, 'mcp_client') or self.mcp_client is None:
-                            # Intenta usar el cliente global como fallback
-                            from app.agents.mcp_integration import _mcp_client
-                            if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
-                                logger.info(f"Usando cliente MCP global como fallback")
-                                trend_data = _mcp_client.call_tool_sync("analizar_tendencia", trend_params)
-                            else:
-                                logger.error(f"No hay cliente MCP disponible para ejecutar 'analizar_tendencia'")
-                                raise ValueError("No hay cliente MCP disponible")
-                        else:
-                            # Usar el cliente propio del agente
-                            trend_data = self.mcp_client.call_tool_sync("analizar_tendencia", trend_params)
-                        
-                        marketing_data["trend_analysis"] = trend_data
-                        logger.info("Análisis de tendencia obtenido a través de MCP")
-                    except Exception as e:
-                        logger.error(f"Error al obtener análisis de tendencia: {str(e)}")
-                    
-                    # Usar la herramienta de recomendación de estrategia de marketing si está disponible
-                    if "industry" in context:
-                        try:
-                            strategy_params = {
-                                "industria": context["industry"],
-                                "presupuesto": context.get("budget", 50000),
-                                "objetivo": context.get("goal", "awareness"),
-                                "publico_objetivo": context.get("target_audience", "general")
-                            }
-                            
-                            # Verificar que existe el cliente MCP
-                            if not hasattr(self, 'mcp_client') or self.mcp_client is None:
-                                # Intenta usar el cliente global como fallback
-                                from app.agents.mcp_integration import _mcp_client
-                                if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
-                                    logger.info(f"Usando cliente MCP global como fallback")
-                                    strategy_data = _mcp_client.call_tool_sync("recomendar_estrategia_marketing", strategy_params)
-                                else:
-                                    logger.error(f"No hay cliente MCP disponible para ejecutar 'recomendar_estrategia_marketing'")
-                                    raise ValueError("No hay cliente MCP disponible")
-                            else:
-                                # Usar el cliente propio del agente
-                                strategy_data = self.mcp_client.call_tool_sync("recomendar_estrategia_marketing", strategy_params)
-                            
-                            marketing_data["marketing_strategy"] = strategy_data
-                            logger.info(f"Estrategia de marketing obtenida para {context['industry']}")
-                        except Exception as e:
-                            logger.error(f"Error al obtener estrategia de marketing: {str(e)}")
-                    
-                    # Analizar rendimiento de campaña si hay datos disponibles
-                    if "campaign_data" in context and isinstance(context["campaign_data"], dict):
-                        try:
-                            campaign_data = context["campaign_data"]
-                            campaign_params = {
-                                "nombre_campania": campaign_data.get("name", "Campaña sin nombre"),
-                                "impresiones": campaign_data.get("impressions", 0),
-                                "clics": campaign_data.get("clicks", 0),
-                                "conversiones": campaign_data.get("conversions", 0),
-                                "coste": campaign_data.get("cost", 0)
-                            }
-                            
-                            # Verificar que existe el cliente MCP
-                            if not hasattr(self, 'mcp_client') or self.mcp_client is None:
-                                # Intenta usar el cliente global como fallback
-                                from app.agents.mcp_integration import _mcp_client
-                                if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
-                                    logger.info(f"Usando cliente MCP global como fallback")
-                                    campaign_analysis = _mcp_client.call_tool_sync("analizar_rendimiento_campania", campaign_params)
-                                else:
-                                    logger.error(f"No hay cliente MCP disponible para ejecutar 'analizar_rendimiento_campania'")
-                                    raise ValueError("No hay cliente MCP disponible")
-                            else:
-                                # Usar el cliente propio del agente
-                                campaign_analysis = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", campaign_params)
-                            
-                            marketing_data["campaign_analysis"] = campaign_analysis
-                            logger.info(f"Análisis de campaña obtenido para {campaign_params['nombre_campania']}")
-                        except Exception as e:
-                            logger.error(f"Error al obtener análisis de campaña: {str(e)}")
-                    
-                except Exception as e:
-                    logger.error(f"Error al obtener datos mediante MCP: {str(e)}")
-                    
-            else:
-                logger.warning("No se pudo inicializar el cliente MCP. Usando método alternativo.")
-                # Usar el servicio local si está disponible como fallback
-                data_service = self.get_tool("data_lookup")
-                if data_service:
-                    logger.info("Utilizando servicio local de búsqueda de datos como fallback")
-                    # Usar el servicio local como fallback
-                    # ... (código existente para usar data_service) ...
+                        # Si no hay LLM disponible, usar el enfoque anterior
+                        marketing_data = self._legacy_marketing_processing(query, context)
+                else:
+                    logger.warning("No se pudo inicializar el cliente MCP. Usando método alternativo.")
+                    # Usar el servicio local si está disponible como fallback
+                    data_service = self.get_tool("data_lookup")
+                    if data_service:
+                        logger.info("Utilizando servicio local de búsqueda de datos como fallback")
+                        # Usar el servicio local como fallback
+                        # ... (código existente para usar data_service) ...
         except Exception as e:
             logger.error(f"Error al inicializar cliente MCP: {str(e)}")
             # Usar fallback si está disponible
@@ -287,35 +294,6 @@ class MarketingAgent(BaseAgent):
             if data_service:
                 # ... código de fallback existente ...
                 pass
-        
-        # Usar también otras herramientas MCP si es necesario
-        try:
-            # Ejemplo: Usar herramienta financial_models para tendencias de mercado
-            if "industry" in context:
-                financial_params = {
-                    "industria": context["industry"],
-                    "metodo": "analisis_rentabilidad",
-                    "datos": None
-                }
-                
-                # Verificar que existe el cliente MCP
-                if not hasattr(self, 'mcp_client') or self.mcp_client is None:
-                    # Intenta usar el cliente global como fallback
-                    from app.agents.mcp_integration import _mcp_client
-                    if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
-                        logger.info(f"Usando cliente MCP global como fallback")
-                        financial_data = _mcp_client.call_tool_sync("financial_models", financial_params)
-                    else:
-                        logger.error(f"No hay cliente MCP disponible para ejecutar 'financial_models'")
-                        raise ValueError("No hay cliente MCP disponible")
-                else:
-                    # Usar el cliente propio del agente
-                    financial_data = self.mcp_client.call_tool_sync("financial_models", financial_params)
-                
-                marketing_data["market_trends"] = financial_data
-                logger.info(f"Datos financieros obtenidos a través de MCP para industria: {context['industry']}")
-        except Exception as e:
-            logger.error(f"Error al obtener datos financieros mediante MCP: {str(e)}")
         
         # Preparar input para el prompt con todos los datos recopilados
         prompt_input = {
@@ -516,3 +494,137 @@ Incluye métricas relevantes cuando estén disponibles y destaca oportunidades c
         # Si no se detecta ninguna industria, devolver valor por defecto
         logger.info("No se detectó industria específica, usando valor por defecto: tecnología")
         return "tecnología"
+
+    def _legacy_marketing_processing(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Método legacy para procesar consultas de marketing sin usar LLM para categorización.
+        
+        Args:
+            query: La consulta del usuario
+            context: El contexto adicional
+            
+        Returns:
+            Diccionario con los datos de marketing obtenidos
+        """
+        marketing_data = {}
+        
+        try:
+            # 1. Análisis de tendencias si hay datos
+            if context.get("datos"):
+                try:
+                    trend_params = {
+                        "datos": context["datos"],
+                        "etiquetas": context.get("etiquetas", None)
+                    }
+                    
+                    # Verificar que existe el cliente MCP
+                    if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                        # Intenta usar el cliente global como fallback
+                        from app.agents.mcp_integration import _mcp_client
+                        if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                            logger.info(f"Usando cliente MCP global como fallback")
+                            trend_data = _mcp_client.call_tool_sync("analizar_tendencia", trend_params)
+                        else:
+                            logger.error(f"No hay cliente MCP disponible para ejecutar 'analizar_tendencia'")
+                            raise ValueError("No hay cliente MCP disponible")
+                    else:
+                        # Usar el cliente propio del agente
+                        trend_data = self.mcp_client.call_tool_sync("analizar_tendencia", trend_params)
+                    
+                    marketing_data["trend_analysis"] = trend_data
+                    logger.info("Análisis de tendencia obtenido a través de MCP")
+                except Exception as e:
+                    logger.error(f"Error al obtener análisis de tendencia: {str(e)}")
+            
+            # 2. Estrategia de marketing si hay industria
+            if "industry" in context:
+                try:
+                    strategy_params = {
+                        "industria": context["industry"],
+                        "presupuesto": context.get("budget", 50000),
+                        "objetivo": context.get("goal", "awareness"),
+                        "publico_objetivo": context.get("target_audience", "general")
+                    }
+                    
+                    # Verificar que existe el cliente MCP
+                    if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                        # Intenta usar el cliente global como fallback
+                        from app.agents.mcp_integration import _mcp_client
+                        if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                            logger.info(f"Usando cliente MCP global como fallback")
+                            strategy_data = _mcp_client.call_tool_sync("recomendar_estrategia_marketing", strategy_params)
+                        else:
+                            logger.error(f"No hay cliente MCP disponible para ejecutar 'recomendar_estrategia_marketing'")
+                            raise ValueError("No hay cliente MCP disponible")
+                    else:
+                        # Usar el cliente propio del agente
+                        strategy_data = self.mcp_client.call_tool_sync("recomendar_estrategia_marketing", strategy_params)
+                    
+                    marketing_data["marketing_strategy"] = strategy_data
+                    logger.info(f"Estrategia de marketing obtenida para {context['industry']}")
+                except Exception as e:
+                    logger.error(f"Error al obtener estrategia de marketing: {str(e)}")
+            
+            # 3. Análisis de campaña si hay datos
+            if "campaign_data" in context and isinstance(context["campaign_data"], dict):
+                try:
+                    campaign_data = context["campaign_data"]
+                    campaign_params = {
+                        "nombre_campania": campaign_data.get("name", "Campaña sin nombre"),
+                        "impresiones": campaign_data.get("impressions", 0),
+                        "clics": campaign_data.get("clicks", 0),
+                        "conversiones": campaign_data.get("conversions", 0),
+                        "coste": campaign_data.get("cost", 0)
+                    }
+                    
+                    # Verificar que existe el cliente MCP
+                    if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                        # Intenta usar el cliente global como fallback
+                        from app.agents.mcp_integration import _mcp_client
+                        if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                            logger.info(f"Usando cliente MCP global como fallback")
+                            campaign_analysis = _mcp_client.call_tool_sync("analizar_rendimiento_campania", campaign_params)
+                        else:
+                            logger.error(f"No hay cliente MCP disponible para ejecutar 'analizar_rendimiento_campania'")
+                            raise ValueError("No hay cliente MCP disponible")
+                    else:
+                        # Usar el cliente propio del agente
+                        campaign_analysis = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", campaign_params)
+                    
+                    marketing_data["campaign_analysis"] = campaign_analysis
+                    logger.info(f"Análisis de campaña obtenido para {campaign_params['nombre_campania']}")
+                except Exception as e:
+                    logger.error(f"Error al obtener análisis de campaña: {str(e)}")
+            
+            # 4. Análisis financiero para marketing si hay industria
+            if "industry" in context:
+                try:
+                    financial_params = {
+                        "industria": context["industry"],
+                        "metodo": "analisis_rentabilidad",
+                        "datos": None
+                    }
+                    
+                    # Verificar que existe el cliente MCP
+                    if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                        # Intenta usar el cliente global como fallback
+                        from app.agents.mcp_integration import _mcp_client
+                        if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                            logger.info(f"Usando cliente MCP global como fallback")
+                            financial_data = _mcp_client.call_tool_sync("financial_models", financial_params)
+                        else:
+                            logger.error(f"No hay cliente MCP disponible para ejecutar 'financial_models'")
+                            raise ValueError("No hay cliente MCP disponible")
+                    else:
+                        # Usar el cliente propio del agente
+                        financial_data = self.mcp_client.call_tool_sync("financial_models", financial_params)
+                    
+                    marketing_data["market_trends"] = financial_data
+                    logger.info(f"Datos financieros obtenidos a través de MCP para industria: {context['industry']}")
+                except Exception as e:
+                    logger.error(f"Error al obtener datos financieros: {str(e)}")
+        
+        except Exception as e:
+            logger.error(f"Error en procesamiento legacy de marketing: {str(e)}")
+        
+        return marketing_data

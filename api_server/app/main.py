@@ -121,6 +121,71 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Error interno del servidor"}
             )
 
+class ResponseLoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware para registrar todas las respuestas HTTP con su contenido."""
+    
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+        request_id = request.headers.get("X-Request-ID", "unknown")
+        
+        path = request.url.path
+        method = request.method
+        
+        # Solo loguear ciertas rutas, especialmente las APIs
+        if "/api/" in path:
+            try:
+                body = await request.body()
+                if body:
+                    try:
+                        # Intentar capturar el cuerpo JSON
+                        body_str = body.decode('utf-8')
+                        logger.info(
+                            f"Cuerpo de la solicitud: {body_str}",
+                            extra={"request_id": request_id, "path": path, "method": method}
+                        )
+                    except Exception as e:
+                        logger.warning(f"No se pudo decodificar el cuerpo: {str(e)}")
+            except Exception as e:
+                logger.warning(f"No se pudo leer el cuerpo de la solicitud: {str(e)}")
+        
+        # Procesar la solicitud
+        response = await call_next(request)
+        
+        # Si es una respuesta JSON de la API, capturar y loguear el contenido completo
+        if "/api/" in path and "application/json" in response.headers.get("content-type", ""):
+            try:
+                # Necesitamos leer el cuerpo de la respuesta
+                original_body = b""
+                async for chunk in response.body_iterator:
+                    original_body += chunk
+                
+                # Decodificar para loguear
+                body_str = original_body.decode('utf-8')
+                
+                # Loguear el cuerpo completo para depuración
+                logger.info(
+                    f"Respuesta completa: {body_str}",
+                    extra={
+                        "request_id": request_id, 
+                        "path": path, 
+                        "method": method,
+                        "status_code": response.status_code
+                    }
+                )
+                
+                # Crear una nueva respuesta con el mismo cuerpo
+                return Response(
+                    content=original_body,
+                    status_code=response.status_code,
+                    headers=dict(response.headers),
+                    media_type=response.media_type
+                )
+            except Exception as e:
+                logger.error(f"Error al loguear respuesta: {str(e)}")
+                return response
+        
+        return response
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -216,6 +281,9 @@ app.mount("/metrics", metrics_app)
 
 # Middleware para logging de solicitudes
 app.add_middleware(RequestLoggingMiddleware)
+
+# Middleware para logging de respuestas
+app.add_middleware(ResponseLoggingMiddleware)
 
 # Middleware para timeout
 app.add_middleware(TimeoutMiddleware)

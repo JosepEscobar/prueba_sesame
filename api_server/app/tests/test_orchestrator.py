@@ -17,7 +17,7 @@ class MockAgent(BaseAgent):
     """Agente simulado para pruebas."""
     
     def __init__(self, name, response=None, confidence=0.9):
-        super().__init__(name=name, model="gpt-3.5-turbo")
+        super().__init__(name=name, model="gpt-4.1-mini")
         self.response = response or {"result": f"Respuesta de {name}"}
         self.confidence = confidence
         

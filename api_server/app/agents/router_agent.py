@@ -91,9 +91,9 @@ class RouterAgent(BaseAgent):
             self.client = client
             self.has_openai = True
         
-        # Verificar la conexión con OpenAI
-        if self.has_openai:
-            self.verify_openai_connection()
+        # Asumimos que la conexión es válida para evitar llamadas innecesarias
+        # que pueden causdar errores 429 (Too Many Requests)
+        logger.info("Omitiendo verificación explícita de conexión para ahorrar llamadas a la API")
         
         # Definir los agentes disponibles y sus capacidades
         self.available_agents = {
@@ -181,67 +181,11 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
     
     def verify_openai_connection(self):
         """
-        Verifica la conexión con OpenAI haciendo una pequeña consulta de prueba.
-        
-        Esto ayuda a detectar problemas de conexión o autenticación temprano.
+        DEPRECATED: Método eliminado para evitar llamadas innecesarias a la API.
+        Esta función consumía cuota de API sin aportar beneficio real.
+        Ahora se asume que la conexión es válida si hay credenciales configuradas.
         """
-        # Variables para seguimiento del estado
-        openai_client_ok = False
-        langchain_ok = False
-        
-        # 1. Verificar cliente directo de OpenAI
-        if self.client:
-            try:
-                messages = [
-                    {"role": "system", "content": "Responde con 'OK' si me estás recibiendo correctamente."},
-                    {"role": "user", "content": "Test de conexión"}
-                ]
-                
-                prompt = {
-                    "model": settings.OPENAI_MODEL,
-                    "messages": messages,
-                    "temperature": 0.0,
-                    "max_tokens": 5
-                }
-                
-                response = self.invoke_llm(prompt, prompt_type="openai_direct")
-                
-                if response and response.choices and len(response.choices) > 0:
-                    logger.info(f"Conexión con OpenAI verificada correctamente: {response.choices[0].message.content}")
-                    openai_client_ok = True
-                else:
-                    logger.warning("La verificación de OpenAI no retornó una respuesta válida")
-            except Exception as e:
-                logger.error(f"Error al verificar la conexión con OpenAI: {str(e)}")
-        
-        # 2. Verificar LLM de LangChain
-        if self.llm is not None:
-            try:
-                from langchain_core.messages import SystemMessage, HumanMessage
-                
-                messages = [
-                    SystemMessage(content="Responde con 'OK' si me estás recibiendo correctamente."),
-                    HumanMessage(content="Test de conexión")
-                ]
-                
-                response = self.invoke_llm(messages, prompt_type="langchain")
-                
-                if response and hasattr(response, 'content') and response.content:
-                    logger.info(f"Conexión con LangChain verificada correctamente: {response.content}")
-                    langchain_ok = True
-                else:
-                    logger.warning("La verificación de LangChain no retornó una respuesta válida")
-            except Exception as e:
-                logger.error(f"Error al verificar conexión con LangChain: {str(e)}")
-        
-        # Actualizar el estado de conectividad
-        self.has_openai = openai_client_ok or langchain_ok
-        
-        if self.has_openai:
-            logger.info("Verificación de conexión con OpenAI exitosa")
-        else:
-            logger.warning("Verificación de conexión con OpenAI fallida. Se usará clasificación por keywords.")
-            
+        # Simplemente devolvemos el estado actual sin hacer llamadas a la API
         return self.has_openai
     
     def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -423,7 +367,7 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
     
     def _classify_query_by_keywords(self, query: str) -> str:
         """
-        Clasifica una consulta por palabras clave.
+        Clasifica una consulta usando LLM o, como fallback, por palabras clave.
         
         Args:
             query: La consulta a clasificar
@@ -431,6 +375,43 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
         Returns:
             El tipo de agente más adecuado
         """
+        # Intentar usar LLM si está disponible para categorización JSON
+        if self.llm is not None:
+            try:
+                categorization_prompt = f"""
+                Analiza la siguiente consulta y determina qué agente especializado debería manejarla.
+                
+                Consulta: "{query}"
+                
+                Devuelve SOLAMENTE un objeto JSON con esta estructura:
+                {{
+                    "agent": "finance_agent" | "marketing_agent" | "analysis_agent",
+                    "confidence": float entre 0 y 1,
+                    "reasoning": "breve explicación de la elección"
+                }}
+                
+                Criterios para cada agente:
+                - finance_agent: Consultas sobre finanzas, inversiones, contabilidad, análisis financiero, presupuestos, etc.
+                - marketing_agent: Consultas sobre marketing, publicidad, campañas, estrategias de mercado, clientes, etc.
+                - analysis_agent: Consultas generales de análisis, tendencias, datos, información general, etc.
+                
+                No incluyas texto adicional en tu respuesta, solo el JSON.
+                """
+                
+                response = self.llm.invoke(categorization_prompt)
+                categorization = json.loads(response.content.strip())
+                logger.info(f"Categorización por LLM: {categorization}")
+                
+                agent_type = categorization.get("agent", "analysis_agent")
+                logger.info(f"LLM seleccionó agente: {agent_type}")
+                
+                return agent_type
+                
+            except Exception as e:
+                logger.error(f"Error al usar LLM para categorización JSON: {str(e)}. Usando clasificación por keywords como fallback.")
+                # Continuar con el método de palabras clave como fallback
+        
+        # Fallback: clasificación por palabras clave
         # Convertir la consulta a minúsculas
         query_lower = query.lower()
         

@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     
     # Configuración de OpenAI (no incluir claves en el código)
     OPENAI_API_KEY: str = ""  # Será cargada desde .env
-    OPENAI_MODEL: str = "gpt-3.5-turbo"
+    OPENAI_MODEL: str = "gpt-4.1-mini"
     TEMPERATURE: float = 0.7
     MAX_TOKENS: int = 1000
     
