@@ -12,14 +12,20 @@ settings = get_settings()
 
 # Función para crear un LLM que puede ser reemplazado en los tests
 def create_llm():
-    if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "sk-your-key-here":
-        return ChatOpenAI(
-            model_name=settings.OPENAI_MODEL,
-            temperature=settings.TEMPERATURE,
-            api_key=settings.OPENAI_API_KEY,
-        )
-    logger.warning("No hay clave API de OpenAI válida configurada.")
-    return None
+    """Crea y retorna una instancia del modelo de lenguaje."""
+    
+    # Verificar si hay una clave API configurada
+    if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY == "sk-your-key-here":
+        logger.warning("No se ha configurado una clave API de OpenAI válida.")
+        # En este caso, retornar None en lugar de un modelo
+        return None
+    
+    # Si hay una clave API, crear el modelo como de costumbre
+    return ChatOpenAI(
+        model_name=settings.OPENAI_MODEL,
+        temperature=settings.TEMPERATURE,
+        streaming=True
+    )
 
 # LLM global que puede ser sustituido desde los tests
 llm = create_llm()
@@ -139,7 +145,9 @@ class RouterAgent(BaseAgent):
             context = input_data.get("context", {})
             agent_preference = input_data.get("agent_preference")
             
-            logger.info(f"RouterAgent analizando consulta: {query[:50]}...")
+            # Logueamos solo los primeros 50 caracteres de la consulta como texto, no como slice
+            query_preview = query[:50] + "..." if len(query) > 50 else query
+            logger.info(f"RouterAgent analizando consulta: {query_preview}")
             
             # Si hay una preferencia de agente, respetarla si el agente existe
             if agent_preference:

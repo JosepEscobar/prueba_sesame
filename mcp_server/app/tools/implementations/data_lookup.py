@@ -1,5 +1,9 @@
 """
-Implementación de herramienta para búsqueda de datos externos.
+Implementaciones de herramientas de búsqueda de datos.
+
+Este módulo contiene herramientas para buscar y recuperar
+información de diferentes fuentes, incluyendo datos financieros,
+de mercado y noticias.
 """
 
 from typing import Dict, Any, List, Optional
@@ -8,6 +12,7 @@ import random
 import json
 import requests
 from urllib.parse import urlencode
+from datetime import datetime, timedelta
 
 from app.core.logging import logger
 from app.core.metrics import MetricsCollector
@@ -557,4 +562,227 @@ class DataLookupImplementation:
             "website": f"https://www.{company.lower().replace(' ', '')}.com",
             "source": "Datos de empresa simulados",
             "timestamp": time.time()
-        } 
+        }
+
+def buscar_datos_financieros(empresa: str, periodo: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Busca datos financieros de una empresa específica.
+    
+    Args:
+        empresa: Nombre o ticker de la empresa
+        periodo: Periodo para los datos (trimestre/año). Si no se especifica, se usa el último disponible.
+    
+    Returns:
+        Datos financieros de la empresa
+    """
+    # En una implementación real, esto conectaría con una API financiera
+    # Para demostración, generamos datos de ejemplo
+    
+    hoy = datetime.now()
+    periodo_actual = periodo or f"Q{(hoy.month-1)//3 + 1} {hoy.year}"
+    
+    # Empresas comunes con datos preestablecidos para demostración
+    empresas_conocidas = {
+        "tesla": {
+            "nombre": "Tesla, Inc.",
+            "ticker": "TSLA",
+            "sector": "Automotriz/Tecnología",
+            "ingresos": 24578000000,
+            "beneficio_neto": 2515000000,
+            "activos_totales": 84526000000,
+            "pasivos_totales": 48109000000,
+            "flujo_caja": 4591000000,
+            "margen_beneficio": 0.102,
+            "ROI": 0.093,
+        },
+        "apple": {
+            "nombre": "Apple Inc.",
+            "ticker": "AAPL",
+            "sector": "Tecnología",
+            "ingresos": 94836000000,
+            "beneficio_neto": 22955000000,
+            "activos_totales": 336307000000,
+            "pasivos_totales": 290452000000,
+            "flujo_caja": 28869000000,
+            "margen_beneficio": 0.242,
+            "ROI": 0.175,
+        },
+        "microsoft": {
+            "nombre": "Microsoft Corporation",
+            "ticker": "MSFT",
+            "sector": "Tecnología",
+            "ingresos": 51865000000,
+            "beneficio_neto": 16425000000,
+            "activos_totales": 301366000000,
+            "pasivos_totales": 193694000000,
+            "flujo_caja": 19965000000,
+            "margen_beneficio": 0.317,
+            "ROI": 0.186,
+        },
+        "amazon": {
+            "nombre": "Amazon.com, Inc.",
+            "ticker": "AMZN",
+            "sector": "Comercio electrónico/Tecnología",
+            "ingresos": 134373000000,
+            "beneficio_neto": 4358000000,
+            "activos_totales": 370151000000,
+            "pasivos_totales": 282304000000,
+            "flujo_caja": 6354000000,
+            "margen_beneficio": 0.032,
+            "ROI": 0.112,
+        },
+    }
+    
+    # Buscar la empresa (ignorando mayúsculas/minúsculas)
+    empresa_lower = empresa.lower()
+    empresa_data = None
+    
+    for key, data in empresas_conocidas.items():
+        if key == empresa_lower or data["ticker"].lower() == empresa_lower:
+            empresa_data = data
+            break
+    
+    # Si no se encuentra, crear datos aleatorios
+    if empresa_data is None:
+        empresa_data = {
+            "nombre": empresa,
+            "ticker": empresa[:4].upper(),
+            "sector": "General",
+            "ingresos": random.randint(10000000, 500000000),
+            "beneficio_neto": random.randint(1000000, 100000000),
+            "activos_totales": random.randint(50000000, 1000000000),
+            "pasivos_totales": random.randint(20000000, 500000000),
+            "flujo_caja": random.randint(1000000, 50000000),
+            "margen_beneficio": round(random.uniform(0.05, 0.3), 3),
+            "ROI": round(random.uniform(0.05, 0.25), 3),
+        }
+    
+    # Añadir variación por periodo
+    variacion = random.uniform(0.9, 1.1)
+    
+    return {
+        "empresa": empresa_data["nombre"],
+        "ticker": empresa_data["ticker"],
+        "sector": empresa_data["sector"],
+        "periodo": periodo_actual,
+        "fecha_consulta": hoy.strftime("%Y-%m-%d"),
+        "datos": {
+            "ingresos": int(empresa_data["ingresos"] * variacion),
+            "beneficio_neto": int(empresa_data["beneficio_neto"] * variacion),
+            "activos_totales": int(empresa_data["activos_totales"] * variacion),
+            "pasivos_totales": int(empresa_data["pasivos_totales"] * variacion),
+            "flujo_caja": int(empresa_data["flujo_caja"] * variacion),
+            "margen_beneficio": round(empresa_data["margen_beneficio"] * variacion, 3),
+            "ROI": round(empresa_data["ROI"] * variacion, 3),
+        },
+        "fuente": "Base de datos financiera Sesame (demo)",
+        "actualizado": (hoy - timedelta(days=random.randint(1, 30))).strftime("%Y-%m-%d")
+    }
+
+def data_lookup(lookup_type: str, query: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Busca información general según el tipo de búsqueda y consulta.
+    
+    Args:
+        lookup_type: Tipo de búsqueda ('market_data', 'news', 'company', etc.)
+        query: Consulta de búsqueda
+        filters: Filtros adicionales para la búsqueda
+        
+    Returns:
+        Resultados de la búsqueda
+    """
+    # Inicializar resultado
+    result = {
+        "query": query,
+        "tipo": lookup_type,
+        "fecha_consulta": datetime.now().strftime("%Y-%m-%d"),
+        "resultados": [],
+        "fuente": "Servicio de datos Sesame (demo)",
+        "success": True
+    }
+    
+    # Aplicar filtros si existen
+    filter_str = ""
+    if filters:
+        filter_str = " con filtros: " + ", ".join([f"{k}={v}" for k, v in filters.items()])
+    
+    # Procesar según el tipo de búsqueda
+    if lookup_type == "market_data":
+        result["resultados"] = generar_datos_mercado(query)
+        result["descripcion"] = f"Datos de mercado para '{query}'{filter_str}"
+    elif lookup_type == "news":
+        result["resultados"] = generar_noticias(query)
+        result["descripcion"] = f"Noticias relacionadas con '{query}'{filter_str}"
+    elif lookup_type == "company":
+        result["resultados"] = generar_datos_empresa(query)
+        result["descripcion"] = f"Información de la empresa '{query}'{filter_str}"
+    else:
+        result["resultados"] = []
+        result["success"] = False
+        result["error"] = f"Tipo de búsqueda '{lookup_type}' no soportado"
+    
+    return result
+
+def generar_datos_mercado(query: str) -> List[Dict[str, Any]]:
+    """Genera datos de mercado de ejemplo para una consulta."""
+    hoy = datetime.now()
+    
+    # Generar datos para los últimos 5 días
+    datos = []
+    for i in range(5):
+        fecha = hoy - timedelta(days=i)
+        variacion = random.uniform(-2.0, 2.0)
+        datos.append({
+            "fecha": fecha.strftime("%Y-%m-%d"),
+            "indice_principal": round(3500 + random.uniform(-100, 100), 2),
+            "volumen_mercado": random.randint(1000000, 5000000),
+            "variacion": round(variacion, 2),
+            "tendencia": "alza" if variacion > 0 else "baja",
+            "volatilidad": round(random.uniform(10, 30), 2)
+        })
+    
+    return datos
+
+def generar_noticias(query: str) -> List[Dict[str, Any]]:
+    """Genera noticias de ejemplo relacionadas con una consulta."""
+    hoy = datetime.now()
+    
+    # Noticias de ejemplo
+    titulares = [
+        f"Resultados trimestrales de {query} superan expectativas",
+        f"Nuevas tendencias afectan al sector de {query}",
+        f"Expertos analizan el futuro de {query} en el mercado global",
+        f"Regulaciones podrían impactar la industria de {query}",
+        f"Innovación: {query} lidera transformación digital"
+    ]
+    
+    noticias = []
+    for i, titular in enumerate(titulares):
+        fecha = hoy - timedelta(days=i)
+        noticias.append({
+            "titulo": titular,
+            "fecha": fecha.strftime("%Y-%m-%d"),
+            "fuente": random.choice(["Financial Times", "Bloomberg", "CNBC", "Reuters", "The Wall Street Journal"]),
+            "resumen": f"Breve resumen de la noticia sobre {query} y su impacto en el mercado financiero.",
+            "relevancia": round(random.uniform(0.5, 1.0), 2),
+            "sentiment": random.choice(["positivo", "neutral", "negativo"])
+        })
+    
+    return noticias
+
+def generar_datos_empresa(query: str) -> Dict[str, Any]:
+    """Genera información detallada de una empresa de ejemplo."""
+    return {
+        "nombre": query,
+        "ticker": query[:4].upper(),
+        "sede": random.choice(["Nueva York, EEUU", "San Francisco, EEUU", "Londres, UK", "Tokyo, Japón"]),
+        "fundacion": random.randint(1950, 2010),
+        "sector": random.choice(["Tecnología", "Finanzas", "Manufactura", "Servicios", "Energía"]),
+        "empleados": random.randint(1000, 100000),
+        "revenue_anual": f"${random.randint(100, 1000)} millones",
+        "cotizacion": random.choice([True, False]),
+        "productos_principales": [f"Producto {i+1}" for i in range(3)],
+        "ultimo_precio_accion": round(random.uniform(10, 500), 2),
+        "variacion_precio": round(random.uniform(-5, 5), 2),
+        "capitalizacion": f"${random.randint(1, 100)} mil millones"
+    } 

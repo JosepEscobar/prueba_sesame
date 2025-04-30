@@ -99,7 +99,10 @@ class Orchestrator:
         self.request_id = request_id or str(uuid.uuid4())
         
         start_time = time.time()
-        logger.info(f"Procesando solicitud {self.request_id}: {request.get('query', '')[:50]}...")
+        # Logueamos solo los primeros 50 caracteres de la consulta como texto, no como slice
+        query = request.get('query', '')
+        query_preview = query[:50] + "..." if len(query) > 50 else query
+        logger.info(f"Procesando solicitud {self.request_id}: {query_preview}...")
         
         try:
             # Configurar contexto de ejecución con ID de solicitud para rastreo

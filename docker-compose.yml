@@ -1,18 +1,39 @@
-version: '3'
+version: '3.8'
 
 services:
+  mcp_server:
+    build:
+      context: ./mcp_server
+    container_name: mcp_server
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+    volumes:
+      - ./mcp_server/logs:/app/logs
+    restart: unless-stopped
+
   api_server:
-    build: ./api_server
+    build:
+      context: ./api_server
+    container_name: api_server
     ports:
       - "8000:8000"
-    volumes:
-      - ./api_server/logs:/app/logs
-    env_file:
-      - ./api_server/.env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=False
+      - MCP_CLIENT_URL=http://mcp_server:4000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL}
+      - TEMPERATURE=${TEMPERATURE}
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY}
+      - NEWS_API_KEY=${NEWS_API_KEY}
+      - BING_SEARCH_API_KEY=${BING_SEARCH_API_KEY}
     depends_on:
       - mcp_server
-    networks:
-      - sesame_network
+    volumes:
+      - ./api_server/logs:/app/logs
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -20,21 +41,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-      
-  mcp_server:
-    build: ./mcp_server
-    ports:
-      - "4000:4000"
-    volumes:
-      - ./mcp_server/logs:/app/logs
-    env_file:
-      - ./mcp_server/.env
-    networks:
-      - sesame_network
-    restart: unless-stopped
 
 networks:
-  sesame_network:
+  default:
     driver: bridge
 
 volumes:

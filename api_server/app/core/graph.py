@@ -89,7 +89,10 @@ class AgentGraph:
             Resultado final del flujo de agentes
         """
         try:
-            logger.info(f"Iniciando ejecución del grafo de agentes con input: {input_data.get('query', '')[:50]}...")
+            # Loguear la consulta con un límite seguro
+            query = input_data.get('query', '')
+            query_preview = query[:50] + "..." if len(query) > 50 else query
+            logger.info(f"Iniciando ejecución del grafo de agentes con input: {query_preview}")
             
             # Configurar el estado inicial
             state = {

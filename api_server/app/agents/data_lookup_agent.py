@@ -1,310 +1,299 @@
 from typing import Dict, Any, List, Optional
 import time
-import asyncio
+import json
+import os
+from pathlib import Path
 
-from langchain.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 from app.agents.base import BaseAgent
 from app.core.logging import logger
+from app.core.metrics import MetricsCollector
 from app.core.config import get_settings
 from app.tools.mcp_client import MCPClient
 
-# Obtener la configuración
+# Obtener configuración
 settings = get_settings()
 
 class DataLookupAgent(BaseAgent):
     """
-    Agente especializado en buscar y obtener información de fuentes externas.
+    Agente especializado en búsqueda y recuperación de datos.
     
-    Este agente se encarga de realizar búsquedas en diversas fuentes de datos como
-    noticias, informes de mercado, información de empresas y contenido web para
-    proporcionar información relevante y actualizada para consultas empresariales.
-    
-    Actualizado para usar herramientas a través del servidor MCP.
+    Este agente se encarga de:
+    - Buscar información relevante en fuentes de datos
+    - Interpretar consultas y convertirlas en consultas estructuradas
+    - Recuperar datos específicos según criterios
+    - Proporcionar contexto adicional para otros agentes
     """
     
     def __init__(self):
-        """Inicializa el DataLookupAgent con el cliente MCP."""
+        """Inicializa el agente de búsqueda de datos."""
         super().__init__(
-            name="Data Lookup Agent",
-            description="Agente especializado en buscar y obtener información de fuentes externas"
+            name="data_lookup_agent",
+            description="Especialista en búsqueda y recuperación de datos de múltiples fuentes."
         )
-        logger.info(f"DataLookupAgent inicializado con modelo: {settings.OPENAI_MODEL}")
         
-        # Inicializar el cliente MCP para herramientas externas
+        # Comprobar si hay una clave API válida
+        if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "sk-your-key-here":
+            self.llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.1)
+        else:
+            # Crear un modelo ficticio para desarrollo
+            logger.warning("No hay clave API de OpenAI válida. Usando respuestas ficticias para desarrollo.")
+            self.llm = None
+            
+        # Inicializar el cliente MCP con StdioTransport
+        mcp_server_path = str(Path(os.path.abspath("mcp_server/main.py")))
         self.mcp_client = MCPClient(
-            base_url=settings.MCP_CLIENT_URL
+            base_url=settings.MCP_CLIENT_URL,
+            use_stdio=True,  # Activar StdioTransport
+            mcp_server_path=mcp_server_path
         )
         
-        self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """Eres un agente especializado en buscar, filtrar y sintetizar información relevante de fuentes externas.
-            
-            Tu objetivo es encontrar datos precisos y relevantes que puedan complementar las respuestas de otros agentes. Cuando el usuario necesite información específica o actualizada, tu trabajo es:
-            
-            1. Entender exactamente qué información se necesita buscar
-            2. Determinar las mejores fuentes para esa información
-            3. Formular consultas efectivas para obtener resultados relevantes
-            4. Sintetizar y estructurar la información encontrada
-            
-            Utilizarás las siguientes herramientas especializadas:
-            - data_lookup: Busca información en diferentes fuentes externas
-            - financial_models: Obtiene modelos y plantillas financieras
-            
-            Proporciona respuestas objetivas y basadas en hechos, citando siempre tus fuentes.
-            
-            Sigue este formato para tus respuestas:
-            
-            1. CONSULTA INTERPRETADA: Reformula lo que entendiste que se necesita buscar
-            2. FUENTES CONSULTADAS: Lista las fuentes que has utilizado
-            3. INFORMACIÓN RELEVANTE: Presenta la información encontrada de forma estructurada
-            4. SÍNTESIS: Resume los puntos clave en 2-3 frases
-            5. FUENTES: Proporciona referencias
-            """),
-            ("human", "{query}\n\nContexto de búsqueda: {context}")
-        ])
-        
-    def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        self.services = [
+            "Búsqueda de datos financieros",
+            "Búsqueda de noticias",
+            "Búsqueda de tendencias",
+            "Datos de mercado",
+            "Información de empresas"
+        ]
+        logger.info(f"Agente {self.name} inicializado con {len(self.services)} servicios usando StdioTransport")
+    
+    def _execute_impl(self, input_data: Dict[Any, Any]) -> Dict[Any, Any]:
         """
-        Ejecuta la operación de búsqueda de datos basada en los datos de entrada.
+        Implementa la lógica de ejecución del agente de búsqueda de datos.
         
         Args:
-            input_data: Diccionario que contiene la consulta y cualquier contexto adicional.
-                Debe incluir 'query' y opcionalmente 'lookup_type' y 'parameters'.
-                
+            input_data: Datos de entrada que contienen la consulta y el contexto
+            
         Returns:
-            Dict con los resultados de la búsqueda, la consulta original y un nivel de confianza.
+            Diccionario con los datos encontrados, input original y nivel de confianza
         """
         start_time = time.time()
-        
-        # Extraer la consulta y parámetros
         query = input_data.get("query", "")
+        context = input_data.get("context", {})
         lookup_type = input_data.get("lookup_type", "general")
-        parameters = input_data.get("parameters", {})
         
-        logger.info(
-            f"DataLookupAgent ejecutando búsqueda",
-            extra={
-                "agent_name": self.name,
-                "lookup_type": lookup_type,
-                "query": query[:100] + "..." if len(query) > 100 else query
-            }
-        )
+        # Logueamos solo los primeros 50 caracteres de la consulta como texto, no como slice
+        query_preview = query[:50] + "..." if len(query) > 50 else query
+        logger.info(f"Procesando consulta de datos ({lookup_type}): {query_preview}")
         
-        # Realizar búsqueda a través del servidor MCP
-        results = {}
-        data_sources = []
-        
-        try:
-            # Inicializar cliente MCP si no se ha hecho ya
-            loop = asyncio.get_event_loop()
-            if not loop.run_until_complete(self.mcp_client.initialize()):
-                logger.error("No se pudo inicializar el cliente MCP")
-                return {
-                    "results": {},
-                    "synthesis": "Error al conectar con el servidor de herramientas externas",
-                    "data_sources": [],
-                    "query": query,
-                    "confidence": 0.0,
-                    "error": "Error de conexión MCP"
-                }
-            
-            # Preparar parámetros para la llamada a data_lookup
-            mcp_params = {
-                "query": query,
-                "lookup_type": lookup_type
-            }
-            
-            # Añadir parámetros adicionales según el tipo de búsqueda
-            if lookup_type == "industry" and "industry" in parameters:
-                mcp_params["industry"] = parameters["industry"]
-                
-            if lookup_type == "company" and "company" in parameters:
-                mcp_params["company"] = parameters["company"]
-            
-            # Realizar la llamada a la herramienta data_lookup a través de MCP
-            logger.info(f"Llamando a herramienta data_lookup con parámetros: {mcp_params}")
-            lookup_result = loop.run_until_complete(
-                self.mcp_client.call_tool("data_lookup", mcp_params)
-            )
-            
-            # Procesar resultados
-            if "error" in lookup_result:
-                logger.error(f"Error en la búsqueda MCP: {lookup_result['error']}")
-                return {
-                    "results": {},
-                    "synthesis": f"Error al buscar información: {lookup_result['error']}",
-                    "data_sources": [],
-                    "query": query,
-                    "confidence": 0.0,
-                    "error": lookup_result['error']
-                }
-            
-            # Extraer resultados según el tipo de búsqueda
-            if lookup_type == "general":
-                # Para búsqueda general, los resultados ya vienen combinados
-                results = lookup_result.get("results", {})
-                
-                # Crear lista de fuentes de datos
-                for result_type, data in results.items():
-                    if isinstance(data, dict) and "source" in data:
-                        data_sources.append({"type": result_type, "source": data["source"]})
-            else:
-                # Para búsquedas específicas, usar el resultado directamente
-                results[lookup_type] = lookup_result
-                if "source" in lookup_result:
-                    data_sources.append({"type": lookup_type, "source": lookup_result["source"]})
-            
-            # Preparar el prompt para sintetizar los resultados
-            prompt = self._prepare_synthesis_prompt(query, results, lookup_type)
-            
-            # Invocar el LLM para obtener la síntesis
-            synthesis = self._invoke_llm(prompt)
-            
+        # Si no hay un LLM configurado (por falta de API key), usar método alternativo
+        if self.llm is None:
+            logger.warning("No hay LLM configurado, usando búsqueda de datos básica.")
             processing_time = time.time() - start_time
             
-            return {
-                "results": results,
-                "synthesis": synthesis,
-                "data_sources": data_sources,
-                "query": query,
-                "confidence": 0.85,
-                "processing_time": processing_time
-            }
+            # En este caso, intentar usar directamente las herramientas MCP para la búsqueda
+            try:
+                # Inicializar el cliente MCP
+                initialized = self.mcp_client.initialize_sync()
+                
+                if initialized:
+                    logger.info("Cliente MCP inicializado correctamente. Realizando búsqueda de datos directa.")
+                    
+                    # Configurar parámetros según el tipo de búsqueda
+                    mcp_params = {
+                        "query": query,
+                        "lookup_type": lookup_type
+                    }
+                    
+                    # Si hay contexto adicional, añadirlo a los parámetros
+                    if context:
+                        mcp_params.update(context)
+                    
+                    # Realizar la búsqueda a través de MCP
+                    result = self.mcp_client.call_tool_sync("data_lookup", mcp_params)
+                    
+                    return {
+                        "result": result,
+                        "input": query,
+                        "lookup_type": lookup_type,
+                        "confidence": 0.7,  # Confianza media por ser búsqueda directa
+                        "processing_time": processing_time,
+                        "success": True
+                    }
+                else:
+                    logger.error("No se pudo inicializar el cliente MCP")
+                    return {
+                        "result": {},
+                        "input": query,
+                        "confidence": 0.0,
+                        "processing_time": processing_time,
+                        "success": False,
+                        "error": "No se pudo inicializar la conexión con el servidor MCP"
+                    }
+            except Exception as e:
+                logger.error(f"Error en búsqueda directa: {str(e)}")
+                return {
+                    "result": {},
+                    "input": query,
+                    "confidence": 0.0,
+                    "processing_time": processing_time,
+                    "success": False,
+                    "error": f"Error en búsqueda directa: {str(e)}"
+                }
+        
+        # Preparar los datos para la búsqueda
+        lookup_data = {}
+        
+        try:
+            # Inicializar el cliente MCP
+            initialized = self.mcp_client.initialize_sync()
             
+            if initialized:
+                logger.info("Cliente MCP inicializado correctamente con StdioTransport. Ejecutando búsqueda de datos.")
+                
+                # Determinar qué tipo de datos necesitamos buscar
+                if lookup_type == "financial":
+                    # Buscar datos financieros específicos
+                    company = context.get("company", self._extract_entity(query, "company"))
+                    
+                    if company:
+                        financial_params = {
+                            "empresa": company,
+                            "periodo": context.get("period", "actual")
+                        }
+                        financial_data = self.mcp_client.call_tool_sync("buscar_datos_financieros", financial_params)
+                        lookup_data["financial_data"] = financial_data
+                        logger.info(f"Datos financieros obtenidos para: {company}")
+                
+                elif lookup_type == "marketing":
+                    # Buscar datos de marketing
+                    campaign = context.get("campaign", self._extract_entity(query, "campaign"))
+                    
+                    if campaign and "metrics" in context:
+                        metrics = context["metrics"]
+                        marketing_params = {
+                            "nombre_campania": campaign,
+                            "impresiones": metrics.get("impressions", 1000),
+                            "clics": metrics.get("clicks", 50),
+                            "conversiones": metrics.get("conversions", 10),
+                            "coste": metrics.get("cost", 500)
+                        }
+                        marketing_data = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", marketing_params)
+                        lookup_data["marketing_data"] = marketing_data
+                        logger.info(f"Datos de marketing obtenidos para: {campaign}")
+                
+                # Siempre realizar una búsqueda general de datos
+                general_params = {
+                    "lookup_type": lookup_type,
+                    "query": query
+                }
+                general_data = self.mcp_client.call_tool_sync("data_lookup", general_params)
+                lookup_data["general_data"] = general_data
+                logger.info(f"Búsqueda general completada para tipo: {lookup_type}")
+                
+                # Si se solicitan tendencias y tenemos datos numéricos
+                if lookup_type == "trends" and "numerical_data" in context:
+                    trends_params = {
+                        "datos": context["numerical_data"],
+                        "etiquetas": context.get("labels", None)
+                    }
+                    trends_data = self.mcp_client.call_tool_sync("analizar_tendencia", trends_params)
+                    lookup_data["trends_data"] = trends_data
+                    logger.info("Análisis de tendencias completado")
+                    
+                    # Si se solicita además predicción
+                    if context.get("predict", False):
+                        predict_params = {
+                            "datos": context["numerical_data"],
+                            "periodos_futuros": context.get("future_periods", 3)
+                        }
+                        prediction_data = self.mcp_client.call_tool_sync("predecir_valores", predict_params)
+                        lookup_data["prediction_data"] = prediction_data
+                        logger.info("Predicción de valores completada")
+                
+            else:
+                logger.warning("No se pudo inicializar el cliente MCP. Usando método alternativo.")
+                # Implementar lógica alternativa si es necesario
+        
         except Exception as e:
-            logger.error(
-                f"Error en DataLookupAgent: {str(e)}",
-                extra={"agent_name": self.name, "error": str(e)}
-            )
-            return {
-                "results": {},
-                "synthesis": f"Error al buscar información: {str(e)}",
-                "data_sources": [],
-                "query": query,
-                "confidence": 0.0,
-                "error": str(e)
-            }
+            logger.error(f"Error al obtener datos mediante MCP: {str(e)}")
+            # Implementar lógica alternativa si es necesario
+        
+        # Generar un resumen de los datos encontrados
+        result_summary = self._generate_data_summary(query, lookup_data, lookup_type)
+        
+        # Estructurar la respuesta
+        processing_time = time.time() - start_time
+        
+        result = {
+            "result": {
+                "content": result_summary,
+                "lookup_data": lookup_data,
+                "lookup_type": lookup_type
+            },
+            "agent": "data_lookup",
+            "input": input_data.get("query", ""),
+            "confidence": 0.85,  # Nivel de confianza para búsquedas de datos
+            "processing_time": processing_time,
+            "model": "gpt-3.5-turbo" if self.llm else "direct_lookup"
+        }
+        
+        logger.info(f"Búsqueda de datos completada en {processing_time:.2f} segundos")
+        
+        return result
     
-    def _prepare_synthesis_prompt(self, query: str, results: Dict[str, Any], lookup_type: str) -> str:
+    def _generate_data_summary(self, query: str, data: Dict[str, Any], lookup_type: str) -> str:
         """
-        Prepara el prompt para la síntesis de los resultados de búsqueda.
+        Genera un resumen de los datos encontrados.
         
         Args:
-            query: La consulta original
-            results: Los resultados de la búsqueda
-            lookup_type: El tipo de búsqueda realizada
+            query: Consulta original
+            data: Datos encontrados
+            lookup_type: Tipo de búsqueda
             
         Returns:
-            El prompt para el LLM
+            Resumen de los datos
         """
-        # Formatear los resultados para el prompt
-        formatted_results = ""
-        for result_type, data in results.items():
-            formatted_results += f"\n--- {result_type.upper()} ---\n"
-            formatted_results += str(data)[:1500]  # Limitar tamaño para no exceder contexto
-            formatted_results += "\n"
+        if not self.llm:
+            # Si no hay LLM, generar un resumen básico
+            return f"Datos encontrados para consulta: {query}. Tipo: {lookup_type}."
+        
+        # Formatear los datos para el prompt
+        formatted_data = json.dumps(data, indent=2, ensure_ascii=False)
         
         prompt = f"""
-        Eres un especialista en sintetizar y organizar información de múltiples fuentes de datos.
+        Genera un resumen conciso de los siguientes datos encontrados para la consulta:
         
-        CONSULTA: {query}
-        TIPO DE BÚSQUEDA: {lookup_type}
+        Consulta: {query}
+        Tipo de búsqueda: {lookup_type}
         
-        RESULTADOS ENCONTRADOS:
-        {formatted_results}
+        Datos:
+        {formatted_data}
         
-        Por favor, sintetiza estos resultados en un formato claro y estructurado siguiendo estas pautas:
-        
-        1. RESUMEN EJECUTIVO: Una síntesis concisa de los hallazgos principales (2-3 frases)
-        2. DATOS CLAVE: Lista de 3-5 puntos con la información más relevante
-        3. ANÁLISIS: Breve análisis de cómo esta información responde a la consulta original
-        4. RECOMENDACIONES: Si aplica, sugerencias basadas en los datos encontrados
-        
-        La síntesis debe ser objetiva, basada en hechos y directamente relevante para la consulta original.
-        Usa un tono profesional y claro, adecuado para consultoría empresarial.
+        Proporciona solo los puntos más importantes y relevantes para la consulta.
         """
         
-        return prompt
+        # Generar el resumen usando el LLM
+        response = self.llm.invoke(prompt)
+        return response.content
     
-    async def search_with_mcp(self, lookup_type: str, query: str, **params) -> Dict[str, Any]:
+    def _extract_entity(self, query: str, entity_type: str) -> str:
         """
-        Realiza una búsqueda usando la herramienta data_lookup a través de MCP.
+        Extrae entidades de la consulta del usuario.
         
         Args:
-            lookup_type: Tipo de búsqueda a realizar
-            query: Consulta para la búsqueda
-            **params: Parámetros adicionales según el tipo de búsqueda
+            query: Consulta del usuario
+            entity_type: Tipo de entidad a extraer (company, campaign, etc.)
             
         Returns:
-            Resultados de la búsqueda
+            Entidad extraída o cadena vacía si no se encuentra
         """
-        try:
-            # Inicializar el cliente si aún no se ha hecho
-            if not await self.mcp_client.initialize():
-                logger.warning("No se pudo inicializar el cliente MCP, usando respuesta simulada")
-                return {"error": "No se pudo conectar al servidor MCP"}
-            
-            # Preparar parámetros para la llamada
-            mcp_params = {
-                "lookup_type": lookup_type,
-                "query": query,
-                **params
-            }
-            
-            # Realizar la llamada a la herramienta
-            result = await self.mcp_client.call_tool("data_lookup", mcp_params)
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error al buscar con MCP: {str(e)}")
-            return {"error": str(e)}
-    
-    async def get_financial_models(self, model_type: str, industry: str = "general", 
-                                  complexity: str = "intermediate") -> Dict[str, Any]:
-        """
-        Obtiene modelos financieros usando la herramienta financial_models a través de MCP.
+        # En una implementación real se usaría NER o un LLM
+        # Esta es una implementación simple basada en palabras clave
         
-        Args:
-            model_type: Tipo de modelo financiero
-            industry: Industria específica
-            complexity: Nivel de complejidad
-            
-        Returns:
-            Modelos financieros disponibles
-        """
-        try:
-            # Inicializar el cliente si aún no se ha hecho
-            if not await self.mcp_client.initialize():
-                logger.warning("No se pudo inicializar el cliente MCP, usando respuesta simulada")
-                return {"error": "No se pudo conectar al servidor MCP"}
-            
-            # Preparar parámetros para la llamada
-            params = {
-                "model_type": model_type,
-                "industry": industry,
-                "complexity": complexity
-            }
-            
-            # Realizar la llamada a la herramienta
-            result = await self.mcp_client.call_tool("financial_models", params)
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error al obtener modelos financieros: {str(e)}")
-            return {"error": str(e)}
-            
-    def _invoke_llm(self, prompt: str) -> str:
-        """
-        Invoca el LLM para generar una respuesta basada en el prompt dado.
+        query_lower = query.lower()
         
-        Args:
-            prompt: El prompt para el LLM
-            
-        Returns:
-            La respuesta generada por el LLM
-        """
-        try:
-            response = self.llm.invoke(prompt)
-            return response.content if hasattr(response, 'content') else str(response)
-        except Exception as e:
-            logger.error(f"Error al invocar LLM: {str(e)}")
-            return f"Error al procesar la información: {str(e)}" 
+        if entity_type == "company":
+            companies = ["apple", "microsoft", "google", "amazon", "tesla", "meta", "facebook"]
+            for company in companies:
+                if company in query_lower:
+                    return company
+        
+        elif entity_type == "campaign":
+            campaigns = ["black friday", "navidad", "verano", "primavera", "lanzamiento"]
+            for campaign in campaigns:
+                if campaign in query_lower:
+                    return campaign
+        
+        # Si no encontramos nada, devolver una cadena vacía
+        return "" 

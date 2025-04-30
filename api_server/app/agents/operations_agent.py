@@ -46,7 +46,9 @@ class OperationsAgent(BaseAgent):
         query = input_data.get('query', '')
         content = input_data.get('content', '')
         
-        logger.info(f"Procesando consulta de operaciones: {query[:100]}...")
+        # Loguear la consulta con un límite seguro
+        query_preview = query[:100] + "..." if len(query) > 100 else query
+        logger.info(f"Procesando consulta de operaciones: {query_preview}")
         
         # Preparar el sistema de prompt para obtener una respuesta estructurada
         prompt = f"""
