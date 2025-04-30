@@ -88,12 +88,22 @@ class MCPClient:
                     return []
             
             # Usar requests directamente para obtener las herramientas
-            response = requests.get(f"{self.base_url}/mcp/v1/tools", timeout=5)
+            # Intentar primero con /tools, luego con /mcp/v1/tools
+            response = requests.get(f"{self.base_url}/tools", timeout=5)
             if response.status_code != 200:
-                logger.error(f"Error al obtener herramientas MCP: {response.status_code}")
-                return []
+                # Intentar ruta alternativa si la primera falla
+                response = requests.get(f"{self.base_url}/mcp/v1/tools", timeout=5)
+                if response.status_code != 200:
+                    logger.error(f"Error al obtener herramientas MCP: {response.status_code}")
+                    return []
                 
-            tools = response.json().get("tools", [])
+            # Extraer las herramientas según el formato de respuesta
+            if "tools" in response.json():
+                tools = response.json().get("tools", [])
+            else:
+                # La respuesta podría ser directamente la lista de herramientas
+                tools = response.json()
+                
             logger.info(f"Obtenidas {len(tools)} herramientas del servidor MCP")
             return tools
         except Exception as e:
@@ -118,21 +128,31 @@ class MCPClient:
                     return {"error": "No se pudo inicializar la conexión con el servidor MCP"}
             
             # Usar requests directamente para llamar a la herramienta
-            url = f"{self.base_url}/mcp/v1/tools/{tool_name}"
+            # Intentar primero con la ruta principal /tools
+            url = f"{self.base_url}/tools/{tool_name}"
             headers = {"Content-Type": "application/json"}
             
-            response = requests.post(url, headers=headers, json=params, timeout=30)
-            
-            if response.status_code == 200:
-                result = response.json()
-                logger.info(f"Herramienta MCP '{tool_name}' ejecutada exitosamente")
-                return result
-            else:
-                error_msg = f"Error al llamar a {tool_name}: {response.status_code}"
-                if response.text:
-                    error_msg += f" - {response.text}"
-                logger.error(error_msg)
-                return {"error": error_msg}
+            try:
+                response = requests.post(url, headers=headers, json=params, timeout=30)
+                
+                # Si falla, intentar con la ruta alternativa /mcp/v1/tools
+                if response.status_code != 200:
+                    alt_url = f"{self.base_url}/mcp/v1/tools/{tool_name}"
+                    response = requests.post(alt_url, headers=headers, json=params, timeout=30)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    logger.info(f"Herramienta MCP '{tool_name}' ejecutada exitosamente")
+                    return result
+                else:
+                    error_msg = f"Error al llamar a {tool_name}: {response.status_code}"
+                    if response.text:
+                        error_msg += f" - {response.text}"
+                    logger.error(error_msg)
+                    return {"error": error_msg}
+            except requests.exceptions.RequestException as req_error:
+                logger.error(f"Error en la solicitud HTTP para {tool_name}: {str(req_error)}")
+                return {"error": f"Error en la solicitud HTTP: {str(req_error)}"}
         except Exception as e:
             logger.error(f"Error al llamar a herramienta MCP {tool_name}: {str(e)}")
             return {"error": f"Error en la llamada a la herramienta: {str(e)}"}
@@ -536,92 +556,6 @@ class MCPClient:
             return await self.call_tool(tool_name, params)
         
         return tool_wrapper
-    
-    # Métodos síncronos para compatibilidad
-    def initialize_sync(self) -> bool:
-        """
-        Implementación puramente síncrona del método de inicialización.
-        No intenta usar el loop de eventos en absoluto.
-        
-        Returns:
-            bool: True si se inicializó con éxito, False en caso contrario
-        """
-        try:
-            # Verificar que el servidor MCP está disponible mediante una llamada HTTP síncrona
-            response = requests.get(f"{self.base_url}/status", timeout=5)
-            if response.status_code != 200:
-                logger.error(f"Error al verificar estado del servidor MCP: {response.status_code}")
-                return False
-                
-            logger.info(f"Conexión con servidor MCP establecida en {self.base_url}")
-            self.initialized = True
-            return True
-        except Exception as e:
-            logger.error(f"Error en inicialización síncrona con MCP: {str(e)}")
-            return False
-    
-    def list_tools_sync(self) -> List[Dict[str, Any]]:
-        """
-        Implementación puramente síncrona para listar herramientas.
-        
-        Returns:
-            Lista de herramientas disponibles
-        """
-        try:
-            if not self.initialized:
-                success = self.initialize_sync()
-                if not success:
-                    return []
-            
-            # Usar requests directamente para obtener las herramientas
-            response = requests.get(f"{self.base_url}/mcp/v1/tools", timeout=5)
-            if response.status_code != 200:
-                logger.error(f"Error al obtener herramientas MCP: {response.status_code}")
-                return []
-                
-            tools = response.json().get("tools", [])
-            logger.info(f"Obtenidas {len(tools)} herramientas del servidor MCP")
-            return tools
-        except Exception as e:
-            logger.error(f"Error al listar herramientas MCP: {str(e)}")
-            return []
-    
-    def call_tool_sync(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Implementación puramente síncrona para llamar a una herramienta.
-        
-        Args:
-            tool_name: Nombre de la herramienta a llamar
-            params: Parámetros para la herramienta
-            
-        Returns:
-            Resultado de la ejecución de la herramienta
-        """
-        try:
-            if not self.initialized:
-                success = self.initialize_sync()
-                if not success:
-                    return {"error": "No se pudo inicializar la conexión con el servidor MCP"}
-            
-            # Usar requests directamente para llamar a la herramienta
-            url = f"{self.base_url}/mcp/v1/tools/{tool_name}"
-            headers = {"Content-Type": "application/json"}
-            
-            response = requests.post(url, headers=headers, json=params, timeout=30)
-            
-            if response.status_code == 200:
-                result = response.json()
-                logger.info(f"Herramienta MCP '{tool_name}' ejecutada exitosamente")
-                return result
-            else:
-                error_msg = f"Error al llamar a {tool_name}: {response.status_code}"
-                if response.text:
-                    error_msg += f" - {response.text}"
-                logger.error(error_msg)
-                return {"error": error_msg}
-        except Exception as e:
-            logger.error(f"Error al llamar a herramienta MCP {tool_name}: {str(e)}")
-            return {"error": f"Error en la llamada a la herramienta: {str(e)}"}
     
     async def close(self):
         """Cierra la conexión con el servidor MCP."""

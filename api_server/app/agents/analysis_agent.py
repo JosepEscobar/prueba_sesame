@@ -34,13 +34,39 @@ class AnalysisAgent(BaseAgent):
         )
         # Asignar el LLM importado a la propiedad de la instancia
         self.llm = llm
+        
         # Inicializar cliente MCP
-        mcp_path = str(Path(os.path.abspath(__file__)).parents[3] / "mcp_server" / "main.py")
-        self.mcp_client = MCPClient(
-            base_url=settings.MCP_CLIENT_URL,
-            use_stdio=True,
-            mcp_server_path=mcp_path
-        )
+        try:
+            # Deducir la ruta del servidor MCP
+            mcp_path = str(Path(os.path.abspath(__file__)).parents[3] / "mcp_server" / "main.py")
+            self.mcp_client = MCPClient(
+                base_url=settings.MCP_CLIENT_URL,
+                use_stdio=True,
+                mcp_server_path=mcp_path
+            )
+            
+            # Volver a intentar obtener el cliente global después de inicializar
+            from app.agents.mcp_integration import _mcp_client, get_mcp_tools_sync
+            
+            # Inicializar con get_mcp_tools_sync para asegurar cliente global
+            tools_list = get_mcp_tools_sync()
+            
+            if tools_list:
+                self.mcp_client = _mcp_client  # Actualizar referencia al cliente global
+                self.mcp_initialized = True
+                
+                # Actualizar lista de herramientas disponibles
+                self.available_mcp_tools = [tool["name"] for tool in tools_list]
+                logger.info(f"Cliente MCP inicializado. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
+            else:
+                logger.warning("No se pudo inicializar el cliente MCP")
+                self.mcp_initialized = False
+                self.available_mcp_tools = []
+        except Exception as e:
+            logger.error(f"Error al inicializar el cliente MCP: {str(e)}")
+            self.mcp_client = None
+            self.mcp_initialized = False
+            self.available_mcp_tools = []
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """Eres un agente especializado en análisis detallado de datos y textos.
             Tu objetivo es proporcionar análisis profundos, identificar patrones, y extraer insights valiosos.
@@ -84,24 +110,53 @@ class AnalysisAgent(BaseAgent):
         mcp_data = {}
         try:
             # Inicializar MCP si es necesario
-            self.mcp_client.initialize_sync()
+            if hasattr(self, 'mcp_client') and self.mcp_client is not None:
+                self.mcp_client.initialize_sync()
             
-            # Invocar la herramienta MCP 'analizar_tendencia' si es relevante
-            if "datos" in context and isinstance(context["datos"], list):
-                trend_result = self.mcp_client.call_tool_sync("analizar_tendencia", {
-                    "datos": context["datos"],
-                    "etiquetas": context.get("etiquetas", [])
-                })
-                if trend_result and "error" not in trend_result:
-                    mcp_data["tendencia"] = trend_result.get("result", {})
-                    logger.info("Datos de tendencia obtenidos de MCP")
-            
-            # Invocar la herramienta MCP 'search_articles' si es una consulta de búsqueda
-            search_result = self.mcp_client.call_tool_sync("search_articles", {"query": query})
-            if search_result and "error" not in search_result:
-                mcp_data["articles"] = search_result.get("result", {})
-                logger.info("Datos de artículos obtenidos de MCP")
+                # Invocar la herramienta MCP 'analizar_tendencia' si es relevante
+                if "datos" in context and isinstance(context["datos"], list):
+                    # Verificar que existe el cliente MCP
+                    if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                        # Intenta usar el cliente global como fallback
+                        from app.agents.mcp_integration import _mcp_client
+                        if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                            logger.info(f"Usando cliente MCP global como fallback")
+                            trend_result = _mcp_client.call_tool_sync("analizar_tendencia", {
+                                "datos": context["datos"],
+                                "etiquetas": context.get("etiquetas", [])
+                            })
+                        else:
+                            logger.error(f"No hay cliente MCP disponible para ejecutar 'analizar_tendencia'")
+                            trend_result = None
+                    else:
+                        # Usar el cliente propio del agente
+                        trend_result = self.mcp_client.call_tool_sync("analizar_tendencia", {
+                            "datos": context["datos"],
+                            "etiquetas": context.get("etiquetas", [])
+                        })
+                    
+                    if trend_result and "error" not in trend_result:
+                        mcp_data["tendencia"] = trend_result.get("result", {})
+                        logger.info("Datos de tendencia obtenidos de MCP")
                 
+                # Invocar la herramienta MCP 'search_articles' si es una consulta de búsqueda
+                # Verificar que existe el cliente MCP
+                if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                    # Intenta usar el cliente global como fallback
+                    from app.agents.mcp_integration import _mcp_client
+                    if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                        logger.info(f"Usando cliente MCP global como fallback")
+                        search_result = _mcp_client.call_tool_sync("search_articles", {"query": query})
+                    else:
+                        logger.error(f"No hay cliente MCP disponible para ejecutar 'search_articles'")
+                        search_result = None
+                else:
+                    # Usar el cliente propio del agente
+                    search_result = self.mcp_client.call_tool_sync("search_articles", {"query": query})
+                
+                if search_result and "error" not in search_result:
+                    mcp_data["articles"] = search_result.get("result", {})
+                    logger.info("Datos de artículos obtenidos de MCP")
         except Exception as e:
             logger.error(f"Error al obtener datos de MCP: {str(e)}")
         

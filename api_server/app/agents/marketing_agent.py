@@ -53,8 +53,23 @@ class MarketingAgent(BaseAgent):
             mcp_tools = get_mcp_tools_sync()
             # Configurar el agente con herramientas MCP para LangChain
             configure_agent_with_mcp(self, mcp_tools)
+            
+            # Volver a intentar obtener el cliente global después de inicializar
+            from app.agents.mcp_integration import _mcp_client
+            self.mcp_client = _mcp_client  # Asignar el cliente global a self.mcp_client
+            
+            if self.mcp_client is not None:
+                self.available_mcp_tools = [tool["name"] for tool in mcp_tools]
+                logger.info(f"Cliente MCP inicializado. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
+                self.mcp_initialized = True
+            else:
+                logger.warning("Cliente MCP global es None después de inicialización")
+                self.available_mcp_tools = []
+                self.mcp_initialized = False
         except Exception as e:
             logger.error(f"Error al configurar herramientas MCP: {str(e)}")
+            self.mcp_initialized = False
+            self.available_mcp_tools = []
         
         self.services = [
             "Estrategia de marketing",
@@ -174,7 +189,21 @@ class MarketingAgent(BaseAgent):
                             "datos": [100, 120, 150, 130, 170],
                             "etiquetas": ["Ene", "Feb", "Mar", "Abr", "May"]
                         }
-                        trend_data = self.mcp_client.call_tool_sync("analizar_tendencia", trend_params)
+                        
+                        # Verificar que existe el cliente MCP
+                        if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                            # Intenta usar el cliente global como fallback
+                            from app.agents.mcp_integration import _mcp_client
+                            if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                                logger.info(f"Usando cliente MCP global como fallback")
+                                trend_data = _mcp_client.call_tool_sync("analizar_tendencia", trend_params)
+                            else:
+                                logger.error(f"No hay cliente MCP disponible para ejecutar 'analizar_tendencia'")
+                                raise ValueError("No hay cliente MCP disponible")
+                        else:
+                            # Usar el cliente propio del agente
+                            trend_data = self.mcp_client.call_tool_sync("analizar_tendencia", trend_params)
+                        
                         marketing_data["trend_analysis"] = trend_data
                         logger.info("Análisis de tendencia obtenido a través de MCP")
                     except Exception as e:
@@ -189,7 +218,21 @@ class MarketingAgent(BaseAgent):
                                 "objetivo": context.get("goal", "awareness"),
                                 "publico_objetivo": context.get("target_audience", "general")
                             }
-                            strategy_data = self.mcp_client.call_tool_sync("recomendar_estrategia_marketing", strategy_params)
+                            
+                            # Verificar que existe el cliente MCP
+                            if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                                # Intenta usar el cliente global como fallback
+                                from app.agents.mcp_integration import _mcp_client
+                                if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                                    logger.info(f"Usando cliente MCP global como fallback")
+                                    strategy_data = _mcp_client.call_tool_sync("recomendar_estrategia_marketing", strategy_params)
+                                else:
+                                    logger.error(f"No hay cliente MCP disponible para ejecutar 'recomendar_estrategia_marketing'")
+                                    raise ValueError("No hay cliente MCP disponible")
+                            else:
+                                # Usar el cliente propio del agente
+                                strategy_data = self.mcp_client.call_tool_sync("recomendar_estrategia_marketing", strategy_params)
+                            
                             marketing_data["marketing_strategy"] = strategy_data
                             logger.info(f"Estrategia de marketing obtenida para {context['industry']}")
                         except Exception as e:
@@ -206,7 +249,21 @@ class MarketingAgent(BaseAgent):
                                 "conversiones": campaign_data.get("conversions", 0),
                                 "coste": campaign_data.get("cost", 0)
                             }
-                            campaign_analysis = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", campaign_params)
+                            
+                            # Verificar que existe el cliente MCP
+                            if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                                # Intenta usar el cliente global como fallback
+                                from app.agents.mcp_integration import _mcp_client
+                                if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                                    logger.info(f"Usando cliente MCP global como fallback")
+                                    campaign_analysis = _mcp_client.call_tool_sync("analizar_rendimiento_campania", campaign_params)
+                                else:
+                                    logger.error(f"No hay cliente MCP disponible para ejecutar 'analizar_rendimiento_campania'")
+                                    raise ValueError("No hay cliente MCP disponible")
+                            else:
+                                # Usar el cliente propio del agente
+                                campaign_analysis = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", campaign_params)
+                            
                             marketing_data["campaign_analysis"] = campaign_analysis
                             logger.info(f"Análisis de campaña obtenido para {campaign_params['nombre_campania']}")
                         except Exception as e:
@@ -240,7 +297,21 @@ class MarketingAgent(BaseAgent):
                     "model_type": "market_trends",
                     "complexity": "simple"
                 }
-                financial_data = self.mcp_client.call_tool_sync("financial_models", financial_params)
+                
+                # Verificar que existe el cliente MCP
+                if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                    # Intenta usar el cliente global como fallback
+                    from app.agents.mcp_integration import _mcp_client
+                    if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+                        logger.info(f"Usando cliente MCP global como fallback")
+                        financial_data = _mcp_client.call_tool_sync("financial_models", financial_params)
+                    else:
+                        logger.error(f"No hay cliente MCP disponible para ejecutar 'financial_models'")
+                        raise ValueError("No hay cliente MCP disponible")
+                else:
+                    # Usar el cliente propio del agente
+                    financial_data = self.mcp_client.call_tool_sync("financial_models", financial_params)
+                
                 marketing_data["market_trends"] = financial_data
                 logger.info(f"Datos financieros obtenidos a través de MCP para industria: {context['industry']}")
         except Exception as e:

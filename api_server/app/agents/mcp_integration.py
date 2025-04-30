@@ -131,9 +131,17 @@ def configure_agent_with_mcp(agent, tools):
                     agent.tools[tool["name"]] = tool
                 logger.info(f"Añadidas {len(tools)} herramientas MCP al diccionario del agente")
             else:
-                logger.warning(f"Formato de agent.tools no soportado: {type(agent.tools)}")
+                # Si tools no es lista ni diccionario, inicializar como diccionario
+                agent.tools = {}
+                for tool in tools:
+                    agent.tools[tool["name"]] = tool
+                logger.info(f"Creado nuevo diccionario de herramientas para el agente")
         else:
-            logger.warning("El agente no tiene un atributo 'tools' compatible")
+            # Si el agente no tiene atributo tools, crearlo como diccionario
+            agent.tools = {}
+            for tool in tools:
+                agent.tools[tool["name"]] = tool
+            logger.info(f"Inicializado nuevo atributo tools para el agente")
             
     except Exception as e:
         logger.error(f"Error al configurar agente con herramientas MCP: {str(e)}") 
