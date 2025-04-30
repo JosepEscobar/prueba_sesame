@@ -5,6 +5,9 @@ from app.agents.base import BaseAgent
 from app.core.logging import logger
 from app.core.config import get_settings
 from langchain_openai import ChatOpenAI
+from app.tools.mcp_client import MCPClient
+import os
+from pathlib import Path
 
 # Obtener la configuración
 settings = get_settings()
@@ -45,6 +48,13 @@ class ActionAgent(BaseAgent):
             - Recomendaciones posteriores"""),
             ("human", "{input}")
         ])
+        # Inicializar cliente MCP
+        mcp_path = str(Path(os.path.abspath(__file__)).parents[3] / "mcp_server" / "main.py")
+        self.mcp_client = MCPClient(
+            base_url=settings.MCP_CLIENT_URL,
+            use_stdio=True,
+            mcp_server_path=mcp_path
+        )
         
     def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Ejecuta la acción solicitada."""
@@ -53,18 +63,19 @@ class ActionAgent(BaseAgent):
         # Extraer la consulta
         query = input_data.get("query", "")
         
+        # Loguear la consulta con un límite seguro
+        query_preview = query[:50] + "..." if len(query) > 50 else query
+        logger.info(f"ActionAgent procesando consulta: {query_preview}")
+        
         # Formatear el prompt correctamente
         formatted_prompt = self.prompt.format(input=query)
         
-        # Obtener la respuesta del LLM
-        response = self.llm.invoke(formatted_prompt)
-        
+        # Llamar a la herramienta MCP 'query_kb'
+        mcp_result = self.mcp_client.call_tool_sync("query_kb", {"query": query})
         processing_time = time.time() - start_time
-        logger.info(f"ActionAgent completó la acción en {processing_time:.2f} segundos")
-        
         return {
-            "action_result": response.content,
+            "action_result": mcp_result.get("result", ""),
             "input": input_data,
-            "confidence": 0.85,
+            "confidence": mcp_result.get("confidence", 0.0),
             "processing_time": processing_time
         } 

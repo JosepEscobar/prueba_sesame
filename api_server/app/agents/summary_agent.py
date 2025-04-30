@@ -5,12 +5,15 @@ Agent encargado de crear resúmenes concisos y claros de información compleja.
 from typing import Dict, Any, List, Optional
 import time
 import json
+import os
+from pathlib import Path
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from app.agents.base import BaseAgent
 from app.core.logging import logger
 from app.core.config import get_settings
+from app.tools.mcp_client import MCPClient
 
 # Obtener la configuración
 settings = get_settings()
@@ -41,6 +44,13 @@ class SummaryAgent(BaseAgent):
         )
         # Asignar el LLM importado a la propiedad de la instancia
         self.llm = llm
+        # Inicializar cliente MCP
+        mcp_path = str(Path(os.path.abspath(__file__)).parents[3] / "mcp_server" / "main.py")
+        self.mcp_client = MCPClient(
+            base_url=get_settings().MCP_CLIENT_URL,
+            use_stdio=True,
+            mcp_server_path=mcp_path
+        )
         logger.info(f"SummaryAgent inicializado")
     
     def _execute_impl(self, input_data: Dict[Any, Any]) -> Dict[Any, Any]:
@@ -55,10 +65,14 @@ class SummaryAgent(BaseAgent):
             Dict con los resultados del resumen, la consulta original y un nivel de confianza.
         """
         try:
-            logger.info(f"SummaryAgent procesando solicitud: {input_data.get('query', '')[:50]}...")
-            
-            # Extraer la consulta y el contexto
+            # Extraer la consulta
             query = input_data.get("query", "")
+            
+            # Loguear la consulta con un límite seguro
+            query_preview = query[:50] + "..." if len(query) > 50 else query
+            logger.info(f"SummaryAgent procesando solicitud: {query_preview}")
+            
+            # Extraer el contexto
             context = input_data.get("context", "")
             
             # Preparar el prompt para el resumen
@@ -81,18 +95,17 @@ class SummaryAgent(BaseAgent):
             Tu resumen debe ser completo pero conciso, presentando las ideas principales de forma estructurada.
             """
             
-            # Invocar el LLM para obtener un resumen
+            # Invocar la herramienta MCP 'search_articles' para obtener contenido
             start_time = time.time()
-            response = self.llm.invoke(prompt)
+            mcp_result = self.mcp_client.call_tool_sync("search_articles", {"query": query})
             processing_time = time.time() - start_time
-            
-            logger.info(f"SummaryAgent completó la generación del resumen en {processing_time:.2f} segundos")
-            
+
+            logger.info(f"SummaryAgent obtuvo datos de MCP en {processing_time:.2f} segundos")
             return {
-                "summary_result": response.content,
-                "result": response.content,  # Para compatibilidad con la prueba
+                "summary_result": mcp_result.get("result", ""),
+                "result": mcp_result.get("result", ""),  # Para compatibilidad
                 "input": input_data,
-                "confidence": 0.85,
+                "confidence": mcp_result.get("confidence", 0.0),
                 "processing_time": processing_time
             }
             

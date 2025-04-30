@@ -1,35 +1,35 @@
-# Servidor MCP
+# Servidor MCP para Sesame
 
-Este proyecto implementa un servidor MCP (Model Context Protocol) para proporcionar herramientas mediante una API estandarizada. El servidor MCP permite a diferentes clientes como LangChain, LlamaIndex o agentes personalizados utilizar herramientas locales a través de un protocolo común.
+Este proyecto implementa un servidor [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) que expone herramientas de análisis financiero, marketing y datos a modelos de lenguaje como Claude, GPT y otros agentes compatibles con MCP.
+
+## Descripción
+
+El servidor MCP proporciona una serie de herramientas especializadas para análisis financiero, marketing y procesamiento de datos, permitiendo a los modelos de lenguaje realizar operaciones específicas de dominio sin necesidad de acceso a internet o APIs externas.
 
 ## Características
 
-- Implementación de herramientas financieras y de búsqueda de datos
-- Registro dinámico de herramientas desde archivos JSON de esquema
-- Métricas de rendimiento y logs completos
-- Compatible con implementaciones modernas de FastMCP
-- Fácil de extender con nuevas herramientas
+- 📊 **Herramientas financieras**: Búsqueda de datos financieros y cálculo de ratios
+- 📈 **Herramientas de marketing**: Análisis de campañas y recomendaciones estratégicas
+- 📉 **Herramientas de análisis de datos**: Detección de tendencias y predicciones simples
 
 ## Requisitos
 
-- Python 3.10 o superior
-- Dependencias especificadas en `requirements.txt`
+- Python 3.9+
+- Paquetes Python según `requirements.txt`
 
 ## Instalación
 
-1. Clona este repositorio
-2. Crea un entorno virtual
-3. Instala las dependencias
+1. Clonar este repositorio
+2. Instalar dependencias:
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
+cd mcp_server
 pip install -r requirements.txt
 ```
 
-4. Crea un archivo `.env` basado en `.env-example` con tus configuraciones
-
 ## Uso
+
+### Iniciar el servidor
 
 Para iniciar el servidor MCP:
 
@@ -37,70 +37,118 @@ Para iniciar el servidor MCP:
 python main.py
 ```
 
-Opciones disponibles:
+El servidor se iniciará en `http://localhost:4000` utilizando el transporte SSE (Server-Sent Events).
 
-- `--host`: Host en el que se ejecutará el servidor (por defecto: 0.0.0.0)
-- `--port`: Puerto en el que se ejecutará el servidor (por defecto: 4000)
+### Integración con agentes Sesame
 
-## Estructura del proyecto
+Los agentes de Sesame en el `api_server` están diseñados para conectarse con este servidor MCP siguiendo el patrón de integración oficial de MCP con LangChain y LangGraph.
 
-```
-mcp_server/
-├── app/
-│   ├── core/
-│   │   ├── config.py        # Configuración con pydantic-settings
-│   │   ├── logging.py       # Configuración de logs
-│   │   └── metrics.py       # Recolector de métricas
-│   └── tools/
-│       ├── implementations/ # Implementaciones de herramientas
-│       ├── schemas/         # Esquemas JSON de herramientas
-│       └── server/          # Código del servidor MCP
-├── logs/                    # Directorio para archivos de log
-├── main.py                  # Punto de entrada principal
-├── requirements.txt         # Dependencias del proyecto
-└── Dockerfile               # Para ejecutar en Docker
-```
+```python
+# Configuración del cliente MCP siguiendo el patrón oficial
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.tools import load_mcp_tools
 
-## Añadir nuevas herramientas
+# Configurar cliente MCP
+client = MultiServerMCPClient({
+    "sesame": {
+        "transport": "sse",
+        "url": "http://localhost:4000",
+    }
+})
 
-1. Crea un archivo de esquema JSON en `app/tools/schemas/`
-2. Implementa la funcionalidad en `app/tools/implementations/`
-3. Registra la implementación en `main.py`
+# Cargar herramientas MCP adaptadas a LangChain
+tools = load_mcp_tools(client)
 
-## Docker
-
-Para ejecutar el servidor en Docker:
-
-```bash
-# Construir la imagen
-docker build -t mcp-server .
-
-# Ejecutar el contenedor
-docker run -p 4000:4000 mcp-server
+# Luego usar esas herramientas con tu agente LangChain
+# agent = Agent(..., tools=tools)
 ```
 
-## Uso con docker-compose
+Para que los agentes puedan acceder a las herramientas MCP, asegúrate de:
 
-Para ejecutar como parte de una arquitectura de microservicios:
+1. Iniciar primero el servidor MCP: `python mcp_server/main.py`
+2. Configurar la URL correcta en el archivo `.env` del `api_server`:
+   ```
+   MCP_CLIENT_URL=http://localhost:4000
+   ```
 
-```yaml
-version: '3'
-services:
-  mcp_server:
-    build: ./mcp_server
-    ports:
-      - "4000:4000"
-    volumes:
-      - ./mcp_server/logs:/app/logs
-    env_file:
-      - ./mcp_server/.env
+Los agentes finance_agent y marketing_agent invocan automáticamente herramientas externas como `analizar_tendencia`, `recomendar_estrategia_marketing` y `calcular_ratios_financieros` cuando es apropiado.
+
+### Conectar con Claude
+
+Para usar este servidor con Claude, puedes especificar la siguiente configuración en la API de Claude:
+
+```json
+{
+  "mcpServers": {
+    "sesame": {
+      "url": "http://localhost:4000/sse",
+      "transport": "sse"
+    }
+  }
+}
 ```
+
+### Usar con LangGraph
+
+Para usar este servidor con LangGraph, siguiendo el patrón oficial:
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.tools import load_mcp_tools
+from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4o")
+
+# Configure the client with the servers
+client = MultiServerMCPClient(
+    {
+        "sesame": {
+            "transport": "sse",
+            "url": "http://localhost:4000",
+        }
+    }
+)
+
+# Load the tools from the client
+tools = load_mcp_tools(client)
+
+# Create a REACT agent with the model and tools
+agent = create_react_agent(model, tools)
+
+# Invoke the agent
+response = await agent.ainvoke(
+    {"messages": [{"role": "user", "content": "Analiza los datos financieros de Apple"}]}
+)
+```
+
+## Herramientas disponibles
+
+### Análisis financiero
+
+- `buscar_datos_financieros`: Obtiene datos financieros de una empresa
+- `calcular_ratios_financieros`: Calcula ratios financieros a partir de datos básicos
+
+### Marketing
+
+- `analizar_rendimiento_campania`: Analiza el rendimiento de una campaña de marketing
+- `recomendar_estrategia_marketing`: Recomienda estrategias basadas en parámetros básicos
+
+### Análisis de datos
+
+- `analizar_tendencia`: Analiza una serie temporal y detecta tendencias
+- `predecir_valores`: Realiza una predicción simple de valores futuros
 
 ## Desarrollo
 
-Para contribuir al proyecto:
+Para contribuir a este proyecto:
 
-1. Crea una rama para tu característica (`git checkout -b feature/amazing-feature`)
-2. Realiza tus cambios
-3. Ejecuta las pruebas
-4. Envía tu pull request 
+1. Crea un entorno virtual de Python
+2. Instala las dependencias de desarrollo: `pip install -r requirements.txt`
+3. Ejecuta pruebas: `pytest`
+
+## Recursos adicionales
+
+- [Documentación de Model Context Protocol](https://modelcontextprotocol.io/)
+- [Adaptadores MCP para LangChain](https://github.com/langchain-ai/langchain-mcp-adapters)
+- [LangGraph con MCP](https://langchain-ai.github.io/langgraph/agents/mcp/) 

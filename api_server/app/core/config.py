@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     MCP_PORT: int = 4000
     
     # Configuración del cliente MCP
-    MCP_CLIENT_URL: str = "http://localhost:4000"
+    MCP_CLIENT_URL: str = "http://localhost:4000/sse"
     MCP_CLIENT_TIMEOUT: int = 30
     
     # Compatibilidad con nombres antiguos de variables

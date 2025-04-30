@@ -33,20 +33,24 @@ class DataLookupImplementation:
         self.metrics = MetricsCollector()
         logger.info(f"Implementación de búsqueda de datos inicializada: {self.name}")
     
-    def search_market_data(self, query: str) -> Dict[str, Any]:
+    def search_market_data(self, term=None, **kwargs):
         """
-        Busca datos de mercado relevantes para la consulta.
+        Busca datos de mercado relacionados con el término de búsqueda.
         
         Args:
-            query: Consulta sobre datos de mercado
+            term: Término de búsqueda
+            kwargs: Argumentos adicionales para la búsqueda
             
         Returns:
             Datos de mercado encontrados
         """
-        start_time = time.time()
-        
         try:
-            logger.info(f"Buscando datos de mercado para: {query[:50]}...")
+            start_time = time.time()
+            query = term if term else (kwargs.get("query") or "")
+            
+            # Logueamos solo los primeros 50 caracteres de la consulta como texto
+            query_preview = query[:50] + "..." if len(query) > 50 else query
+            logger.info(f"Buscando datos de mercado para: {query_preview}")
             
             # Intentar usar Alpha Vantage API si hay clave disponible
             if self.api_keys.get("alpha_vantage"):
@@ -114,20 +118,24 @@ class DataLookupImplementation:
                 "timestamp": time.time()
             }
     
-    def search_news(self, query: str) -> Dict[str, Any]:
+    def search_news(self, term=None, **kwargs):
         """
-        Busca noticias relevantes para la consulta.
+        Busca noticias relacionadas con el término de búsqueda.
         
         Args:
-            query: Consulta sobre noticias
+            term: Término de búsqueda
+            kwargs: Argumentos adicionales para la búsqueda
             
         Returns:
             Noticias encontradas
         """
-        start_time = time.time()
-        
         try:
-            logger.info(f"Buscando noticias para: {query[:50]}...")
+            start_time = time.time()
+            query = term if term else (kwargs.get("query") or "")
+            
+            # Logueamos solo los primeros 50 caracteres de la consulta como texto
+            query_preview = query[:50] + "..." if len(query) > 50 else query
+            logger.info(f"Buscando noticias para: {query_preview}")
             
             # Intentar usar News API si hay clave disponible
             if self.api_keys.get("news_api"):
@@ -240,20 +248,24 @@ class DataLookupImplementation:
                 "timestamp": time.time()
             }
     
-    def search_web(self, query: str) -> Dict[str, Any]:
+    def search_web(self, term=None, **kwargs):
         """
-        Busca información en la web.
+        Busca información en la web relacionada con el término de búsqueda.
         
         Args:
-            query: Consulta para buscar en la web
+            term: Término de búsqueda
+            kwargs: Argumentos adicionales para la búsqueda
             
         Returns:
-            Resultados de la búsqueda web
+            Información web encontrada
         """
-        start_time = time.time()
-        
         try:
-            logger.info(f"Buscando información web para: {query[:50]}...")
+            start_time = time.time()
+            query = term if term else (kwargs.get("query") or "")
+            
+            # Logueamos solo los primeros 50 caracteres de la consulta como texto
+            query_preview = query[:50] + "..." if len(query) > 50 else query
+            logger.info(f"Buscando información web para: {query_preview}")
             
             # Intentar usar Bing Search API si hay clave disponible
             if self.api_keys.get("bing_search"):

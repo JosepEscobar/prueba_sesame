@@ -13,12 +13,18 @@ from app.core.config import get_settings
 from app.core.logging import setup_logging, logger
 from app.core.metrics import setup_metrics
 from app.api.router import api_router
+from app.api.routes import router as routes_router
 from app.tools.register_tools import register_all_tools
 from app.tools.server.server_init import start_mcp_server_process, stop_mcp_server_process
+from app.tools.mcp_adapter import get_mcp_tools
 import uvicorn
 import os
 import sys
 from pathlib import Path
+import traceback
+from starlette.middleware.base import BaseHTTPMiddleware
+import multiprocessing
+from typing import Optional
 
 # Configuración de logging
 setup_logging()
@@ -41,6 +47,79 @@ if settings.SENTRY_DSN:
 
 # Variable global para el proceso del servidor MCP
 mcp_process = None
+
+class TimeoutMiddleware(BaseHTTPMiddleware):
+    """Middleware para agregar un timeout a todas las solicitudes."""
+    
+    async def dispatch(self, request: Request, call_next):
+        try:
+            # Establecer un timeout de 10 segundos para todas las solicitudes
+            return await asyncio.wait_for(call_next(request), timeout=10.0)
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout en la solicitud: {request.method} {request.url.path}")
+            return JSONResponse(
+                status_code=504,
+                content={"detail": "La solicitud excedió el tiempo límite de 10 segundos"}
+            )
+        except Exception as e:
+            logger.error(f"Error inesperado en el middleware: {str(e)}")
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Error interno del servidor"}
+            )
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware para registrar solicitudes HTTP."""
+    
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+        request_id = request.headers.get("X-Request-ID", "unknown")
+        
+        logger.info(
+            f"Solicitud iniciada: {request.method} {request.url.path}",
+            extra={"request_id": request_id, "method": request.method, "path": request.url.path}
+        )
+        
+        try:
+            response = await call_next(request)
+            process_time = time.time() - start_time
+            
+            logger.info(
+                f"Solicitud completada: {request.method} {request.url.path} - {response.status_code} en {process_time:.4f}s",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "process_time": process_time
+                }
+            )
+            
+            # Añadir cabecera de tiempo de procesamiento
+            response.headers["X-Process-Time"] = str(process_time)
+            return response
+            
+        except Exception as e:
+            process_time = time.time() - start_time
+            error_traceback = traceback.format_exc()
+            
+            logger.error(
+                f"Error en solicitud: {request.method} {request.url.path} - {str(e)}",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "error": str(e),
+                    "process_time": process_time,
+                    "exc_info": error_traceback
+                }
+            )
+            
+            # En caso de error no controlado, devolver respuesta de error 500
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Error interno del servidor"}
+            )
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -90,6 +169,10 @@ async def lifespan(app: FastAPI):
     tool_stats = register_all_tools()
     logger.info(f"Herramientas registradas: {tool_stats['implemented_tools']}/{tool_stats['total_tools']}")
     
+    # Cargar herramientas MCP adaptadas
+    tools = get_mcp_tools()
+    logger.info(f"Herramientas MCP adaptadas cargadas: {len(tools)} herramientas disponibles")
+    
     yield
     
     # Código que se ejecuta al detener la aplicación
@@ -131,69 +214,15 @@ app.add_middleware(
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 
-# Middleware para logging de solicitudes HTTP
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    """Registra información sobre cada solicitud HTTP."""
-    request_id = str(uuid.uuid4())
-    request.state.request_id = request_id
-    
-    start_time = time.time()
-    
-    logger.info(
-        f"Solicitud iniciada: {request.method} {request.url.path}",
-        extra={
-            "request_id": request_id,
-            "method": request.method,
-            "path": request.url.path,
-            "client_ip": request.client.host if request.client else None
-        }
-    )
-    
-    try:
-        response = await call_next(request)
-        process_time = time.time() - start_time
-        
-        logger.info(
-            f"Solicitud completada: {request.method} {request.url.path} - {response.status_code}",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "status_code": response.status_code,
-                "process_time": process_time
-            }
-        )
-        
-        response.headers["X-Process-Time"] = str(process_time)
-        response.headers["X-Request-ID"] = request_id
-        
-        return response
-    except Exception as e:
-        process_time = time.time() - start_time
-        
-        logger.error(
-            f"Error en solicitud: {request.method} {request.url.path} - {str(e)}",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "error": str(e),
-                "process_time": process_time
-            },
-            exc_info=True
-        )
-        
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error": "Error interno del servidor",
-                "request_id": request_id
-            }
-        )
+# Middleware para logging de solicitudes
+app.add_middleware(RequestLoggingMiddleware)
+
+# Middleware para timeout
+app.add_middleware(TimeoutMiddleware)
 
 # Incluir rutas
 app.include_router(api_router, prefix=settings.API_PREFIX)
+app.include_router(routes_router, prefix=settings.API_PREFIX)
 
 # Endpoint raíz
 @app.get("/", 
@@ -281,6 +310,12 @@ app.openapi = custom_openapi
 @app.get("/docs", include_in_schema=False)
 def redirect_to_docs():
     return RedirectResponse(url="/api/v1/docs")
+
+# Opcional: Exponer endpoint para listarlas
+@app.get(f"{settings.API_PREFIX}/mcp-tools")
+async def list_mcp_tools():
+    """Devuelve la lista de herramientas MCP adaptadas a LangChain."""
+    return [ {"name": t.name, "description": t.description} for t in tools ]
 
 # Punto de entrada para ejecución directa
 if __name__ == "__main__":

@@ -73,7 +73,8 @@ async def process_query(
     start_time = time.time()
     
     try:
-        result = await orchestrator.process_query(request)
+        # Llamada síncrona al orquestador
+        result = orchestrator.process_query(request)
         
         # Calcular tiempo de procesamiento
         processing_time = time.time() - start_time
@@ -89,15 +90,20 @@ async def process_query(
         
         logger.info(f"Consulta procesada en {processing_time:.4f}s por {result.get('agent', 'unknown')} (request_id: {request_id})")
         
-        # Agregar metadatos a la respuesta
-        result["metadata"] = {
-            "request_id": request_id,
-            "processing_time": processing_time,
+        # Preparar la respuesta según el modelo QueryResponse
+        # Asegurándonos de que todos los campos requeridos estén presentes
+        response = {
+            "result": result.get("result", {}),
             "agent": result.get("agent", "unknown"),
+            "processing_time": processing_time,
             "confidence": result.get("confidence", 0.0)
         }
         
-        return result
+        # Agregar campos opcionales si están presentes
+        if "data_sources" in result:
+            response["data_sources"] = result["data_sources"]
+        
+        return response
         
     except Exception as e:
         # Calcular tiempo en caso de error

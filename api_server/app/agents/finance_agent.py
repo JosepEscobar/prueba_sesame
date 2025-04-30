@@ -1,32 +1,40 @@
 from typing import Dict, Any, List, Optional
 import time
-import asyncio
+import json
+import os
 
 from langchain_openai import ChatOpenAI
 from app.agents.base import BaseAgent
 from app.core.logging import logger
+from app.core.metrics import MetricsCollector
 from app.core.config import get_settings
 from app.tools.mcp_client import MCPClient
+from app.agents.mcp_integration import configure_agent_with_mcp, get_mcp_tools
 
 # Obtener la configuración
 settings = get_settings()
 
 class FinanceAgent(BaseAgent):
     """
-    Agente especializado en análisis financiero y consultoría económica.
+    Agente especializado en finanzas, inversiones y análisis financiero.
     
-    Proporciona análisis detallado, recomendaciones y estrategias financieras
-    basadas en datos de mercado, indicadores económicos y mejores prácticas
-    del sector financiero.
-    
-    Actualizado para usar herramientas a través del servidor MCP.
+    Este agente proporciona recomendaciones y análisis sobre:
+    - Análisis financiero de empresas
+    - Modelos y proyecciones financieras
+    - Estrategias de inversión
+    - Análisis de riesgo
+    - Valoración de empresas
+    - Planificación financiera
+    - Optimización fiscal
+    - Presupuestos y control de costos
+    - Métricas y KPIs financieros
     """
     
     def __init__(self):
         """Inicializa el agente de finanzas."""
         super().__init__(
             name="finance_agent",
-            description="Especialista en análisis financiero y consultoría económica."
+            description="Especialista en finanzas, inversiones y análisis financiero."
         )
         
         # Comprobar si hay una clave API válida
@@ -37,28 +45,60 @@ class FinanceAgent(BaseAgent):
             logger.warning("No hay clave API de OpenAI válida. Usando respuestas ficticias para desarrollo.")
             self.llm = None
             
-        self.services = [
-            "Análisis financiero",
-            "Planificación de presupuestos",
-            "Optimización fiscal",
-            "Estrategias de inversión",
-            "Gestión de riesgos financieros",
-            "Valuación empresarial",
-            "Análisis de rentabilidad",
-            "Modelos financieros",
-            "Planificación de flujo de caja"
-        ]
+        # Inicializar el cliente MCP con StdioTransport
+        # Obtener la ruta del servidor MCP del settings o utilizar una ruta por defecto
+        mcp_server_path = getattr(settings, "MCP_SERVER_PATH", None)
+        if not mcp_server_path:
+            # Intentar deducir la ruta relativa al directorio actual
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
+            mcp_server_path = os.path.join(project_root, "mcp_server", "main.py")
+            logger.info(f"Usando ruta deducida para servidor MCP: {mcp_server_path}")
         
-        # Inicializar el cliente MCP para herramientas externas
+        # Inicializar el cliente MCP directo para llamadas con MCPClient
         self.mcp_client = MCPClient(
-            base_url=settings.MCP_CLIENT_URL
+            base_url=settings.MCP_CLIENT_URL, 
+            use_stdio=True,
+            mcp_server_path=mcp_server_path
         )
         
-        logger.info(f"Agente {self.name} inicializado con {len(self.services)} servicios")
+        # Inicializar herramientas MCP desde el principio
+        try:
+            success = self.mcp_client.initialize_sync()
+            if success:
+                tools = self.mcp_client.list_tools_sync()
+                logger.info(f"Cliente MCP inicializado correctamente. Herramientas disponibles: {len(tools)}")
+                self.available_mcp_tools = [tool["name"] for tool in tools]
+                logger.info(f"Herramientas MCP disponibles: {', '.join(self.available_mcp_tools)}")
+            else:
+                logger.warning("No se pudo inicializar el cliente MCP durante la inicialización del agente")
+                self.available_mcp_tools = []
+        except Exception as e:
+            logger.error(f"Error al inicializar el cliente MCP: {str(e)}")
+            self.available_mcp_tools = []
         
+        # Obtener herramientas MCP adaptadas para LangChain
+        mcp_tools = get_mcp_tools()
+        
+        # Configurar el agente con herramientas MCP para LangChain
+        configure_agent_with_mcp(self, mcp_tools)
+        
+        self.services = [
+            "Análisis financiero",
+            "Modelos financieros",
+            "Estrategias de inversión",
+            "Análisis de riesgo",
+            "Valoración de empresas",
+            "Planificación financiera",
+            "Optimización fiscal",
+            "Presupuestos",
+            "Métricas financieras"
+        ]
+        logger.info(f"Agente {self.name} inicializado con {len(self.services)} servicios y herramientas MCP")
+    
     def _execute_impl(self, input_data: Dict[Any, Any]) -> Dict[Any, Any]:
         """
-        Implementa la lógica de ejecución del agente financiero.
+        Implementa la lógica de ejecución del agente de finanzas.
         
         Args:
             input_data: Datos de entrada que contienen la consulta financiera y contexto
@@ -70,102 +110,11 @@ class FinanceAgent(BaseAgent):
         query = input_data.get("query", "")
         context = input_data.get("context", {})
         
-        logger.info(f"Procesando consulta financiera: {query[:50]}...")
+        # Logueamos solo los primeros 50 caracteres de la consulta como texto, no como slice
+        query_preview = query[:50] + "..." if len(query) > 50 else query
+        logger.info(f"Procesando consulta financiera: {query_preview}")
         
-        # Recopilar datos financieros relevantes utilizando MCP
-        financial_data = {}
-        
-        try:
-            # Inicializar cliente MCP si no se ha hecho ya
-            loop = asyncio.get_event_loop()
-            if not loop.run_until_complete(self.mcp_client.initialize()):
-                logger.error("No se pudo inicializar el cliente MCP")
-                return {
-                    "result": "Error al conectar con el servidor de herramientas externas",
-                    "input": query,
-                    "confidence": 0.0,
-                    "error": "Error de conexión MCP"
-                }
-            
-            logger.info("Utilizando herramientas MCP para enriquecer el análisis financiero")
-            
-            # Si hay empresas mencionadas, buscar información sobre ellas
-            if "company" in context:
-                company_data_result = loop.run_until_complete(
-                    self.mcp_client.call_tool("data_lookup", {
-                        "lookup_type": "company",
-                        "query": query,
-                        "company": context["company"]
-                    })
-                )
-                if "error" not in company_data_result:
-                    financial_data["company_info"] = company_data_result
-            
-            # Buscar datos de mercado relevantes
-            market_data_result = loop.run_until_complete(
-                self.mcp_client.call_tool("data_lookup", {
-                    "lookup_type": "market_data",
-                    "query": query
-                })
-            )
-            if "error" not in market_data_result:
-                financial_data["market_data"] = market_data_result
-            
-            # Buscar noticias financieras recientes
-            news_data_result = loop.run_until_complete(
-                self.mcp_client.call_tool("data_lookup", {
-                    "lookup_type": "news",
-                    "query": query + " finanzas"
-                })
-            )
-            if "error" not in news_data_result:
-                financial_data["recent_news"] = news_data_result
-            
-            # Si hay una industria específica, buscar informes del sector
-            if "industry" in context:
-                industry_report_result = loop.run_until_complete(
-                    self.mcp_client.call_tool("data_lookup", {
-                        "lookup_type": "industry",
-                        "query": query,
-                        "industry": context["industry"]
-                    })
-                )
-                if "error" not in industry_report_result:
-                    financial_data["industry_reports"] = industry_report_result
-            
-            # Buscar información web adicional
-            web_data_result = loop.run_until_complete(
-                self.mcp_client.call_tool("data_lookup", {
-                    "lookup_type": "web",
-                    "query": query + " análisis financiero"
-                })
-            )
-            if "error" not in web_data_result:
-                financial_data["web_resources"] = web_data_result
-            
-            # Buscar modelos financieros relevantes
-            financial_models_result = loop.run_until_complete(
-                self.mcp_client.call_tool("financial_models", {
-                    "model_type": "forecast",
-                    "industry": context.get("industry", "general")
-                })
-            )
-            if "error" not in financial_models_result:
-                financial_data["financial_models"] = financial_models_result
-            
-        except Exception as e:
-            logger.error(f"Error al recopilar datos financieros vía MCP: {str(e)}")
-            # Continuar con los datos que se hayan podido recopilar
-        
-        # Preparar input para el prompt con todos los datos recopilados
-        prompt_input = {
-            "query": query,
-            "context": context,
-            "financial_data": financial_data,
-            "services": self.services
-        }
-        
-        # Si no hay un LLM configurado (por falta de API key), devolver una respuesta ficticia
+        # Si no hay un LLM configurado (por falta de API key), devolver un error
         if self.llm is None:
             logger.error("Error: No hay clave API de OpenAI válida. Imposible generar respuesta.")
             processing_time = time.time() - start_time
@@ -177,6 +126,121 @@ class FinanceAgent(BaseAgent):
                 "success": False,
                 "error": "No se ha configurado una clave API de OpenAI válida. Para utilizar este agente, configure la clave en el archivo .env"
             }
+        
+        # Recopilar datos financieros relevantes utilizando herramientas MCP
+        financial_data = {}
+        mcp_tools_used = []
+        
+        # Reinicializar el cliente MCP si es necesario
+        if not self.available_mcp_tools:
+            try:
+                logger.info("Reintentando inicialización del cliente MCP")
+                success = self.mcp_client.initialize_sync()
+                if success:
+                    tools = self.mcp_client.list_tools_sync()
+                    self.available_mcp_tools = [tool["name"] for tool in tools]
+                    logger.info(f"Cliente MCP inicializado exitosamente. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
+                else:
+                    logger.warning("No se pudo reinicializar el cliente MCP")
+            except Exception as e:
+                logger.error(f"Error al reinicializar el cliente MCP: {str(e)}")
+        
+        # Función auxiliar para ejecutar una herramienta MCP con manejo de errores
+        def execute_mcp_tool(tool_name, params, data_key):
+            nonlocal financial_data, mcp_tools_used
+            if tool_name not in self.available_mcp_tools:
+                logger.warning(f"Herramienta '{tool_name}' no disponible en el servidor MCP")
+                return False
+            
+            try:
+                logger.info(f"Llamando a herramienta MCP '{tool_name}' con parámetros: {params}")
+                result = self.mcp_client.call_tool_sync(tool_name, params)
+                
+                if "error" in result:
+                    logger.error(f"Error al ejecutar '{tool_name}': {result['error']}")
+                    return False
+                
+                financial_data[data_key] = result
+                mcp_tools_used.append(tool_name)
+                logger.info(f"Herramienta '{tool_name}' ejecutada exitosamente")
+                return True
+            except Exception as e:
+                logger.error(f"Excepción al ejecutar '{tool_name}': {str(e)}")
+                return False
+        
+        # Extraer información relevante de la consulta
+        company = context.get("company", self._extract_company(query))
+        industry = context.get("industry", self._extract_industry(query))
+        period = context.get("period", "actual")
+        
+        # 1. Buscar datos financieros
+        if company and "buscar_datos_financieros" in self.available_mcp_tools:
+            execute_mcp_tool(
+                "buscar_datos_financieros",
+                {"empresa": company, "periodo": period},
+                "company_financials"
+            )
+        
+        # 2. Calcular ratios financieros si tenemos datos básicos
+        if "company_financials" in financial_data and "datos" in financial_data["company_financials"] and "calcular_ratios_financieros" in self.available_mcp_tools:
+            datos = financial_data["company_financials"]["datos"]
+            execute_mcp_tool(
+                "calcular_ratios_financieros",
+                {
+                    "ingresos": datos.get("ingresos", 0),
+                    "beneficio_neto": datos.get("beneficio_neto", 0),
+                    "activos_totales": datos.get("activos_totales", 0),
+                    "pasivos_totales": datos.get("pasivos_totales", 0)
+                },
+                "financial_ratios"
+            )
+        
+        # 3. Obtener estrategia de marketing si es relevante
+        if industry and "recomendar_estrategia_marketing" in self.available_mcp_tools:
+            execute_mcp_tool(
+                "recomendar_estrategia_marketing",
+                {
+                    "industria": industry,
+                    "presupuesto": context.get("budget", 50000),
+                    "objetivo": context.get("goal", "conversiones"),
+                    "publico_objetivo": context.get("target_audience", "empresas")
+                },
+                "marketing_strategy"
+            )
+        
+        # 4. Analizar tendencia si hay datos históricos disponibles
+        historical_data = context.get("historical_data")
+        if historical_data and isinstance(historical_data, list) and "analizar_tendencia" in self.available_mcp_tools:
+            execute_mcp_tool(
+                "analizar_tendencia",
+                {
+                    "datos": historical_data,
+                    "etiquetas": context.get("historical_labels", [f"P{i+1}" for i in range(len(historical_data))])
+                },
+                "trend_analysis"
+            )
+        
+        # 5. Predecir valores futuros si es relevante
+        if historical_data and isinstance(historical_data, list) and "predecir_valores" in self.available_mcp_tools:
+            execute_mcp_tool(
+                "predecir_valores",
+                {
+                    "datos": historical_data,
+                    "periodos_futuros": context.get("forecast_periods", 3)
+                },
+                "forecast"
+            )
+        
+        # Añadir información sobre las herramientas utilizadas
+        financial_data["tools_used"] = mcp_tools_used
+        
+        # Preparar input para el prompt con todos los datos recopilados
+        prompt_input = {
+            "query": query,
+            "context": context,
+            "financial_data": financial_data,
+            "services": self.services
+        }
         
         # Formatear el prompt usando el método de formato
         formatted_prompt = self._format_finance_prompt(prompt_input)
@@ -190,20 +254,25 @@ class FinanceAgent(BaseAgent):
         
         # Recopilar fuentes de datos utilizadas
         data_sources = []
-        for data_type, data in financial_data.items():
-            if isinstance(data, dict) and "source" in data:
-                data_sources.append({"type": data_type, "source": data["source"]})
+        for tool_name in mcp_tools_used:
+            data_sources.append({"type": tool_name, "source": "MCP Server"})
         
         result = {
-            "result": response.content,
-            "data_sources": data_sources,
+            "result": {
+                "content": response.content,
+                "data_sources": data_sources,
+                "financial_data_summary": self._summarize_financial_data(financial_data),
+                "using_mcp": len(mcp_tools_used) > 0,
+                "mcp_tools_used": mcp_tools_used
+            },
+            "agent": "finance",
             "input": input_data.get("query", ""),
-            "confidence": 0.89,  # Nivel de confianza alto para respuestas financieras
+            "confidence": 0.90,  # Nivel de confianza para respuestas financieras
             "processing_time": processing_time,
             "model": "gpt-3.5-turbo"
         }
         
-        logger.info(f"Análisis financiero completado en {processing_time:.2f} segundos")
+        logger.info(f"Análisis financiero completado en {processing_time:.2f} segundos. Herramientas MCP utilizadas: {', '.join(mcp_tools_used)}")
         
         return result
     
@@ -223,8 +292,8 @@ class FinanceAgent(BaseAgent):
         services = input_data.get("services", [])
         
         prompt = f"""
-        Eres un experto en finanzas y consultoría económica actuando como parte de un sistema 
-        de asistencia empresarial. Debes proporcionar un análisis financiero detallado y 
+        Eres un experto financiero actuando como parte de un sistema de asistencia 
+        empresarial. Debes proporcionar un análisis financiero detallado y 
         recomendaciones prácticas basadas en la siguiente consulta y datos disponibles.
         
         ## Consulta del cliente:
@@ -241,121 +310,100 @@ class FinanceAgent(BaseAgent):
         
         ## Instrucciones:
         1. Analiza detenidamente toda la información financiera proporcionada
-        2. Identifica los puntos clave y patrones significativos en los datos
+        2. Identifica insights financieros relevantes para la consulta
         3. Formula recomendaciones financieras concretas y accionables
-        4. Presenta proyecciones o escenarios cuando sea relevante
-        5. Incluye consideraciones de riesgo y cómo mitigarlos
-        6. Usa terminología financiera precisa pero explica los conceptos complejos
+        4. Considera aspectos de riesgo, retorno y factores macroeconómicos
+        5. Incluye métricas financieras relevantes y su interpretación
+        6. Proporciona opciones o escenarios cuando sea apropiado
         
         ## Formato de respuesta:
         Tu análisis debe seguir esta estructura:
-        1. Resumen ejecutivo del análisis financiero (breve)
-        2. Hallazgos clave basados en los datos proporcionados
-        3. Recomendaciones estratégicas y tácticas
-        4. Métricas o KPIs a monitorear
-        5. Próximos pasos recomendados
+        1. Resumen ejecutivo financiero (breve)
+        2. Análisis de la situación financiera actual
+        3. Recomendaciones estratégicas financieras
+        4. Análisis de riesgos y consideraciones importantes
+        5. Métricas financieras a monitorear (KPIs)
+        6. Próximos pasos recomendados
         
         Responde de manera profesional, basada en datos, y orientada a resultados.
         """
         
-        return prompt 
-    
-    async def get_financial_data(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Obtiene datos financieros usando el cliente MCP.
+        return prompt
         
-        Args:
-            query: Consulta del usuario
-            context: Contexto adicional
-            
-        Returns:
-            Datos financieros recopilados
+    def _extract_industry(self, query: str) -> Optional[str]:
         """
-        financial_data = {}
-        
-        try:
-            # Inicializar el cliente si no se ha hecho
-            if not await self.mcp_client.initialize():
-                logger.warning("No se pudo inicializar el cliente MCP")
-                return {"error": "No se pudo conectar al servidor MCP"}
-            
-            # Buscar datos de mercado
-            market_data = await self.mcp_client.call_tool("data_lookup", {
-                "lookup_type": "market_data",
-                "query": query
-            })
-            if "error" not in market_data:
-                financial_data["market_data"] = market_data
-            
-            # Buscar noticias financieras
-            news_data = await self.mcp_client.call_tool("data_lookup", {
-                "lookup_type": "news",
-                "query": query + " finanzas"
-            })
-            if "error" not in news_data:
-                financial_data["news"] = news_data
-            
-            # Si hay una industria en el contexto, buscar informes
-            if "industry" in context:
-                industry_data = await self.mcp_client.call_tool("data_lookup", {
-                    "lookup_type": "industry",
-                    "industry": context["industry"]
-                })
-                if "error" not in industry_data:
-                    financial_data["industry"] = industry_data
-            
-            # Si hay una empresa en el contexto, buscar información
-            if "company" in context:
-                company_data = await self.mcp_client.call_tool("data_lookup", {
-                    "lookup_type": "company",
-                    "company": context["company"]
-                })
-                if "error" not in company_data:
-                    financial_data["company"] = company_data
-            
-            # Buscar modelos financieros
-            model_type = self._determine_model_type(query)
-            financial_models = await self.mcp_client.call_tool("financial_models", {
-                "model_type": model_type,
-                "industry": context.get("industry", "general")
-            })
-            if "error" not in financial_models:
-                financial_data["models"] = financial_models
-            
-            return financial_data
-            
-        except Exception as e:
-            logger.error(f"Error al obtener datos financieros: {str(e)}")
-            return {"error": str(e)}
-    
-    def _determine_model_type(self, query: str) -> str:
-        """
-        Determina el tipo de modelo financiero más relevante para la consulta.
+        Extrae la industria mencionada en la consulta.
+        Método simplificado para propósitos de ejemplo.
         
         Args:
             query: Consulta del usuario
             
         Returns:
-            Tipo de modelo financiero
+            Nombre de la industria o None si no se identifica
         """
-        query = query.lower()
+        industry_keywords = {
+            "tecnología": ["tecnología", "software", "hardware", "informática", "digital"],
+            "finanzas": ["banco", "finanzas", "financiero", "inversión", "bolsa"],
+            "salud": ["salud", "farmacéutica", "hospital", "médico", "sanitario"],
+            "comercio": ["retail", "comercio", "tienda", "ecommerce", "minorista"],
+            "manufactura": ["manufactura", "fabricación", "industrial", "fábrica"],
+            "energía": ["energía", "petróleo", "gas", "renovable", "electricidad"]
+        }
         
-        if any(word in query for word in ["flujo", "caja", "efectivo", "liquidez"]):
-            return "cash_flow"
-        elif any(word in query for word in ["valoración", "valuar", "valor"]):
-            return "valuation"
-        elif any(word in query for word in ["presupuesto", "gastos"]):
-            return "budget"
-        elif any(word in query for word in ["proyección", "proyectar", "tendencia", "prever"]):
-            return "forecast"
-        elif any(word in query for word in ["inversión", "invertir", "capital"]):
-            return "investment"
-        elif any(word in query for word in ["precio", "tarifa", "estrategia"]):
-            return "pricing"
-        elif any(word in query for word in ["equilibrio", "breakeven"]):
-            return "breakeven"
-        elif any(word in query for word in ["retorno", "roi", "rendimiento"]):
-            return "roi"
-        else:
-            # Tipo por defecto
-            return "forecast" 
+        query_lower = query.lower()
+        
+        for industry, keywords in industry_keywords.items():
+            for keyword in keywords:
+                if keyword in query_lower:
+                    return industry
+        
+        return None 
+
+    def _summarize_financial_data(self, financial_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Genera un resumen de los datos financieros obtenidos para incluir en la respuesta.
+        
+        Args:
+            financial_data: Datos financieros completos
+            
+        Returns:
+            Resumen de los datos financieros
+        """
+        summary = {}
+        
+        if "market_data" in financial_data:
+            summary["market_data_available"] = True
+            if isinstance(financial_data["market_data"], dict) and "source" in financial_data["market_data"]:
+                summary["market_data_source"] = financial_data["market_data"]["source"]
+                
+        if "financial_models" in financial_data:
+            summary["models_available"] = True
+            if isinstance(financial_data["financial_models"], dict) and "model_type" in financial_data["financial_models"]:
+                summary["model_type"] = financial_data["financial_models"]["model_type"]
+        
+        if "financial_news" in financial_data:
+            summary["news_available"] = True
+            
+        if "company_data" in financial_data:
+            summary["company_data_available"] = True
+            
+        return summary 
+
+    def _extract_company(self, query: str) -> str:
+        """
+        Extrae el nombre de la empresa mencionada en la consulta.
+        
+        Args:
+            query: Consulta del usuario
+            
+        Returns:
+            Nombre de la empresa o cadena vacía si no se encuentra
+        """
+        # Implementación simple - en producción usaríamos NER o un modelo específico
+        common_companies = ["Apple", "Tesla", "Amazon", "Google", "Microsoft", "Facebook", "IBM", "Intel"]
+        
+        for company in common_companies:
+            if company.lower() in query.lower():
+                return company
+        
+        return "" 

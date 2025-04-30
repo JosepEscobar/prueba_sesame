@@ -5,6 +5,9 @@ from app.agents.base import BaseAgent
 from app.core.logging import logger
 from app.core.config import get_settings
 from langchain_openai import ChatOpenAI
+import os
+from pathlib import Path
+from app.tools.mcp_client import MCPClient
 
 # Obtener la configuración
 settings = get_settings()
@@ -31,6 +34,13 @@ class AnalysisAgent(BaseAgent):
         )
         # Asignar el LLM importado a la propiedad de la instancia
         self.llm = llm
+        # Inicializar cliente MCP
+        mcp_path = str(Path(os.path.abspath(__file__)).parents[3] / "mcp_server" / "main.py")
+        self.mcp_client = MCPClient(
+            base_url=settings.MCP_CLIENT_URL,
+            use_stdio=True,
+            mcp_server_path=mcp_path
+        )
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """Eres un agente especializado en análisis detallado de datos y textos.
             Tu objetivo es proporcionar análisis profundos, identificar patrones, y extraer insights valiosos.
@@ -52,6 +62,10 @@ class AnalysisAgent(BaseAgent):
         # Extraer la consulta
         query = input_data.get("query", "")
         
+        # Loguear la consulta con un límite seguro
+        query_preview = query[:50] + "..." if len(query) > 50 else query
+        logger.info(f"AnalysisAgent procesando consulta: {query_preview}")
+        
         # Si no hay un LLM configurado (por falta de API key), devolver un error
         if self.llm is None:
             logger.error("Error: No hay clave API de OpenAI válida. Imposible generar respuesta de análisis.")
@@ -68,15 +82,14 @@ class AnalysisAgent(BaseAgent):
         # Formatear el prompt correctamente
         formatted_prompt = self.prompt.format(input=query)
         
-        # Obtener la respuesta del LLM
-        response = self.llm.invoke(formatted_prompt)
+        # Invocar la herramienta MCP 'search_articles'
+        mcp_result = self.mcp_client.call_tool_sync("search_articles", {"query": query})
         
+        # Procesar resultado MCP
         processing_time = time.time() - start_time
-        logger.info(f"AnalysisAgent completó el análisis en {processing_time:.2f} segundos")
-        
         return {
-            "result": response.content,
+            "result": mcp_result.get("result", ""),
             "input": input_data,
-            "confidence": 0.9,
+            "confidence": mcp_result.get("confidence", 0.0),
             "processing_time": processing_time
         } 
