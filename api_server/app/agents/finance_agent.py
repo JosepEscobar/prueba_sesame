@@ -109,243 +109,106 @@ class FinanceAgent(BaseAgent):
     def _execute_impl(self, input_data: Dict[Any, Any]) -> Dict[Any, Any]:
         """
         Ejecuta el análisis financiero.
+        
+        Args:
+            input_data: Datos de entrada con la consulta y contexto
+            
+        Returns:
+            Resultado del análisis financiero
         """
         start_time = time.time()
         
         try:
-            # Extraer la consulta
+            # Obtener la consulta
             query = input_data.get("query", "")
+            
+            # Obtener contexto adicional si existe
             context = input_data.get("context", {})
             
-            # Loguear la consulta con un límite seguro
-            query_preview = query[:50] + "..." if len(query) > 50 else query
-            logger.info(f"FinanceAgent procesando consulta: {query_preview}")
+            # Extraer la industria relevante de la consulta o el contexto
+            industry = context.get("industry") if context and "industry" in context else self._extract_industry(query)
             
-            # Si no hay un LLM configurado (por falta de API key), generar una respuesta simulada
-            if self.llm is None:
-                logger.warning("No hay clave API de OpenAI válida. Generando respuesta simulada.")
-                
-                # Extraer la industria si está disponible
-                industry = context.get("industry", "")
-                if not industry:
-                    industry = self._extract_industry(query)
+            # Obtener datos financieros si los hay
+            financial_data = {}
+            
+            # Intentar extraer nombre de la empresa
+            company_name = context.get("company") if context and "company" in context else self._extract_company(query)
+            
+            # Si tenemos nombre de empresa, intentar obtener sus datos financieros
+            if company_name:
+                try:
+                    company_data = None
+                    # Primero intentar con la herramienta MCP
+                    if self.mcp_client:
+                        tool_response = self.mcp_client.call_tool_sync(
+                            "buscar_datos_financieros",
+                            {"empresa": company_name}
+                        )
+                        if tool_response and isinstance(tool_response, dict) and "result" in tool_response:
+                            company_data = tool_response["result"]
                     
-                # Generar un modelo financiero simulado para la industria específica
-                financial_model = self._generate_fallback_model(industry)
+                    if company_data:
+                        financial_data = self._summarize_financial_data(company_data)
+                except Exception as e:
+                    logger.warning(f"No se pudieron obtener datos financieros para {company_name}: {str(e)}")
+            
+            # Comprobar si tenemos acceso a LLM
+            if self.llm is None:
+                raise Exception("LLM no disponible para generar análisis financiero")
                 
-                processing_time = time.time() - start_time
-                return {
-                    "result": {
-                        "content": financial_model,
-                        "source": "finance_agent",
-                        "model_type": "fallback",
-                        "industry": industry
-                    },
-                    "confidence": 0.7,
-                    "processing_time": processing_time,
-                    "reasoning": "Generado con modo fallback - sin OpenAI API"
-                }
+            # Construir el prompt para el modelo
+            prompt_data = {
+                "query": query,
+                "context": context,
+                "financial_data": financial_data
+            }
             
-            # Construir el prompt para el análisis financiero
-            prompt = self._format_finance_prompt(input_data)
+            prompt = self._format_finance_prompt(prompt_data)
             
-            # Llamar al LLM para generar el análisis
-            response = self.invoke_llm(prompt)
+            # Realizar consulta al LLM
+            from langchain_core.messages import SystemMessage, HumanMessage
             
-            # Procesar la respuesta
+            messages = [
+                SystemMessage(content="Eres un analista financiero experto. Tu tarea es proporcionar análisis financieros precisos y recomendaciones basadas en datos."),
+                HumanMessage(content=prompt)
+            ]
+            
+            # Invocar el LLM
+            response = self.invoke_llm(messages)
+            
+            # Procesar el tiempo y devolver resultado
             processing_time = time.time() - start_time
             
-            # Retornar el resultado completo, no solo un mensaje genérico
             return {
                 "result": {
-                    "content": response,
+                    "content": response.content,
                     "source": "finance_agent",
                     "model_type": "openai",
-                    "query": query
+                    "analysis_complete": True,
+                    "industry": industry
                 },
-                "input": input_data,
                 "confidence": 0.9,
                 "processing_time": processing_time,
-                "reasoning": "Clasificado por análisis de la consulta"
+                "reasoning": "Generado con OpenAI API"
             }
             
         except Exception as e:
-            logger.error(f"Error en FinanceAgent: {str(e)}")
-            
-            # En caso de error, generar una respuesta fallback
-            industry = input_data.get("context", {}).get("industry", "tecnología")
-            financial_model = self._generate_fallback_model(industry)
-            
+            logger.error(f"Error al ejecutar FinanceAgent: {str(e)}")
             processing_time = time.time() - start_time
+            
+            # En caso de error, devolver detalles del error
             return {
+                "error": str(e),
                 "result": {
-                    "content": financial_model,
+                    "content": f"Error al generar análisis financiero: {str(e)}",
                     "source": "finance_agent",
-                    "model_type": "fallback_error",
+                    "model_type": "error",
                     "error": str(e)
                 },
-                "confidence": 0.5,
+                "confidence": 0.0,
                 "processing_time": processing_time,
-                "reasoning": f"Generado con modo fallback debido a error: {str(e)}"
+                "reasoning": f"Error durante el procesamiento: {str(e)}"
             }
-
-    def _generate_fallback_model(self, industry: str) -> str:
-        """
-        Genera un modelo financiero básico cuando el LLM no está disponible.
-        
-        Args:
-            industry: La industria para la que se genera el modelo
-            
-        Returns:
-            Un modelo financiero textual básico
-        """
-        industry = industry.lower() if industry else "tecnología"
-        
-        if "tecnolog" in industry:
-            return """# Modelo Financiero para el Sector Tecnológico con Proyección de Crecimiento
-
-## 1. Resumen Ejecutivo
-Este modelo financiero proporciona proyecciones de crecimiento para empresas en el sector tecnológico, con un enfoque en SaaS, hardware y servicios cloud. Las proyecciones estiman un crecimiento anual del 15-20% durante los próximos 5 años.
-
-## 2. Supuestos Clave
-- Crecimiento de ingresos: 15-20% anual
-- Margen bruto: 65-75%
-- Gastos operativos: 40-45% de ingresos
-- Inversión en I+D: 15-20% de ingresos
-- CAPEX: 8-12% de ingresos anuales
-- Tasa de impuestos efectiva: 22-25%
-
-## 3. Proyecciones Financieras (5 años)
-### Año 1
-- Ingresos: Base + 18%
-- EBITDA: 28% de ingresos
-- Flujo de caja libre: 15% de ingresos
-
-### Año 2
-- Ingresos: Año 1 + 19%
-- EBITDA: 30% de ingresos
-- Flujo de caja libre: 17% de ingresos
-
-### Año 3-5
-- Ingresos: CAGR del 20%
-- EBITDA: Expansión al 32% 
-- Flujo de caja libre: 20% de ingresos
-
-## 4. Métricas Clave de Valoración
-- EV/EBITDA: 18-22x
-- P/E: 25-30x
-- EV/Ingresos: 6-8x
-
-## 5. Factores de Crecimiento
-- Adopción continua de soluciones cloud
-- Expansión de IA y automatización
-- Incremento en ciberseguridad
-- Nuevos mercados emergentes
-
-## 6. Riesgos
-- Competencia intensificada
-- Cambios regulatorios
-- Rápida obsolescencia tecnológica
-- Volatilidad macroeconómica
-
-Este modelo financiero es indicativo y debe adaptarse a la situación específica de cada empresa dentro del sector tecnológico."""
-            
-        elif "finanz" in industry or "financ" in industry:
-            return """# Modelo Financiero para el Sector Financiero con Proyección de Crecimiento
-
-## 1. Resumen Ejecutivo
-Este modelo financiero proyecta el crecimiento para instituciones del sector financiero, incluyendo bancos, aseguradoras y fintechs, con estimaciones de crecimiento del 8-12% anual durante los próximos 5 años.
-
-## 2. Supuestos Clave
-- Crecimiento de ingresos: 8-12% anual
-- Margen neto de interés: 3.2-3.8%
-- Ratio de eficiencia: 50-55%
-- Provisiones para préstamos: 0.8-1.2% de la cartera
-- ROE objetivo: 12-15%
-- Ratio CET1: >12%
-
-## 3. Proyecciones Financieras (5 años)
-### Año 1
-- Ingresos: Base + 9%
-- ROA: 1.1%
-- Crecimiento de activos: 7%
-
-### Año 2
-- Ingresos: Año 1 + 10%
-- ROA: 1.2%
-- Crecimiento de activos: 8%
-
-### Año 3-5
-- Ingresos: CAGR del 11%
-- ROA: Mejora a 1.4%
-- Crecimiento de activos: 10% anual
-
-## 4. Métricas Clave de Valoración
-- P/B: 1.2-1.5x
-- P/E: 10-14x
-- Dividend Yield: 3-4%
-
-## 5. Factores de Crecimiento
-- Digitalización acelerada
-- Nuevos productos fintech
-- Expansión internacional
-- Gestión de patrimonios
-
-## 6. Riesgos
-- Entorno de bajos tipos de interés
-- Mayor regulación
-- Competencia de nuevas fintechs
-- Riesgos cibernéticos
-
-Este modelo financiero es indicativo y debe adaptarse a la situación específica de cada institución financiera."""
-        else:
-            return f"""# Modelo Financiero para el Sector de {industry.capitalize()} con Proyección de Crecimiento
-
-## 1. Resumen Ejecutivo
-Este modelo financiero proporciona proyecciones de crecimiento para empresas en el sector de {industry}, con un enfoque en las tendencias actuales del mercado. Las proyecciones estiman un crecimiento anual del 10-15% durante los próximos 5 años.
-
-## 2. Supuestos Clave
-- Crecimiento de ingresos: 10-15% anual
-- Margen bruto: 50-60%
-- Gastos operativos: 35-40% de ingresos
-- Inversión en desarrollo: 10-15% de ingresos
-- CAPEX: 5-10% de ingresos anuales
-- Tasa de impuestos efectiva: 20-25%
-
-## 3. Proyecciones Financieras (5 años)
-### Año 1
-- Ingresos: Base + 12%
-- EBITDA: 25% de ingresos
-- Flujo de caja libre: 12% de ingresos
-
-### Año 2
-- Ingresos: Año 1 + 13%
-- EBITDA: 26% de ingresos
-- Flujo de caja libre: 14% de ingresos
-
-### Año 3-5
-- Ingresos: CAGR del 15%
-- EBITDA: Expansión al 28% 
-- Flujo de caja libre: 16% de ingresos
-
-## 4. Métricas Clave de Valoración
-- EV/EBITDA: 12-16x
-- P/E: 18-22x
-- EV/Ingresos: 3-5x
-
-## 5. Factores de Crecimiento
-- Innovación constante
-- Expansión a nuevos mercados
-- Mejora de eficiencia operativa
-- Estrategias de marketing digital
-
-## 6. Riesgos
-- Competencia en aumento
-- Cambios en preferencias del consumidor
-- Presiones regulatorias
-- Volatilidad económica
-
-Este modelo financiero es indicativo y debe adaptarse a la situación específica de cada empresa dentro del sector."""
 
     def _format_finance_prompt(self, input_data: Dict[str, Any]) -> str:
         """
@@ -360,7 +223,6 @@ Este modelo financiero es indicativo y debe adaptarse a la situación específic
         query = input_data.get("query", "")
         context = input_data.get("context", {})
         financial_data = input_data.get("financial_data", {})
-        services = input_data.get("services", [])
         
         prompt = f"""
         Eres un experto financiero actuando como parte de un sistema de asistencia 
@@ -377,26 +239,31 @@ Este modelo financiero es indicativo y debe adaptarse a la situación específic
         {financial_data}
         
         ## Tus áreas de especialización:
-        {', '.join(services)}
+        - Análisis financiero sectorial
+        - Valoración de empresas y proyectos
+        - Proyecciones de crecimiento y rentabilidad
+        - Métricas financieras clave (KPIs)
+        - Modelos financieros para distintas industrias
+        - Estrategias de inversión y financiamiento
         
         ## Instrucciones:
-        1. Analiza detenidamente toda la información financiera proporcionada
-        2. Identifica insights financieros relevantes para la consulta
-        3. Formula recomendaciones financieras concretas y accionables
-        4. Considera aspectos de riesgo, retorno y factores macroeconómicos
-        5. Incluye métricas financieras relevantes y su interpretación
-        6. Proporciona opciones o escenarios cuando sea apropiado
+        1. Proporciona un análisis financiero detallado y estructurado
+        2. Incluye métricas relevantes y proyecciones numéricas cuando sea posible
+        3. Basa tus recomendaciones en datos objetivos y tendencias actuales
+        4. Considera el contexto específico de la industria mencionada
+        5. Organiza tu respuesta en secciones claras con títulos
+        6. Incluye elementos visuales como tablas cuando sea útil
         
         ## Formato de respuesta:
-        Tu análisis debe seguir esta estructura:
-        1. Resumen ejecutivo financiero (breve)
-        2. Análisis de la situación financiera actual
-        3. Recomendaciones estratégicas financieras
-        4. Análisis de riesgos y consideraciones importantes
-        5. Métricas financieras a monitorear (KPIs)
-        6. Próximos pasos recomendados
+        Tu análisis debe estar bien estructurado con:
+        - Introducción al contexto financiero
+        - Análisis de la situación actual
+        - Proyecciones justificadas
+        - Recomendaciones concretas
+        - Consideración de riesgos
+        - Conclusiones
         
-        Responde de manera profesional, basada en datos, y orientada a resultados.
+        Proporciona un análisis completo y útil que permita tomar decisiones informadas.
         """
         
         return prompt

@@ -4,8 +4,8 @@ Rutas de la API para el sistema multi-agente
 
 import time
 import uuid
-from typing import Dict, Any, List
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from typing import Dict, Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Body, Request
 
 from app.core.logging import logger
 from app.api.models import (
@@ -22,8 +22,24 @@ from app.agents.summary_agent import SummaryAgent
 from app.agents.finance_agent import FinanceAgent
 from app.agents.marketing_agent import MarketingAgent
 from app.services.data_lookup import DataLookupService
+from app.core.config import get_settings
 
 router = APIRouter()
+
+# Singleton para el servicio de búsqueda de datos
+data_lookup_service = DataLookupService()
+
+# Agente de enrutamiento singleton (inicializado perezosamente)
+router_agent = None
+
+def get_router_agent():
+    """
+    Obtiene una instancia del agente de enrutamiento, inicializándola si es necesario.
+    """
+    global router_agent
+    if router_agent is None:
+        router_agent = RouterAgent()
+    return router_agent
 
 # Instancias de los agentes
 router_agent = RouterAgent()
@@ -33,16 +49,14 @@ summary_agent = SummaryAgent()
 finance_agent = FinanceAgent()
 marketing_agent = MarketingAgent()
 
-# Servicio de búsqueda de datos
-data_lookup_service = DataLookupService()
-
 # Diccionario para mapear tipos de agentes a instancias
 AGENTS = {
-    "router": router_agent,
+    "router_agent": router_agent,
+    "analysis_agent": analysis_agent,
     "analysis": analysis_agent,
-    "action": action_agent,
-    "summary": summary_agent,
+    "finance_agent": finance_agent,
     "finance": finance_agent,
+    "marketing_agent": marketing_agent,
     "marketing": marketing_agent
 }
 
@@ -138,7 +152,6 @@ async def process_query(request: QueryRequest, background_tasks: BackgroundTasks
                 agent = AGENTS[agent_name]
                 logger.info(f"Agente seleccionado: {agent_name}", extra={"request_id": request_id})
             except Exception as e:
-                import traceback
                 error_traceback = traceback.format_exc()
                 logger.error(f"Error al determinar el agente: {str(e)}\nTraceback:\n{error_traceback}", 
                             extra={"request_id": request_id, "error": str(e), "traceback": error_traceback})
@@ -152,7 +165,6 @@ async def process_query(request: QueryRequest, background_tasks: BackgroundTasks
                 "context": request.context or {}
             })
         except Exception as e:
-            import traceback
             error_traceback = traceback.format_exc()
             logger.error(f"Error al ejecutar el agente {agent_name}: {str(e)}\nTraceback:\n{error_traceback}", 
                         extra={"request_id": request_id, "error": str(e), "traceback": error_traceback})
@@ -179,7 +191,6 @@ async def process_query(request: QueryRequest, background_tasks: BackgroundTasks
         )
         
     except Exception as e:
-        import traceback
         error_traceback = traceback.format_exc()
         logger.error(f"Error al procesar consulta: {str(e)}\nTraceback:\n{error_traceback}", 
                     extra={"request_id": request_id, "error": str(e), "traceback": error_traceback})
@@ -417,7 +428,6 @@ async def process_finance_query(request: QueryRequest, background_tasks: Backgro
         )
         
     except Exception as e:
-        import traceback
         logger.error(f"Error al procesar consulta financiera: {str(e)}\n{traceback.format_exc()}")
         
         return QueryResponse(
@@ -549,7 +559,6 @@ async def debug_query(request: QueryRequest):
             result["success"] = True
             result["steps"].append("Ejecución completada con éxito")
         except Exception as e:
-            import traceback
             error_trace = traceback.format_exc()
             result["errors"].append({
                 "step": "Ejecución del agente",
@@ -557,7 +566,6 @@ async def debug_query(request: QueryRequest):
                 "traceback": error_trace
             })
     except Exception as e:
-        import traceback
         error_trace = traceback.format_exc()
         result["errors"].append({
             "step": "Procesamiento general",
@@ -586,7 +594,6 @@ async def simple_test(request: QueryRequest):
             "timestamp": time.time()
         }
     except Exception as e:
-        import traceback
         error_traceback = traceback.format_exc()
         logger.error(f"Error en endpoint simple: {str(e)}\n{error_traceback}")
         return {

@@ -557,35 +557,19 @@ async def process_query(
                 print(f"* DEBUG ERROR: {str(e)}")
                 print(traceback.format_exc())
                 
-                # Intentar usar respuestas alternativas para consultas financieras
-                if "financ" in query.lower() or "model" in query.lower():
-                    # Fallback para consultas financieras
-                    industry = context.get("industry", "general")
-                    logger.info(f"Usando fallback para consulta financiera sobre industria: {industry}")
-                    
-                    # Construir una respuesta directa sin usar el grafo
-                    from app.api.routes import generate_financial_model
-                    model_content = generate_financial_model(industry)
-                    final_result = {
-                        "agent": "finance_agent",
-                        "confidence": 0.85,
-                        "result": {
-                            "content": model_content,
-                            "source": "finance_agent",
-                            "model_type": "direct_response",
-                            "analysis_complete": True
-                        }
-                    }
-                else:
-                    # Fallback para otras consultas
-                    final_result = {
-                        "agent": "analysis_agent",
-                        "confidence": 0.7,
-                        "result": {
-                            "content": "No se pudo procesar la consulta a través del grafo de agentes. Por favor, inténtelo de nuevo.",
-                            "source": "analysis_agent"
-                        }
-                    }
+                # No usamos fallback, devolvemos un error apropiado
+                processing_time = time.time() - start_time
+                return {
+                    "error": str(e),
+                    "result": {
+                        "content": f"Error al procesar la consulta: {str(e)}",
+                        "source": "error",
+                        "model_type": "error"
+                    },
+                    "agent": "error",
+                    "confidence": 0.0,
+                    "processing_time": processing_time
+                }
             
             # Imprimir para depuración
             print(f"* DEBUG: Resultado final del grafo: {final_result}")
@@ -595,18 +579,26 @@ async def process_query(
                 result = final_result
                 # Asegurarnos de que tenga los campos mínimos
                 if "result" not in result:
-                    result["result"] = "Consulta procesada con éxito"
+                    result["result"] = {
+                        "content": "Error: Resultado incompleto sin campo 'result'",
+                        "source": "error"
+                    }
                 if "agent" not in result:
                     result["agent"] = "unknown_agent"
                 if "confidence" not in result:
-                    result["confidence"] = 0.7
+                    result["confidence"] = 0.0
             else:
-                # Respuesta de fallback si no hay resultado válido
-                logger.warning(f"Resultado inválido del grafo: {final_result}")
-                result = {
-                    "result": "No se pudo procesar completamente su consulta",
-                    "agent": "router_agent",
-                    "confidence": 0.5
+                # Resultado inválido, devolver error
+                logger.error(f"Resultado inválido del grafo: {final_result}")
+                return {
+                    "error": "Resultado inválido del grafo",
+                    "result": {
+                        "content": "Error: El grafo de agentes devolvió un resultado con formato inválido",
+                        "source": "error"
+                    },
+                    "agent": "error",
+                    "confidence": 0.0,
+                    "processing_time": time.time() - start_time
                 }
                 
             # Calcular tiempo de procesamiento
@@ -625,11 +617,14 @@ async def process_query(
             print(f"* DEBUG ERROR: {str(e)}")
             traceback.print_exc()  # Imprimir stack trace completo
             
-            # Respuesta de fallback en caso de error
+            # Error global, devolver información clara del error
             processing_time = time.time() - start_time
             return {
-                "result": "Error al procesar su consulta con el grafo de agentes",
                 "error": str(e),
+                "result": {
+                    "content": f"Error al procesar su consulta: {str(e)}",
+                    "source": "error"
+                },
                 "agent": "error", 
                 "confidence": 0.0,
                 "processing_time": processing_time
@@ -642,8 +637,13 @@ async def process_query(
         
         processing_time = time.time() - start_time
         return {
-            "result": "Error al procesar su consulta",
             "error": str(e),
+            "result": {
+                "content": f"Error crítico al procesar su consulta: {str(e)}",
+                "source": "error"
+            },
+            "agent": "error",
+            "confidence": 0.0,
             "processing_time": processing_time
         }
 
