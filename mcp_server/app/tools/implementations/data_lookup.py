@@ -564,7 +564,7 @@ class DataLookupImplementation:
             "timestamp": time.time()
         }
 
-def buscar_datos_financieros(empresa: str, periodo: Optional[str] = None) -> Dict[str, Any]:
+async def buscar_datos_financieros(empresa: str, periodo: Optional[str] = None) -> Dict[str, Any]:
     """
     Busca datos financieros de una empresa específica.
     
@@ -679,7 +679,7 @@ def buscar_datos_financieros(empresa: str, periodo: Optional[str] = None) -> Dic
         "actualizado": (hoy - timedelta(days=random.randint(1, 30))).strftime("%Y-%m-%d")
     }
 
-def data_lookup(lookup_type: str, query: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+async def data_lookup(lookup_type: str, query: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Busca información general según el tipo de búsqueda y consulta.
     

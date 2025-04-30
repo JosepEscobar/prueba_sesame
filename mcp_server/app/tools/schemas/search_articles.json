@@ -1,35 +1,40 @@
 {
     "name": "search_articles",
-    "description": "Busca artículos académicos dada una consulta de búsqueda.",
+    "description": "Busca artículos y noticias relacionados con un tema específico mediante APIs públicas.",
     "inputs": {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Términos de búsqueda"},
-            "max_results": {"type": "integer", "description": "Número máximo de resultados", "default": 5},
-            "sort_by": {"type": "string", "description": "Criterio de ordenación", "enum": ["relevance", "date", "citations"], "default": "relevance"},
-            "date_range": {"type": "string", "description": "Rango de fechas para la búsqueda", "default": "all"}
+            "tema": {"type": "string", "description": "Tema o palabra clave para buscar (alternativa a query)"},
+            "query": {"type": "string", "description": "Tema o palabra clave para buscar (alternativa a tema)"},
+            "max_resultados": {"type": "integer", "description": "Número máximo de resultados a devolver", "default": 5, "maximum": 10},
+            "incluir_resumen": {"type": "boolean", "description": "Si se debe incluir un resumen de cada artículo", "default": true},
+            "fuentes": {"type": "array", "items": {"type": "string"}, "description": "Lista de fuentes específicas donde buscar (opcional)"}
         },
-        "required": ["query"]
+        "oneOf": [
+            {"required": ["tema"]},
+            {"required": ["query"]}
+        ]
     },
     "outputs": {
         "type": "object",
         "properties": {
-            "articles": {
+            "tema": {"type": "string", "description": "Tema o consulta utilizada para la búsqueda"},
+            "num_resultados": {"type": "integer", "description": "Número de resultados encontrados"},
+            "fecha_busqueda": {"type": "string", "description": "Fecha en que se realizó la búsqueda"},
+            "articulos": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "title": {"type": "string", "description": "Título del artículo"},
-                        "authors": {"type": "array", "items": {"type": "string"}, "description": "Autores del artículo"},
-                        "publication": {"type": "string", "description": "Nombre de la publicación"},
-                        "year": {"type": "integer", "description": "Año de publicación"},
-                        "summary": {"type": "string", "description": "Resumen del artículo"},
+                        "titulo": {"type": "string", "description": "Título del artículo"},
+                        "fuente": {"type": "string", "description": "Fuente o plataforma del artículo"},
+                        "fecha": {"type": "string", "description": "Fecha de publicación del artículo"},
                         "url": {"type": "string", "description": "URL del artículo"},
-                        "citations": {"type": "integer", "description": "Número de citas"}
+                        "resumen": {"type": "string", "description": "Resumen o fragmento del artículo"}
                     }
                 }
             },
-            "total_results": {"type": "integer", "description": "Número total de resultados disponibles"}
+            "error": {"type": "string", "description": "Mensaje de error en caso de fallo"}
         }
     }
 } 

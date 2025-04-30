@@ -11,7 +11,7 @@ import random
 import math
 import numpy as np
 
-def calcular_ratios_financieros(
+async def calcular_ratios_financieros(
     ingresos: float, 
     beneficio_neto: float, 
     activos_totales: float, 
@@ -172,7 +172,7 @@ def generar_recomendaciones_ratios(ratios: Dict[str, float]) -> List[str]:
     
     return recomendaciones
 
-def recomendar_estrategia_marketing(
+async def recomendar_estrategia_marketing(
     industria: str,
     presupuesto: float, 
     objetivo: str,
@@ -311,7 +311,7 @@ def generar_calendario_marketing() -> Dict[str, List[str]]:
     
     return calendario
 
-def analizar_tendencia(
+async def analizar_tendencia(
     datos: List[float],
     etiquetas: Optional[List[str]] = None
 ) -> Dict[str, Any]:
@@ -431,7 +431,7 @@ def analizar_tendencia(
     
     return resultado
 
-def predecir_valores(datos: List[float], periodos_futuros: int = 3) -> Dict[str, Any]:
+async def predecir_valores(datos: List[float], periodos_futuros: int = 3) -> Dict[str, Any]:
     """
     Predice valores futuros basados en datos históricos usando tendencias simples.
     
@@ -552,4 +552,144 @@ def predecir_valores(datos: List[float], periodos_futuros: int = 3) -> Dict[str,
     if periodos_futuros > len(datos):
         resultado["advertencias"].append("Predecir más periodos que los datos históricos disponibles reduce significativamente la confianza.")
     
-    return resultado 
+    return resultado
+
+async def financial_models(
+    industria: str,
+    metodo: str,
+    datos: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Proporciona modelos financieros y análisis para una industria específica.
+    
+    Args:
+        industria: Industria o sector para analizar
+        metodo: Tipo de análisis financiero a realizar
+        datos: Datos adicionales para el análisis (opcional)
+    
+    Returns:
+        Resultados del análisis financiero
+    """
+    # Datos de ejemplo para diferentes industrias
+    modelos_industria = {
+        "tecnología": {
+            "crecimiento_anual": 14.5,
+            "margen_beneficio_promedio": 22.3,
+            "inversion_id_promedio": 18.2,
+            "roi_esperado": 25.4,
+            "tiempo_recuperacion": 2.5
+        },
+        "finanzas": {
+            "crecimiento_anual": 8.2,
+            "margen_beneficio_promedio": 30.1,
+            "inversion_id_promedio": 5.3,
+            "roi_esperado": 18.7,
+            "tiempo_recuperacion": 3.8
+        },
+        "salud": {
+            "crecimiento_anual": 7.5,
+            "margen_beneficio_promedio": 15.8,
+            "inversion_id_promedio": 12.4,
+            "roi_esperado": 16.5,
+            "tiempo_recuperacion": 4.2
+        },
+        "retail": {
+            "crecimiento_anual": 4.8,
+            "margen_beneficio_promedio": 8.2,
+            "inversion_id_promedio": 3.1,
+            "roi_esperado": 12.3,
+            "tiempo_recuperacion": 3.1
+        }
+    }
+    
+    # Si la industria no está en nuestros datos, usar tecnología como default
+    industria_data = modelos_industria.get(industria.lower(), modelos_industria["tecnología"])
+    
+    # Procesar según el método solicitado
+    if metodo == "proyeccion_crecimiento":
+        # Proyección de crecimiento para los próximos 5 años
+        crecimiento_base = industria_data["crecimiento_anual"]
+        proyeccion = [
+            round(crecimiento_base * (1 + 0.05 * i), 2) for i in range(5)
+        ]
+        return {
+            "industria": industria,
+            "metodo": metodo,
+            "proyeccion_5_años": proyeccion,
+            "crecimiento_promedio": sum(proyeccion) / len(proyeccion)
+        }
+    
+    elif metodo == "analisis_rentabilidad":
+        # Análisis de rentabilidad
+        return {
+            "industria": industria,
+            "metodo": metodo,
+            "margen_beneficio": industria_data["margen_beneficio_promedio"],
+            "roi": industria_data["roi_esperado"],
+            "tiempo_recuperacion_años": industria_data["tiempo_recuperacion"]
+        }
+    
+    elif metodo == "comparativa_industria":
+        # Comparativa con otras industrias
+        comparativa = {}
+        for ind, data in modelos_industria.items():
+            comparativa[ind] = {
+                "crecimiento": data["crecimiento_anual"],
+                "margen": data["margen_beneficio_promedio"]
+            }
+        return {
+            "industria_base": industria,
+            "metodo": metodo,
+            "comparativa": comparativa
+        }
+    
+    else:
+        # Método no reconocido, devolver datos generales
+        return {
+            "industria": industria,
+            "datos_financieros": industria_data,
+            "nota": "Método no reconocido, se devuelven datos generales de la industria"
+        }
+
+async def analizar_rendimiento_campania(
+    nombre_campania: str,
+    impresiones: int,
+    clics: int,
+    conversiones: int,
+    coste: float
+) -> Dict[str, Any]:
+    """
+    Analiza el rendimiento de una campaña de marketing.
+    
+    Args:
+        nombre_campania: Nombre de la campaña
+        impresiones: Número total de impresiones
+        clics: Número total de clics
+        conversiones: Número total de conversiones
+        coste: Coste total de la campaña
+    
+    Returns:
+        Análisis de rendimiento de la campaña
+    """
+    # Cálculo de métricas básicas
+    ctr = clics / impresiones if impresiones > 0 else 0
+    cpc = coste / clics if clics > 0 else 0
+    conversion_rate = conversiones / clics if clics > 0 else 0
+    cpa = coste / conversiones if conversiones > 0 else 0
+    roi = (conversiones * 100 - coste) / coste if coste > 0 else 0
+    
+    return {
+        "campania": nombre_campania,
+        "metricas": {
+            "CTR": ctr,
+            "CPC": cpc,
+            "tasa_conversion": conversion_rate,
+            "CPA": cpa,
+            "ROI": roi
+        },
+        "evaluacion": {
+            "rendimiento_ctr": "Bueno" if ctr > 0.02 else "Regular" if ctr > 0.01 else "Bajo",
+            "eficiencia_coste": "Buena" if cpa < 50 else "Regular" if cpa < 100 else "Baja",
+            "rentabilidad": "Alta" if roi > 1 else "Media" if roi > 0 else "Baja"
+        }
+    } 

@@ -19,6 +19,7 @@ import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
+import requests
 
 # Configurar logging
 logs_dir = Path(__file__).parent / "logs"
@@ -548,135 +549,17 @@ async def financial_models(
             "nota": "Método no reconocido, se devuelven datos generales de la industria"
         }
 
-@register_tool()
-async def search_articles(
-    tema: Optional[str] = None,
-    query: Optional[str] = None,
-    max_resultados: int = 5,
-    incluir_resumen: bool = True,
-    fuentes: Optional[List[str]] = None
-) -> Dict[str, Any]:
-    """
-    Busca artículos y noticias relacionados con un tema específico.
-    
-    Args:
-        tema: Tema o palabra clave para buscar (alternativa a query)
-        query: Tema o palabra clave para buscar (alternativa a tema)
-        max_resultados: Número máximo de resultados a devolver
-        incluir_resumen: Si se debe incluir un resumen de cada artículo
-        fuentes: Lista de fuentes específicas donde buscar (opcional)
-    
-    Returns:
-        Lista de artículos encontrados con metadatos
-    """
-    # Usar tema o query, dando prioridad a tema si ambos están presentes
-    tema_busqueda = tema if tema is not None else query
-    
-    if tema_busqueda is None:
-        return {
-            "error": "Debe proporcionar un parámetro 'tema' o 'query' para la búsqueda"
-        }
-    
-    # Limitar el número máximo de resultados
-    if max_resultados > 10:
-        max_resultados = 10
-    
-    # Datos simulados para diferentes temas
-    resultados_por_tema = {
-        "tecnología": [
-            {
-                "titulo": "Avances en inteligencia artificial generativa",
-                "fuente": "Tech Review",
-                "fecha": "2025-04-25",
-                "url": "https://ejemplo.com/ia-generativa",
-                "resumen": "Los últimos avances en IA generativa están transformando múltiples industrias, desde la creación de contenido hasta el diseño de productos."
-            },
-            {
-                "titulo": "El futuro de la computación cuántica",
-                "fuente": "Quantum World",
-                "fecha": "2025-04-20",
-                "url": "https://ejemplo.com/computacion-cuantica",
-                "resumen": "Las empresas tecnológicas compiten por lograr la supremacía cuántica con nuevos procesadores de más de 1000 qubits."
-            },
-            {
-                "titulo": "Tendencias en desarrollo web para 2025",
-                "fuente": "Web Developer Magazine",
-                "fecha": "2025-04-18",
-                "url": "https://ejemplo.com/tendencias-web-2025",
-                "resumen": "Las arquitecturas serverless y los componentes web están redefiniendo cómo se construyen aplicaciones modernas."
-            }
-        ],
-        "marketing": [
-            {
-                "titulo": "Estrategias de marketing basadas en IA",
-                "fuente": "Marketing Digital Today",
-                "fecha": "2025-04-26",
-                "url": "https://ejemplo.com/marketing-ia",
-                "resumen": "Las herramientas de IA están permitiendo personalización en tiempo real y optimización automática de campañas."
-            },
-            {
-                "titulo": "El auge del marketing contextual",
-                "fuente": "Brand Insights",
-                "fecha": "2025-04-22",
-                "url": "https://ejemplo.com/marketing-contextual",
-                "resumen": "Las marcas están utilizando señales contextuales para ofrecer mensajes más relevantes y menos intrusivos."
-            }
-        ],
-        "finanzas": [
-            {
-                "titulo": "Nuevas regulaciones para criptomonedas",
-                "fuente": "Financial Times",
-                "fecha": "2025-04-28",
-                "url": "https://ejemplo.com/regulacion-cripto",
-                "resumen": "Los reguladores globales avanzan hacia un marco común para activos digitales y criptomonedas."
-            },
-            {
-                "titulo": "Tendencias de inversión sostenible",
-                "fuente": "Sustainable Finance",
-                "fecha": "2025-04-24",
-                "url": "https://ejemplo.com/inversion-sostenible",
-                "resumen": "Los fondos ESG continúan atrayendo inversores mientras aumenta el escrutinio sobre el greenwashing."
-            }
-        ]
-    }
-    
-    # Normalizar tema (convertir a minúsculas)
-    tema_lower = tema_busqueda.lower()
-    
-    # Buscar resultados exactos primero
-    resultados = []
-    if tema_lower in resultados_por_tema:
-        resultados = resultados_por_tema[tema_lower][:max_resultados]
-    else:
-        # Buscar en todos los temas si no hay coincidencia exacta
-        for tema_clave, articulos in resultados_por_tema.items():
-            if tema_lower in tema_clave or tema_clave in tema_lower:
-                # Añadir artículos relacionados
-                resultados.extend(articulos)
-        
-        # Limitar resultados
-        resultados = resultados[:max_resultados]
-    
-    # Filtrar por fuentes si se especifican
-    if fuentes and isinstance(fuentes, list) and len(fuentes) > 0:
-        fuentes_lower = [f.lower() for f in fuentes]
-        resultados = [
-            articulo for articulo in resultados 
-            if articulo.get("fuente", "").lower() in fuentes_lower
-        ]
-    
-    # Eliminar resúmenes si no se solicitan
-    if not incluir_resumen:
-        for articulo in resultados:
-            if "resumen" in articulo:
-                del articulo["resumen"]
-    
-    return {
-        "tema": tema_busqueda,
-        "num_resultados": len(resultados),
-        "fecha_busqueda": datetime.now().strftime("%Y-%m-%d"),
-        "articulos": resultados
-    }
+# ---- Las implementaciones de herramientas se han trasladado a los módulos app/tools/implementations/ ----
+# Ahora todas las herramientas son importadas directamente desde estos módulos específicos
+
+# Importar implementaciones desde módulos correspondientes
+from app.tools.implementations import AVAILABLE_TOOLS
+
+# -- Registrar todas las herramientas automáticamente desde AVAILABLE_TOOLS --
+for tool_func in AVAILABLE_TOOLS:
+    tool_name = tool_func.__name__
+    logger.info(f"Registrando herramienta: {tool_name}")
+    register_tool(name=tool_name)(tool_func)
 
 # Status endpoint
 @app.get("/status")
