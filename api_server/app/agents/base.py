@@ -6,6 +6,7 @@ import json
 from app.core.logging import logger
 from app.core.metrics import MetricsCollector
 from app.core.config import get_settings
+from langchain_openai import ChatOpenAI
 
 settings = get_settings()
 
@@ -42,6 +43,9 @@ class BaseAgent(abc.ABC):
                 from openai import OpenAI
                 self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
                 
+                # Log para depuración
+                logger.info(f"Inicializando cliente OpenAI para {name} con API KEY: {settings.OPENAI_API_KEY[:5]}...{settings.OPENAI_API_KEY[-5:] if len(settings.OPENAI_API_KEY) > 10 else ''}")
+                
                 # Verificar que el cliente funciona con una prueba simple
                 response = self.client.chat.completions.create(
                     model=settings.OPENAI_MODEL,
@@ -58,7 +62,6 @@ class BaseAgent(abc.ABC):
                     
                     # Ahora intentamos inicializar el LLM de LangChain con el cliente validado
                     try:
-                        from langchain_openai import ChatOpenAI
                         self.llm = ChatOpenAI(
                             model_name=settings.OPENAI_MODEL,
                             temperature=settings.TEMPERATURE,

@@ -16,7 +16,7 @@ def load_api_credentials():
     Returns:
         tuple: (openai_key, has_valid_key)
     """
-    # Obtener la configuración
+    # Obtener la configuración usando la función cacheada
     settings = get_settings()
     
     # Verificar si hay proxies en las variables de entorno y manejarlos correctamente
@@ -46,8 +46,9 @@ openai_api_key, has_openai = load_api_credentials()
 # Configurar la API key de OpenAI directamente en el entorno
 if has_openai:
     os.environ["OPENAI_API_KEY"] = openai_api_key
+    logger.info(f"API key de OpenAI establecida en variables de entorno: {openai_api_key[:5]}...{openai_api_key[-5:] if len(openai_api_key) > 10 else ''}")
 
-# Obtener la configuración completa
+# Obtener la configuración completa (usando la función cacheada)
 settings = get_settings()
 
 # LLM global usando la API de OpenAI directamente

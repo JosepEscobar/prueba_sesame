@@ -17,13 +17,15 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
-from dotenv import load_dotenv
 
-# Cargar variables de entorno desde .env
-dotenv_path = Path(__file__).parent / ".env"
-if dotenv_path.exists():
-    load_dotenv(dotenv_path)
-    print(f"Variables de entorno cargadas desde {dotenv_path}")
+# Añadir el directorio raíz al path para poder importar módulos
+sys.path.insert(0, str(Path(__file__).parent))
+
+# Importar primero la configuración para asegurar que las variables de entorno estén cargadas
+from app.core.config import get_settings
+
+# Obtener configuración
+settings = get_settings()
 
 # Configurar logging
 logs_dir = Path(__file__).parent / "logs"
@@ -39,9 +41,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("api_server")
-
-# Añadir el directorio raíz al path para poder importar módulos
-sys.path.insert(0, str(Path(__file__).parent))
 
 # Importamos el Router Agent - después de configurar el logger
 try:
