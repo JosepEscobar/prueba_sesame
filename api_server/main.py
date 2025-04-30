@@ -17,9 +17,13 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
+from dotenv import load_dotenv
 
-# Añadir el directorio raíz al path para poder importar módulos
-sys.path.insert(0, str(Path(__file__).parent))
+# Cargar variables de entorno desde .env
+dotenv_path = Path(__file__).parent / ".env"
+if dotenv_path.exists():
+    load_dotenv(dotenv_path)
+    print(f"Variables de entorno cargadas desde {dotenv_path}")
 
 # Configurar logging
 logs_dir = Path(__file__).parent / "logs"
@@ -35,6 +39,16 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("api_server")
+
+# Añadir el directorio raíz al path para poder importar módulos
+sys.path.insert(0, str(Path(__file__).parent))
+
+# Importamos el Router Agent - después de configurar el logger
+try:
+    from app.agents.router_agent import RouterAgent
+    logger.info("RouterAgent importado correctamente")
+except Exception as e:
+    logger.error(f"Error al importar RouterAgent: {str(e)}")
 
 # ---- Modelos de datos Pydantic ----
 class HealthResponse(BaseModel):
@@ -535,48 +549,47 @@ async def process_query(request: QueryRequest):
     El agente router analizará la consulta y determinará qué agente especializado
     debe procesarla. Retorna el resultado generado por el agente seleccionado.
     """
-    import time
-    import httpx
-    
     start_time = time.time()
     logger.info(f"Recibida consulta: {request.query[:50]}...")
     
     try:
-        # Preparamos los datos
+        # Preparamos los datos básicos
         empresa = request.context.get("empresa", "MiEmpresa")
         periodo = request.context.get("periodo", "último trimestre")
         
-        # Enfoque de clasificación basado en palabras clave
-        consulta = request.query.lower()
-        
-        keywords_finanzas = ["financiero", "finanzas", "ingresos", "beneficio", "margen", 
-                            "roi", "ganancia", "rentabilidad", "balance", "contabilidad"]
-        keywords_marketing = ["marketing", "mercado", "campaña", "publicidad", "promoción", 
-                             "ventas", "clientes", "segmentación", "conversión"]
-        keywords_tendencias = ["tendencia", "análisis", "analiza", "predicción", "pronóstico",
-                              "proyección", "futuro", "evolución", "comparativa"]
-        
-        score_finanzas = sum(1 for kw in keywords_finanzas if kw in consulta)
-        score_marketing = sum(1 for kw in keywords_marketing if kw in consulta)
-        score_tendencias = sum(1 for kw in keywords_tendencias if kw in consulta)
-        
-        scores = {
-            "finanzas": score_finanzas,
-            "marketing": score_marketing,
-            "tendencias": score_tendencias
-        }
-        
-        # Determinar el tipo de agente basado en las puntuaciones
-        if scores["finanzas"] > scores["marketing"] and scores["finanzas"] > scores["tendencias"]:
-            agent_type = "finance_agent"
-        elif scores["marketing"] > scores["finanzas"] and scores["marketing"] > scores["tendencias"]:
-            agent_type = "marketing_agent"
-        else:
-            agent_type = "analysis_agent"
+        # Usamos el RouterAgent para clasificar la consulta
+        try:
+            router_agent = RouterAgent()
             
-        logger.info(f"Clasificación de consulta: {agent_type} (scores: {scores})")
+            # Comprobamos si el RouterAgent tiene un LLM disponible
+            if router_agent.llm is None:
+                logger.warning("RouterAgent no tiene LLM configurado. Usando clasificación por keywords.")
+                agent_type = classify_query_by_keywords(request.query)
+                logger.info(f"Consulta clasificada como: {agent_type} (usando keywords)")
+            else:
+                # Clasificar usando el RouterAgent con LLM
+                router_input = {
+                    "query": request.query,
+                    "context": request.context
+                }
+                
+                router_result = router_agent.execute(router_input)
+                
+                if "error" in router_result:
+                    logger.error(f"Error en RouterAgent: {router_result['error']}")
+                    # Fallback a clasificación por keywords
+                    agent_type = classify_query_by_keywords(request.query)
+                    logger.info(f"Consulta clasificada como: {agent_type} (fallback)")
+                else:
+                    agent_type = router_result.get("agent", "analysis_agent")
+                    confidence = router_result.get("confidence", 0.7)
+                    logger.info(f"RouterAgent clasificó la consulta como: {agent_type} (confianza: {confidence})")
+        except Exception as e:
+            logger.error(f"Error al usar RouterAgent: {str(e)}. Usando clasificación directa.")
+            agent_type = classify_query_by_keywords(request.query)
+            logger.info(f"Consulta clasificada como: {agent_type} (fallback después de error)")
         
-        # Procesamos la consulta según el tipo de agente identificado
+        # Procesamos la consulta según el tipo de agente identificado usando herramientas MCP
         async with httpx.AsyncClient() as client:
             # Registramos la petición HTTP
             logger.info(f"Obteniendo datos básicos para: {empresa}, {periodo}")
@@ -617,14 +630,14 @@ async def process_query(request: QueryRequest):
                     
                     return {
                         "result": resultado,
-                        "agent": "mcp_direct_finance",
+                        "agent": "finance_agent",
                         "confidence": 0.85,
                         "processing_time": time.time() - start_time
                     }
                 else:
                     return {
                         "result": f"Datos financieros para {empresa}: {datos_financieros}",
-                        "agent": "mcp_direct_finance",
+                        "agent": "finance_agent",
                         "confidence": 0.7,
                         "processing_time": time.time() - start_time
                     }
@@ -652,12 +665,12 @@ async def process_query(request: QueryRequest):
                     
                     return {
                         "result": resultado,
-                        "agent": "mcp_direct_marketing",
+                        "agent": "marketing_agent",
                         "confidence": 0.8,
                         "processing_time": time.time() - start_time
                     }
             
-            else:  # analysis_agent o cualquier otro tipo
+            else:  # analysis_agent u otros
                 # Si es una consulta de análisis, usar la herramienta de tendencia
                 # Intentaremos con los datos históricos si los proveen
                 datos_serie = request.context.get("datos", [100, 120, 150, 180, 210])
@@ -677,7 +690,7 @@ async def process_query(request: QueryRequest):
                     
                     return {
                         "result": resultado,
-                        "agent": "mcp_direct_analysis",
+                        "agent": "analysis_agent",
                         "confidence": 0.75,
                         "processing_time": time.time() - start_time
                     }
@@ -699,6 +712,66 @@ async def process_query(request: QueryRequest):
             "confidence": 0.1,
             "processing_time": time.time() - start_time
         }
+
+def classify_query_by_keywords(query: str) -> str:
+    """
+    Clasifica una consulta por palabras clave.
+    
+    Args:
+        query: La consulta a clasificar
+    
+    Returns:
+        El tipo de agente más adecuado
+    """
+    # Diccionario de agentes con sus palabras clave
+    agents_keywords = {
+        "finance_agent": [
+            "financiero", "finanzas", "ingresos", "beneficio", "margen", 
+            "roi", "ganancia", "rentabilidad", "balance", "contabilidad",
+            "fiscal", "impuestos", "patrimonio", "capital", "inversión",
+            "activos", "pasivos", "presupuesto", "costes", "gastos"
+        ],
+        "marketing_agent": [
+            "marketing", "mercado", "campaña", "publicidad", "promoción", 
+            "ventas", "clientes", "segmentación", "conversión", "marca",
+            "audiencia", "consumidor", "target", "posicionamiento", "social",
+            "digital", "comunicación", "medios", "engagement", "producto"
+        ],
+        "analysis_agent": [
+            "tendencia", "análisis", "analiza", "predicción", "pronóstico",
+            "proyección", "futuro", "evolución", "comparativa", "datos",
+            "información", "patrones", "insights", "métricas", "indicadores",
+            "histórico", "estadística", "correlación", "hallazgos", "síntesis"
+        ]
+    }
+    
+    # Convertir la consulta a minúsculas
+    query_lower = query.lower()
+    
+    # Calcular puntuaciones para cada agente
+    scores = {}
+    for agent_name, keywords in agents_keywords.items():
+        score = sum(1 for kw in keywords if kw in query_lower)
+        scores[agent_name] = score
+    
+    # Encontrar el agente con mayor puntuación
+    if not scores:
+        return "analysis_agent"  # Por defecto
+        
+    max_score = max(scores.values())
+    if max_score == 0:
+        return "analysis_agent"  # Si ninguno tiene keywords, usar análisis
+        
+    # Si hay múltiples con la misma puntuación máxima, priorizar en este orden
+    priority = ["finance_agent", "marketing_agent", "analysis_agent"]
+    max_agents = [agent for agent, score in scores.items() if score == max_score]
+    
+    for p in priority:
+        if p in max_agents:
+            return p
+            
+    # Si ninguno de los priorizados está en los máximos, tomar el primero
+    return max_agents[0]
 
 def simulate_agent_response(agent_name: str, query: str) -> str:
     """

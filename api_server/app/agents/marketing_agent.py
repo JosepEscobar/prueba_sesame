@@ -198,45 +198,70 @@ class MarketingAgent(BaseAgent):
             "services": self.services
         }
         
-        # Formatear el prompt usando el método de formato
+        # Generar un prompt personalizado para el LLM
         formatted_prompt = self._format_marketing_prompt(prompt_input)
         
-        # Generar análisis de marketing utilizando el LLM
-        logger.info("Generando análisis de marketing con el LLM")
-        response = self.llm.invoke(formatted_prompt)
+        # Crear mensajes para la llamada a LangChain
+        from langchain_core.messages import SystemMessage, HumanMessage
         
-        # Estructurar la respuesta
-        processing_time = time.time() - start_time
+        system_message = """Eres un experto en marketing y estrategias de mercado. Proporciona análisis detallados y recomendaciones estratégicas basadas en los datos disponibles.
+
+Tu respuesta debe ser:
+- Estratégica y orientada a objetivos
+- Basada en los datos proporcionados
+- Estructurada con secciones claras
+- Accionable y específica
+
+Incluye métricas relevantes cuando estén disponibles y destaca oportunidades clave para mejorar."""
         
-        # Recopilar fuentes de datos utilizadas
-        data_sources = []
-        if "recent_news" in marketing_data and isinstance(marketing_data["recent_news"], dict):
-            source = marketing_data["recent_news"].get("source")
-            if source:
-                data_sources.append({"type": "news", "source": source})
+        messages = [
+            SystemMessage(content=system_message),
+            HumanMessage(content=formatted_prompt)
+        ]
+        
+        try:
+            # Invocar el LLM usando el nuevo método para logging
+            response = self.invoke_llm(messages, prompt_type="langchain")
+            
+            if not response or not hasattr(response, 'content'):
+                raise ValueError("El LLM no generó una respuesta válida")
                 
-        if "industry_reports" in marketing_data and isinstance(marketing_data["industry_reports"], dict):
-            source = marketing_data["industry_reports"].get("source")
-            if source:
-                data_sources.append({"type": "report", "source": source})
-        
-        result = {
-            "result": {
-                "content": response.content,
+            result = response.content
+            confidence = 0.85  # Alta confianza para consultas de marketing
+            
+            # Métricas para el resultado
+            processing_time = time.time() - start_time
+            
+            # Recopilar fuentes de datos utilizadas
+            data_sources = []
+            if marketing_data:
+                for source_name, source_data in marketing_data.items():
+                    data_sources.append({"type": source_name, "source": "MCP Server"})
+                
+            # Estructura de respuesta más sencilla
+            return {
+                "result": result,
+                "input": query,
+                "context": context,
+                "marketing_data": self._summarize_marketing_data(marketing_data),
                 "data_sources": data_sources,
-                "marketing_data_summary": self._summarize_marketing_data(marketing_data),
-                "using_mcp": True
-            },
-            "agent": "marketing",
-            "input": input_data.get("query", ""),
-            "confidence": 0.87,  # Nivel de confianza para respuestas de marketing
-            "processing_time": processing_time,
-            "model": "gpt-3.5-turbo"
-        }
-        
-        logger.info(f"Análisis de marketing completado en {processing_time:.2f} segundos utilizando herramientas MCP")
-        
-        return result
+                "confidence": confidence,
+                "processing_time": processing_time,
+                "success": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error al generar respuesta de marketing: {str(e)}")
+            processing_time = time.time() - start_time
+            
+            return {
+                "result": f"Error al procesar la consulta de marketing: {str(e)}",
+                "input": query,
+                "confidence": 0.0,
+                "processing_time": processing_time,
+                "success": False,
+                "error": str(e)
+            }
     
     def _format_marketing_prompt(self, input_data: Dict[str, Any]) -> str:
         """

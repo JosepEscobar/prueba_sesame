@@ -245,36 +245,73 @@ class FinanceAgent(BaseAgent):
         # Formatear el prompt usando el método de formato
         formatted_prompt = self._format_finance_prompt(prompt_input)
         
-        # Generar análisis financiero utilizando el LLM
-        logger.info("Generando análisis financiero con el LLM")
-        response = self.llm.invoke(formatted_prompt)
+        # Usar las herramientas MCP recopiladas para construir el contexto
+        tools_context = []
+        for tool in mcp_tools_used:
+            tools_context.append(f"- {tool}")
         
-        # Estructurar la respuesta
-        processing_time = time.time() - start_time
+        tools_used_str = "\n".join(tools_context) if tools_context else "No se utilizaron herramientas MCP"
         
-        # Recopilar fuentes de datos utilizadas
-        data_sources = []
-        for tool_name in mcp_tools_used:
-            data_sources.append({"type": tool_name, "source": "MCP Server"})
+        # Crear mensaje para LangChain
+        from langchain_core.messages import SystemMessage, HumanMessage
         
-        result = {
-            "result": {
-                "content": response.content,
-                "data_sources": data_sources,
-                "financial_data_summary": self._summarize_financial_data(financial_data),
-                "using_mcp": len(mcp_tools_used) > 0,
-                "mcp_tools_used": mcp_tools_used
-            },
-            "agent": "finance",
-            "input": input_data.get("query", ""),
-            "confidence": 0.90,  # Nivel de confianza para respuestas financieras
-            "processing_time": processing_time,
-            "model": "gpt-3.5-turbo"
-        }
+        system_message = f"""Eres un asistente financiero especializado. Utiliza los datos proporcionados para realizar un análisis detallado y profesional.
         
-        logger.info(f"Análisis financiero completado en {processing_time:.2f} segundos. Herramientas MCP utilizadas: {', '.join(mcp_tools_used)}")
+Herramientas utilizadas:
+{tools_used_str}
         
-        return result
+Proporciona un análisis claro, preciso y estructurado. Incluye:
+1. Un resumen ejecutivo
+2. Análisis de puntos clave
+3. Métricas relevantes
+4. Conclusiones y recomendaciones
+"""
+        
+        messages = [
+            SystemMessage(content=system_message),
+            HumanMessage(content=formatted_prompt)
+        ]
+        
+        try:
+            # Llamar al LLM con el nuevo método para registrar la conversación
+            response = self.invoke_llm(messages, prompt_type="langchain")
+            
+            if not response or not hasattr(response, 'content'):
+                raise ValueError("El LLM no generó una respuesta válida")
+                
+            result = response.content
+            confidence = 0.8  # Nivel de confianza estimado
+            
+            # Métricas para el resultado
+            processing_time = time.time() - start_time
+            
+            return {
+                "result": result,
+                "input": query,
+                "context": context,
+                "data": {
+                    "company": company,
+                    "industry": industry,
+                    "period": period,
+                    "financial_data": financial_data
+                },
+                "confidence": confidence,
+                "processing_time": processing_time,
+                "success": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error al generar respuesta financiera: {str(e)}")
+            processing_time = time.time() - start_time
+            
+            return {
+                "result": f"Error al procesar la consulta financiera: {str(e)}",
+                "input": query,
+                "confidence": 0.1,
+                "processing_time": processing_time,
+                "success": False,
+                "error": str(e)
+            }
     
     def _format_finance_prompt(self, input_data: Dict[str, Any]) -> str:
         """

@@ -1,7 +1,8 @@
 from typing import Dict, Any, List, Optional, Callable
 import time
 import abc
-from langchain_openai import ChatOpenAI
+import os
+import json
 from app.core.logging import logger
 from app.core.metrics import MetricsCollector
 from app.core.config import get_settings
@@ -30,14 +31,145 @@ class BaseAgent(abc.ABC):
         self.tools = {}
         self.memory = {}
         
-        # Inicializar el modelo LLM predeterminado
-        self.llm = ChatOpenAI(
-            model_name=settings.OPENAI_MODEL,
-            temperature=settings.TEMPERATURE,
-            api_key=settings.OPENAI_API_KEY
-        )
+        # Inicializar modelos y clientes
+        self.llm = None
+        self.client = None
+        
+        # Verificar si hay una API key de OpenAI válida configurada
+        if settings.is_openai_api_key_valid():
+            try:
+                # Importar el cliente directamente para mayor control
+                from openai import OpenAI
+                self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+                
+                # Verificar que el cliente funciona con una prueba simple
+                response = self.client.chat.completions.create(
+                    model=settings.OPENAI_MODEL,
+                    messages=[
+                        {"role": "system", "content": "Responde con 'OK' si me estás recibiendo correctamente."},
+                        {"role": "user", "content": "Test de conexión"}
+                    ],
+                    temperature=0.0,
+                    max_tokens=5
+                )
+                
+                if response and response.choices and len(response.choices) > 0:
+                    logger.info(f"Cliente OpenAI verificado correctamente para agente {name}")
+                    
+                    # Ahora intentamos inicializar el LLM de LangChain con el cliente validado
+                    try:
+                        from langchain_openai import ChatOpenAI
+                        self.llm = ChatOpenAI(
+                            model_name=settings.OPENAI_MODEL,
+                            temperature=settings.TEMPERATURE,
+                            api_key=settings.OPENAI_API_KEY,
+                            max_tokens=settings.MAX_TOKENS
+                        )
+                        logger.info(f"LLM de LangChain inicializado correctamente para agente {name}")
+                    except Exception as e:
+                        logger.warning(f"No se pudo inicializar LangChain para {name}, usando cliente directo: {str(e)}")
+                        logger.info(f"Cliente OpenAI directo asignado a agente {name}")
+                else:
+                    logger.warning("La verificación del cliente OpenAI no devolvió una respuesta válida")
+                    self.client = None
+            except Exception as e:
+                logger.warning(f"No se pudo inicializar OpenAI para agente {name}: {str(e)}")
+                self.client = None
+        else:
+            logger.warning(f"No hay API key válida configurada para {name}")
         
         logger.info(f"Agente {name} inicializado")
+    
+    def log_llm_call(self, prompt: Any, response: Any, prompt_type: str = "langchain"):
+        """
+        Registra un prompt enviado al LLM y la respuesta recibida.
+        
+        Args:
+            prompt: El prompt enviado al LLM
+            response: La respuesta recibida del LLM
+            prompt_type: El tipo de prompt ("langchain", "openai_direct" u otro)
+        """
+        try:
+            # Registrar información según el tipo de prompt
+            if prompt_type == "langchain":
+                # Para mensajes de LangChain
+                if hasattr(prompt, "__iter__"):
+                    # Si es una lista de mensajes
+                    prompt_str = "\n---\n".join([
+                        f"[{msg.type}]: {msg.content}" 
+                        for msg in prompt if hasattr(msg, "type") and hasattr(msg, "content")
+                    ])
+                else:
+                    prompt_str = str(prompt)
+                
+                response_str = response.content if hasattr(response, "content") else str(response)
+            
+            elif prompt_type == "openai_direct":
+                # Para llamadas directas a la API de OpenAI
+                messages = prompt.get("messages", [])
+                prompt_str = "\n---\n".join([
+                    f"[{msg.get('role', 'unknown')}]: {msg.get('content', '')}" 
+                    for msg in messages
+                ])
+                
+                if hasattr(response, "choices") and len(response.choices) > 0:
+                    response_str = response.choices[0].message.content
+                else:
+                    response_str = str(response)
+            else:
+                # Para otros tipos de prompts
+                prompt_str = str(prompt)
+                response_str = str(response)
+            
+            # Truncar si son demasiado largos para el log
+            max_log_len = 1000  # Caracteres máximos para el log
+            if len(prompt_str) > max_log_len:
+                prompt_str = prompt_str[:max_log_len] + f"... [truncado, longitud total: {len(prompt_str)}]"
+            if len(response_str) > max_log_len:
+                response_str = response_str[:max_log_len] + f"... [truncado, longitud total: {len(response_str)}]"
+            
+            # Registrar en el log
+            logger.info(f"[{self.name}] LLM Prompt ({prompt_type}):\n{prompt_str}")
+            logger.info(f"[{self.name}] LLM Respuesta:\n{response_str}")
+            
+            # Registrar uso de tokens si está disponible
+            if hasattr(response, "usage") and response.usage:
+                token_usage = response.usage
+                logger.info(f"[{self.name}] Uso de tokens: {token_usage}")
+                
+        except Exception as e:
+            logger.error(f"Error al registrar llamada al LLM: {str(e)}")
+
+    def invoke_llm(self, prompt: Any, prompt_type: str = "langchain", **kwargs):
+        """
+        Invoca el LLM y registra la llamada.
+        
+        Args:
+            prompt: El prompt a enviar al LLM
+            prompt_type: El tipo de prompt
+            **kwargs: Argumentos adicionales para la llamada al LLM
+            
+        Returns:
+            La respuesta del LLM
+        """
+        response = None
+        
+        try:
+            # Invocar según el tipo de LLM disponible
+            if prompt_type == "langchain" and self.llm is not None:
+                response = self.llm.invoke(prompt, **kwargs)
+            elif prompt_type == "openai_direct" and self.client is not None:
+                response = self.client.chat.completions.create(**prompt, **kwargs)
+            else:
+                raise ValueError(f"No hay LLM disponible para el tipo de prompt {prompt_type}")
+                
+            # Registrar la llamada
+            self.log_llm_call(prompt, response, prompt_type)
+            
+            return response
+        except Exception as e:
+            logger.error(f"Error al invocar LLM: {str(e)}")
+            raise e
     
     def add_tool(self, tool_name: str, tool: Any) -> None:
         """
