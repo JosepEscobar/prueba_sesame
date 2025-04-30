@@ -83,7 +83,7 @@ class MCPStatusResponse(BaseModel):
     )
     mcp_url: str = Field(
         description="URL del servidor MCP al que está conectada la API",
-        example="http://localhost:4500"
+        example="http://localhost:4000"
     )
     tools_available: int = Field(
         description="Número total de herramientas disponibles en el servidor MCP",
@@ -328,7 +328,7 @@ app.add_middleware(
 
 # ---- Configuración MCP Client ----
 # Información sobre el servidor MCP
-mcp_url = os.environ.get("MCP_SERVER_URL", "http://localhost:4500")
+mcp_url = os.environ.get("MCP_SERVER_URL", "http://localhost:4000")
 logger.info(f"URL del servidor MCP configurada como: {mcp_url}")
 
 # ---- Rutas API ----
@@ -444,7 +444,7 @@ async def health_check():
                 "application/json": {
                     "example": {
                         "status": "connected",
-                        "mcp_url": "http://localhost:4500",
+                        "mcp_url": "http://localhost:4000",
                         "tools_available": 6,
                         "tools": [
                             "buscar_datos_financieros",

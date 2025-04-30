@@ -90,21 +90,39 @@ class SummaryAgent(BaseAgent):
                     context_text = context["result"]
                 # Caso 4: Hay raw_response disponible (desde el grafo)
                 elif "raw_response" in context and context["raw_response"]:
-                    context_text = context["raw_response"]
+                    # Manejar caso donde raw_response es un objeto AIMessage
+                    raw_response = context["raw_response"]
+                    if hasattr(raw_response, 'content'):  # Es un objeto tipo AIMessage
+                        context_text = raw_response.content
+                    else:
+                        context_text = str(raw_response)
                 # Caso genérico: convertir a JSON para incluirlo completo
                 else:
                     context_text = json.dumps(context, indent=2, ensure_ascii=False)
             elif isinstance(context, str):
                 context_text = context
+            elif hasattr(context, 'content'):  # Manejo directo de AIMessage u objetos similares
+                context_text = context.content
             else:
                 context_text = str(context)
             
             # Registrar el contenido recibido para ayudar en depuración
-            logger.info(f"SummaryAgent recibió contenido para resumir de longitud: {len(context_text)}")
-            if len(context_text) < 500:  # Solo loguear contenido pequeño completo
-                logger.info(f"Contenido recibido: {context_text}")
-            else:
-                logger.info(f"Extracto del contenido: {context_text[:200]}...")
+            try:
+                content_length = len(context_text) if context_text is not None else 0
+                logger.info(f"SummaryAgent recibió contenido para resumir de longitud: {content_length}")
+                if content_length < 500:  # Solo loguear contenido pequeño completo
+                    logger.info(f"Contenido recibido: {context_text}")
+                else:
+                    logger.info(f"Extracto del contenido: {context_text[:200]}...")
+            except Exception as e:
+                logger.warning(f"No se pudo determinar longitud del contenido: {str(e)}. Usando método alternativo.")
+                # Usar un método alternativo para determinar la longitud
+                try:
+                    context_text = str(context_text)
+                    logger.info(f"Contenido convertido a string, longitud: {len(context_text)}")
+                except:
+                    logger.error("No se pudo convertir el contenido a string.")
+                    context_text = "Error al procesar el contenido."
             
             # Si hay poco o ningún contexto, intentar recopilar información adicional
             if not context_text or context_text.strip() in ["", "{}", "[]"]:

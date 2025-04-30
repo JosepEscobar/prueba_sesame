@@ -32,7 +32,7 @@ class MCPClient:
     
     def __init__(
         self, 
-        base_url: str = "http://localhost:4500",
+        base_url: str = "http://localhost:4000",
         use_stdio: bool = False,
         mcp_server_path: Optional[str] = None
     ):

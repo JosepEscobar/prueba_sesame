@@ -36,7 +36,7 @@ def get_mcp_tools_sync() -> List[Dict[str, Any]]:
         if _mcp_client is None:
             logger.info("Creando nuevo cliente MCP global")
             _mcp_client = MCPClient(
-                base_url="http://localhost:4500",
+                base_url="http://localhost:4000",
                 use_stdio=False,  # No usar stdio para evitar problemas con loop de eventos
                 mcp_server_path=mcp_server_path
             )

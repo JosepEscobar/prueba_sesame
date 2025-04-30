@@ -183,17 +183,27 @@ class AgentGraph:
         }
         
         # Ejecutar el agente de resumen
-        summary_result = self.summary.execute({
-            "query": query,
-            "context": summary_context
-        })
-        
-        # Actualizar el estado con el resultado procesado
-        if isinstance(summary_result.get("result"), dict):
-            state["agent_output"] = summary_result["result"]
-        else:
+        try:
+            summary_result = self.summary.execute({
+                "query": query,
+                "context": summary_context
+            })
+            
+            # Actualizar el estado con el resultado procesado
+            if isinstance(summary_result.get("result"), dict):
+                state["agent_output"] = summary_result["result"]
+            else:
+                state["agent_output"] = {
+                    "content": summary_result.get("result", ""),
+                    "source": state["current_agent"],
+                    "summarized": True,
+                    "original_response": raw_response
+                }
+        except Exception as e:
+            logger.error(f"Error al procesar resumen: {str(e)}")
+            # Proporcionar un resultado alternativo en caso de error
             state["agent_output"] = {
-                "content": summary_result.get("result", ""),
+                "content": "",
                 "source": state["current_agent"],
                 "summarized": True,
                 "original_response": raw_response

@@ -591,7 +591,7 @@ def iniciar_servidor():
     """Inicia el servidor MCP."""
     # Verificar puerto disponible
     host = os.environ.get("MCP_HOST", "0.0.0.0")
-    port = int(os.environ.get("MCP_PORT", "4500"))
+    port = int(os.environ.get("MCP_PORT", "4000"))
     
     # Verificar si el puerto está en uso
     import socket
