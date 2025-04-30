@@ -1,83 +1,139 @@
 """
-Módulo de integración de Model Context Protocol (MCP) para agentes.
+Módulo para integración de herramientas MCP con agentes.
 
-Este módulo sigue el patrón oficial de integración de MCP con LangChain y LangGraph.
+Este módulo proporciona funciones para conectar agentes con herramientas MCP.
 """
 
-from typing import List, Dict, Any, Optional
 import os
-from pathlib import Path
-
+import asyncio
+from typing import List, Dict, Any, Optional
 from app.core.logging import logger
-from app.core.config import get_settings
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_mcp_adapters.tools import load_mcp_tools
+from app.tools.mcp_client import MCPClient
 
-settings = get_settings()
+# Mantener una referencia global al cliente MCP para reutilizarlo
+_mcp_client = None
 
-def get_mcp_client() -> MultiServerMCPClient:
+def get_mcp_tools_sync() -> List[Dict[str, Any]]:
     """
-    Obtiene un cliente MCP configurado según la documentación oficial.
+    Versión sincrónica para obtener herramientas MCP disponibles.
     
     Returns:
-        Cliente MCP con servidores configurados
+        Lista de herramientas MCP adaptadas para uso con LangChain
     """
-    # Configuración de servidor MCP siguiendo el patrón oficial
-    client = MultiServerMCPClient({
-        "sesame": {
-            "transport": "sse",
-            "url": settings.MCP_CLIENT_URL,
-        },
-        # Se pueden configurar servidores adicionales si es necesario
-        # "filesystem": {
-        #     "command": "npx",
-        #     "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/files"]
-        # },
-        # "postgres": {
-        #     "command": "npx",
-        #     "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
-        # }
-    })
+    global _mcp_client
     
-    return client
-
-def get_mcp_tools():
-    """
-    Obtiene herramientas MCP adaptadas para usar con LangChain/LangGraph.
-    
-    Returns:
-        Lista de herramientas adaptadas para LangChain
-    """
     try:
-        client = get_mcp_client()
-        tools = load_mcp_tools(client)
-        logger.info(f"Se cargaron {len(tools)} herramientas MCP")
+        # Deducir la ruta del servidor MCP relativa al proyecto
+        import os
+        from pathlib import Path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = Path(current_dir).parent.parent.parent.parent
+        mcp_server_path = os.path.join(project_root, "mcp_server", "main.py")
+        
+        logger.info(f"Ruta MCP deducida: {mcp_server_path}")
+        
+        # Usar cliente global si existe, o crear uno nuevo
+        if _mcp_client is None:
+            logger.info("Creando nuevo cliente MCP global")
+            _mcp_client = MCPClient(
+                base_url="http://localhost:4500",
+                use_stdio=False,  # No usar stdio para evitar problemas con loop de eventos
+                mcp_server_path=mcp_server_path
+            )
+        
+        # Inicializar de manera sincrónica y obtener herramientas
+        success = _mcp_client.initialize_sync()
+        
+        if not success:
+            logger.error("No se pudo inicializar el cliente MCP")
+            return []
+            
+        # Obtener las herramientas usando la versión sincrónica
+        tools = _mcp_client.list_tools_sync()
+        
+        # Convertir herramientas a formato para LangChain
+        langchain_tools = []
         for tool in tools:
-            logger.info(f"Herramienta MCP cargada: {tool.name}")
-        return tools
+            # Crear funciones closures para cada herramienta
+            tool_name = tool["name"]
+            
+            def create_tool_function(tool_name):
+                def tool_function(**kwargs):
+                    # Usar el cliente global
+                    global _mcp_client
+                    if _mcp_client is None:
+                        logger.error(f"Error: cliente MCP no disponible para herramienta {tool_name}")
+                        return {"error": "Cliente MCP no inicializado"}
+                    return _mcp_client.call_tool_sync(tool_name, kwargs)
+                return tool_function
+                
+            langchain_tools.append({
+                "name": tool_name,
+                "description": tool.get("description", f"Herramienta {tool_name} del servidor MCP"),
+                "func": create_tool_function(tool_name)
+            })
+        
+        logger.info(f"Herramientas MCP cargadas: {len(langchain_tools)}")
+        return langchain_tools
+        
     except Exception as e:
         logger.error(f"Error al cargar herramientas MCP: {str(e)}")
         return []
 
-def configure_agent_with_mcp(agent, tools_list=None):
+async def get_mcp_tools() -> List[Dict[str, Any]]:
     """
-    Configura un agente con herramientas MCP según la documentación oficial.
+    Obtiene herramientas MCP disponibles y las convierte a formato para LangChain.
+    
+    Returns:
+        Lista de herramientas MCP adaptadas para uso con LangChain
+    """
+    return get_mcp_tools_sync()
+
+def configure_agent_with_mcp(agent, tools):
+    """
+    Configura un agente con herramientas MCP.
     
     Args:
         agent: El agente a configurar
-        tools_list: Lista opcional de herramientas MCP preconfiguradas
-    
-    Returns:
-        Agente configurado con herramientas MCP
+        tools: Lista de herramientas a añadir
     """
-    if tools_list is None:
-        tools_list = get_mcp_tools()
-    
-    # Añadir herramientas al agente
-    if hasattr(agent, 'tools') and isinstance(agent.tools, list):
-        agent.tools.extend(tools_list)
-        logger.info(f"Se añadieron {len(tools_list)} herramientas MCP al agente")
-    else:
-        logger.warning("No se pudieron añadir herramientas MCP al agente (no tiene atributo 'tools' compatible)")
-    
-    return agent 
+    try:
+        # Verificar que tools sea una lista
+        if not isinstance(tools, list):
+            logger.warning(f"Las herramientas MCP no son una lista. Tipo recibido: {type(tools)}")
+            # Si es un diccionario, intentar convertirlo a lista
+            if isinstance(tools, dict):
+                tools_list = []
+                for name, tool_data in tools.items():
+                    if isinstance(tool_data, dict) and 'func' in tool_data:
+                        tools_list.append(tool_data)
+                    else:
+                        tools_list.append({
+                            "name": name,
+                            "description": str(tool_data),
+                            "func": lambda **kwargs: {"error": "Herramienta no disponible"}
+                        })
+                tools = tools_list
+                logger.info(f"Convertidas {len(tools)} herramientas de diccionario a lista")
+            else:
+                # No podemos hacer nada con este formato
+                logger.error("No se puede procesar el formato de herramientas proporcionado")
+                return
+        
+        # Ahora configurar el agente con la lista de herramientas
+        if hasattr(agent, "tools"):
+            if isinstance(agent.tools, list):
+                agent.tools.extend(tools)
+                logger.info(f"Añadidas {len(tools)} herramientas MCP al agente")
+            elif isinstance(agent.tools, dict):
+                # Si agent.tools es un diccionario, añadir las herramientas como entradas
+                for tool in tools:
+                    agent.tools[tool["name"]] = tool
+                logger.info(f"Añadidas {len(tools)} herramientas MCP al diccionario del agente")
+            else:
+                logger.warning(f"Formato de agent.tools no soportado: {type(agent.tools)}")
+        else:
+            logger.warning("El agente no tiene un atributo 'tools' compatible")
+            
+    except Exception as e:
+        logger.error(f"Error al configurar agente con herramientas MCP: {str(e)}") 

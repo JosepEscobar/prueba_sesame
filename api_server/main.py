@@ -13,10 +13,11 @@ import time
 import httpx
 from pathlib import Path
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Body
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
+import traceback
 
 # Añadir el directorio raíz al path para poder importar módulos
 sys.path.insert(0, str(Path(__file__).parent))
@@ -45,6 +46,7 @@ logger = logging.getLogger("api_server")
 # Importamos el Router Agent - después de configurar el logger
 try:
     from app.agents.router_agent import RouterAgent
+    from app.core.graph import AgentGraph
     logger.info("RouterAgent importado correctamente")
 except Exception as e:
     logger.error(f"Error al importar RouterAgent: {str(e)}")
@@ -497,219 +499,115 @@ async def mcp_status():
     ### Ejemplo de consultas:
     
     * "Analiza el rendimiento financiero del último trimestre"
-    * "Evalúa el impacto de nuestra última campaña de marketing"
-    * "Compara nuestros resultados con la competencia"
-    
-    ### Contexto adicional:
-    
-    El campo `context` permite añadir información estructurada que enriquece
-    la consulta, como identificadores de empresa, periodos de tiempo o
-    regiones geográficas específicas.
-    """,
-    response_model=AgentResponse,
-    response_description="Resultado del agente seleccionado, nivel de confianza y tiempo de procesamiento",
-    tags=["Agentes"],
-    responses={
-        200: {
-            "description": "Respuesta del agente router",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "result": "Tu consulta 'Analiza...' ha sido procesada por el agente finance_agent",
-                        "agent": "finance_agent",
-                        "confidence": 0.95,
-                        "processing_time": 0.5
-                    }
-                }
-            }
-        },
-        422: {
-            "description": "Consulta inválida o incompleta",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": [
-                            {
-                                "loc": ["body", "query"],
-                                "msg": "El campo no puede estar vacío",
-                                "type": "value_error"
-                            }
-                        ]
-                    }
-                }
-            }
-        }
-    }
-)
-async def process_query(request: QueryRequest):
+    * "Evalúa el impacto de nuestra campaña de marketing digital"
+    * "¿Cuáles son las tendencias actuales de nuestro mercado?"
     """
-    Procesar una consulta general a través del agente router.
+)
+async def process_query(
+    request: Request,
+    query_data: QueryRequest
+):
+    """
+    Endpoint para procesar consultas generales.
     
-    El agente router analizará la consulta y determinará qué agente especializado
-    debe procesarla. Retorna el resultado generado por el agente seleccionado.
+    Args:
+        query_data: Datos de la consulta
+    
+    Returns:
+        Respuesta procesada
     """
     start_time = time.time()
-    logger.info(f"Recibida consulta: {request.query[:50]}...")
     
     try:
-        # Preparamos los datos básicos
-        empresa = request.context.get("empresa", "MiEmpresa")
-        periodo = request.context.get("periodo", "último trimestre")
+        # Validar que haya una consulta
+        query = query_data.query.strip()
+        if not query:
+            raise ValueError("La consulta no puede estar vacía")
         
-        # Usamos el RouterAgent para clasificar la consulta
+        # Extraer el contexto
+        context = query_data.context
+        
+        logger.info(f"Recibida consulta: {query[:50]}...")
+        
+        # Inicializar el grafo de agentes
         try:
-            router_agent = RouterAgent()
+            # Crear una instancia del grafo de agentes
+            agent_graph = AgentGraph()
             
-            # Comprobamos si el RouterAgent tiene un LLM disponible
-            if router_agent.llm is None:
-                logger.warning("RouterAgent no tiene LLM configurado. Usando clasificación por keywords.")
-                agent_type = classify_query_by_keywords(request.query)
-                logger.info(f"Consulta clasificada como: {agent_type} (usando keywords)")
-            else:
-                # Clasificar usando el RouterAgent con LLM
-                router_input = {
-                    "query": request.query,
-                    "context": request.context
-                }
-                
-                router_result = router_agent.execute(router_input)
-                
-                if "error" in router_result:
-                    logger.error(f"Error en RouterAgent: {router_result['error']}")
-                    # Fallback a clasificación por keywords
-                    agent_type = classify_query_by_keywords(request.query)
-                    logger.info(f"Consulta clasificada como: {agent_type} (fallback)")
-                else:
-                    agent_type = router_result.get("agent", "analysis_agent")
-                    confidence = router_result.get("confidence", 0.7)
-                    logger.info(f"RouterAgent clasificó la consulta como: {agent_type} (confianza: {confidence})")
-        except Exception as e:
-            logger.error(f"Error al usar RouterAgent: {str(e)}. Usando clasificación directa.")
-            agent_type = classify_query_by_keywords(request.query)
-            logger.info(f"Consulta clasificada como: {agent_type} (fallback después de error)")
-        
-        # Procesamos la consulta según el tipo de agente identificado usando herramientas MCP
-        async with httpx.AsyncClient() as client:
-            # Registramos la petición HTTP
-            logger.info(f"Obteniendo datos básicos para: {empresa}, {periodo}")
-            
-            # Obtenemos datos financieros base (útiles para varios tipos de consultas)
-            response = await client.post(
-                f"{mcp_url}/mcp/v1/tools/buscar_datos_financieros",
-                json={"empresa": empresa, "periodo": periodo}
-            )
-            logger.info(f"HTTP Request: POST {mcp_url}/mcp/v1/tools/buscar_datos_financieros \"{response.status_code} {response.reason_phrase}\"")
-            datos_financieros = response.json().get("result", {})
-            
-            # Procesamos según el tipo de agente identificado
-            if agent_type == "finance_agent":
-                # Análisis financiero usando herramientas MCP
-                finance_data = datos_financieros.get("datos", {})
-                
-                if "ingresos" in finance_data and "beneficio_neto" in finance_data and "activos_totales" in finance_data and "pasivos_totales" in finance_data:
-                    # Calcular ratios si tenemos todos los datos necesarios
-                    ratio_response = await client.post(
-                        f"{mcp_url}/mcp/v1/tools/calcular_ratios_financieros",
-                        json={
-                            "ingresos": finance_data.get("ingresos"),
-                            "beneficio_neto": finance_data.get("beneficio_neto"),
-                            "activos_totales": finance_data.get("activos_totales"),
-                            "pasivos_totales": finance_data.get("pasivos_totales")
-                        }
-                    )
-                    logger.info(f"HTTP Request: POST {mcp_url}/mcp/v1/tools/calcular_ratios_financieros \"{ratio_response.status_code} {ratio_response.reason_phrase}\"")
-                    ratios = ratio_response.json().get("result", {})
-                    
-                    resultado = f"Análisis financiero de {empresa}:\n- Ingresos: {finance_data.get('ingresos'):,.2f}\n- Beneficio: {finance_data.get('beneficio_neto'):,.2f}\n"
-                    
-                    if ratios:
-                        resultado += f"- Margen: {ratios.get('margen_beneficio', 0):.2%}\n"
-                        resultado += f"- ROE: {ratios.get('ROE', 0):.2%}\n"
-                        resultado += f"- ROA: {ratios.get('ROA', 0):.2%}\n"
-                    
-                    return {
-                        "result": resultado,
-                        "agent": "finance_agent",
-                        "confidence": 0.85,
-                        "processing_time": time.time() - start_time
-                    }
-                else:
-                    return {
-                        "result": f"Datos financieros para {empresa}: {datos_financieros}",
-                        "agent": "finance_agent",
-                        "confidence": 0.7,
-                        "processing_time": time.time() - start_time
-                    }
-            
-            elif agent_type == "marketing_agent":
-                # Si es una consulta de marketing, usar la herramienta apropiada
-                marketing_response = await client.post(
-                    f"{mcp_url}/mcp/v1/tools/recomendar_estrategia_marketing",
-                    json={
-                        "industria": request.context.get("industria", "General"),
-                        "presupuesto": request.context.get("presupuesto", 50000),
-                        "objetivo": request.context.get("objetivo", "awareness"),
-                        "publico_objetivo": request.context.get("publico_objetivo", "General")
-                    }
-                )
-                logger.info(f"HTTP Request: POST {mcp_url}/mcp/v1/tools/recomendar_estrategia_marketing \"{marketing_response.status_code} {marketing_response.reason_phrase}\"")
-                marketing_data = marketing_response.json().get("result", {})
-                
-                if "estrategia" in marketing_data:
-                    # Formateamos una respuesta básica con los datos obtenidos
-                    canales = ", ".join(marketing_data.get("canales_recomendados", ["No disponible"]))
-                    resultado = f"Estrategia de marketing: {marketing_data.get('estrategia')}\n"
-                    resultado += f"Público objetivo: {marketing_data.get('publico_objetivo', 'No especificado')}\n"
-                    resultado += f"Canales recomendados: {canales}\n"
-                    
-                    return {
-                        "result": resultado,
-                        "agent": "marketing_agent",
-                        "confidence": 0.8,
-                        "processing_time": time.time() - start_time
-                    }
-            
-            else:  # analysis_agent u otros
-                # Si es una consulta de análisis, usar la herramienta de tendencia
-                # Intentaremos con los datos históricos si los proveen
-                datos_serie = request.context.get("datos", [100, 120, 150, 180, 210])
-                
-                trend_response = await client.post(
-                    f"{mcp_url}/mcp/v1/tools/analizar_tendencia",
-                    json={"datos": datos_serie}
-                )
-                logger.info(f"HTTP Request: POST {mcp_url}/mcp/v1/tools/analizar_tendencia \"{trend_response.status_code} {trend_response.reason_phrase}\"")
-                trend_data = trend_response.json().get("result", {})
-                
-                if "tendencia" in trend_data:
-                    resultado = f"Análisis de tendencia:\n"
-                    resultado += f"- Dirección: {trend_data.get('tendencia', {}).get('direccion', 'No disponible')}\n"
-                    resultado += f"- Cambio: {trend_data.get('tendencia', {}).get('cambio_porcentual', 0):.1f}%\n"
-                    resultado += f"- Análisis: {trend_data.get('analisis', 'No disponible')}"
-                    
-                    return {
-                        "result": resultado,
-                        "agent": "analysis_agent",
-                        "confidence": 0.75,
-                        "processing_time": time.time() - start_time
-                    }
-            
-            # Si llegamos aquí, es una consulta general
-            return {
-                "result": f"Tu consulta ha sido recibida y clasificada como {agent_type}. Por favor especifica más detalles para un análisis más preciso.",
-                "agent": agent_type,
-                "confidence": 0.6,
-                "processing_time": time.time() - start_time
+            # Preparar los datos de entrada para el grafo
+            input_data = {
+                "query": query,
+                "context": context,
+                # No inicializar estos campos, serán establecidos por el grafo:
+                # "current_agent": "router",
+                # "agent_output": {}
             }
             
+            # Imprimir para depuración
+            print(f"* DEBUG: Enviando consulta al grafo: {input_data}")
+            
+            # Ejecutar el grafo de agentes
+            logger.info("Ejecutando grafo de agentes con la consulta")
+            final_result = agent_graph.execute(input_data)
+            
+            # Imprimir para depuración
+            print(f"* DEBUG: Resultado final del grafo: {final_result}")
+            
+            # Verificar si tenemos un resultado válido
+            if isinstance(final_result, dict):
+                result = final_result
+                # Asegurarnos de que tenga los campos mínimos
+                if "result" not in result:
+                    result["result"] = "Consulta procesada con éxito"
+                if "agent" not in result:
+                    result["agent"] = "unknown_agent"
+                if "confidence" not in result:
+                    result["confidence"] = 0.7
+            else:
+                # Respuesta de fallback si no hay resultado válido
+                logger.warning(f"Resultado inválido del grafo: {final_result}")
+                result = {
+                    "result": "No se pudo procesar completamente su consulta",
+                    "agent": "router_agent",
+                    "confidence": 0.5
+                }
+                
+            # Calcular tiempo de procesamiento
+            processing_time = time.time() - start_time
+            
+            # Registrar métrica
+            logger.info(f"Consulta procesada por {result.get('agent', 'desconocido')} con confianza {result.get('confidence', 0.0)}")
+            
+            # Añadir tiempo de procesamiento
+            result["processing_time"] = processing_time
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error al procesar consulta con el grafo: {str(e)}")
+            print(f"* DEBUG ERROR: {str(e)}")
+            traceback.print_exc()  # Imprimir stack trace completo
+            
+            # Respuesta de fallback en caso de error
+            processing_time = time.time() - start_time
+            return {
+                "result": "Error al procesar su consulta con el grafo de agentes",
+                "error": str(e),
+                "agent": "error", 
+                "confidence": 0.0,
+                "processing_time": processing_time
+            }
+    
     except Exception as e:
-        # Manejo de errores
-        logger.error(f"Error al procesar la consulta: {str(e)}")
+        logger.error(f"Error global al procesar consulta: {str(e)}")
+        print(f"* DEBUG GLOBAL ERROR: {str(e)}")
+        traceback.print_exc()  # Imprimir stack trace completo
+        
+        processing_time = time.time() - start_time
         return {
-            "result": f"Se produjo un error al procesar tu consulta: {str(e)}",
-            "agent": "error_handler",
-            "confidence": 0.1,
-            "processing_time": time.time() - start_time
+            "result": "Error al procesar su consulta",
+            "error": str(e),
+            "processing_time": processing_time
         }
 
 def classify_query_by_keywords(query: str) -> str:

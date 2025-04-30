@@ -38,6 +38,7 @@ logger = logging.getLogger("mcp_server")
 from fastapi import FastAPI, APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 import uvicorn
+from fastapi.middleware.cors import CORSMiddleware
 
 # Crear la aplicación FastAPI
 app = FastAPI(
@@ -45,6 +46,32 @@ app = FastAPI(
     description="Servidor MCP para herramientas financieras, análisis y marketing",
     version="1.0.0"
 )
+
+# Middleware para registrar todas las solicitudes
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    # Registrar solicitud entrante
+    logger.info(f"Solicitud recibida: {request.method} {request.url.path}")
+    
+    # Obtener el cuerpo de la solicitud si es POST o PUT
+    if request.method in ("POST", "PUT"):
+        try:
+            body_bytes = await request.body()
+            await request._body.seek(0)  # Reset body position for future handlers
+            if body_bytes:
+                # Limitar el tamaño del cuerpo en los logs
+                body_str = body_bytes.decode('utf-8')
+                if len(body_str) > 500:
+                    body_str = body_str[:500] + "... [truncado]"
+                logger.info(f"Cuerpo de la solicitud: {body_str}")
+        except Exception as e:
+            logger.warning(f"No se pudo leer el cuerpo de la solicitud: {str(e)}")
+    
+    # Continuar con la solicitud
+    response = await call_next(request)
+    logger.info(f"Respuesta: {response.status_code}")
+    
+    return response
 
 # Crear router para la API MCP
 mcp_router = APIRouter(prefix="/mcp/v1")
@@ -421,6 +448,17 @@ async def predecir_valores(datos: List[float], periodos_futuros: int = 3) -> Dic
         }
     except Exception as e:
         return {"error": f"Error al calcular predicciones: {str(e)}"}
+
+# Status endpoint
+@app.get("/status")
+async def status():
+    """Retorna el estado actual del servidor MCP."""
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "tools_count": len(tools_registry),
+        "tools": list(tools_registry.keys())
+    }
 
 # Incluir el router en la aplicación
 app.include_router(mcp_router)

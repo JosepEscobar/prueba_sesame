@@ -1,8 +1,21 @@
+"""
+Cliente MCP con métodos sincronos para integración con agentes y LangGraph.
+
+Este módulo proporciona una clase de cliente MCP que ofrece métodos sincronos
+para poder ser usado fácilmente con agentes en entornos que no son asíncronos.
+"""
+
 from typing import Dict, Any, List, Optional, Awaitable, Callable
 import asyncio
 from functools import partial
 import os
 from pathlib import Path
+import sys
+import json
+import subprocess
+import time
+import threading
+import requests
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.tools import load_mcp_tools
@@ -12,45 +25,133 @@ from app.tools.stdio_client import StdioClientSession
 
 class MCPClient:
     """
-    Cliente para interactuar con servidores MCP (Model Context Protocol).
+    Cliente MCP con métodos sincronos para interactuar con el servidor MCP.
     
-    Esta implementación soporta dos modos de transporte:
-    1. HTTP/SSE usando langchain_mcp_adapters (original)
-    2. StdioTransport (implementación personalizada usando stdin/stdout)
-    
-    Permite a los agentes acceder a herramientas externas de forma estandarizada y compatible
-    con la especificación del MCP.
+    Esta implementación soporta tanto comunicación HTTP como stdio con el servidor MCP.
     """
     
-    def __init__(self, base_url: str = "http://localhost:4000", use_stdio: bool = True, 
-                 mcp_server_path: str = None):
+    def __init__(
+        self, 
+        base_url: str = "http://localhost:4500",
+        use_stdio: bool = False,
+        mcp_server_path: Optional[str] = None
+    ):
         """
         Inicializa el cliente MCP.
         
         Args:
-            base_url: URL base del servidor MCP (para modo HTTP/SSE)
-            use_stdio: Si es True, usa StdioTransport en lugar de HTTP/SSE
-            mcp_server_path: Ruta al servidor MCP (solo para modo stdio)
+            base_url: URL base del servidor MCP para llamadas HTTP
+            use_stdio: Si es True, utiliza comunicación por stdio con subprocess
+            mcp_server_path: Ruta al servidor MCP para uso con stdio
         """
         self.base_url = base_url
         self.use_stdio = use_stdio
+        self.mcp_server_path = mcp_server_path
+        self.mcp_process = None
+        self.tools_cache = None
+        self.initialized = False
         self.metrics = MetricsCollector()
         
-        # Determinar la ruta del servidor MCP para stdio
-        if use_stdio:
-            if mcp_server_path:
-                self.mcp_server_path = mcp_server_path
-            else:
-                # Intentar deducir la ruta relativa al directorio actual
-                current_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-                project_root = current_dir.parent.parent.parent.parent
-                self.mcp_server_path = str(project_root / "mcp_server" / "main.py")
-                logger.info(f"Ruta MCP deducida: {self.mcp_server_path}")
+    def initialize_sync(self) -> bool:
+        """
+        Implementación puramente síncrona del método de inicialización.
+        No intenta usar el loop de eventos en absoluto.
         
-        # Inicializar clientes
-        self._client = None
-        self._stdio_session = None
-        self._tools_cache = None
+        Returns:
+            bool: True si se inicializó con éxito, False en caso contrario
+        """
+        try:
+            # Verificar que el servidor MCP está disponible mediante una llamada HTTP síncrona
+            response = requests.get(f"{self.base_url}/status", timeout=5)
+            if response.status_code != 200:
+                logger.error(f"Error al verificar estado del servidor MCP: {response.status_code}")
+                return False
+                
+            logger.info(f"Conexión con servidor MCP establecida en {self.base_url}")
+            self.initialized = True
+            return True
+        except Exception as e:
+            logger.error(f"Error en inicialización síncrona con MCP: {str(e)}")
+            return False
+    
+    def list_tools_sync(self) -> List[Dict[str, Any]]:
+        """
+        Implementación puramente síncrona para listar herramientas.
+        
+        Returns:
+            Lista de herramientas disponibles
+        """
+        try:
+            if not self.initialized:
+                success = self.initialize_sync()
+                if not success:
+                    return []
+            
+            # Usar requests directamente para obtener las herramientas
+            response = requests.get(f"{self.base_url}/mcp/v1/tools", timeout=5)
+            if response.status_code != 200:
+                logger.error(f"Error al obtener herramientas MCP: {response.status_code}")
+                return []
+                
+            tools = response.json().get("tools", [])
+            logger.info(f"Obtenidas {len(tools)} herramientas del servidor MCP")
+            return tools
+        except Exception as e:
+            logger.error(f"Error al listar herramientas MCP: {str(e)}")
+            return []
+    
+    def call_tool_sync(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Implementación puramente síncrona para llamar a una herramienta.
+        
+        Args:
+            tool_name: Nombre de la herramienta a llamar
+            params: Parámetros para la herramienta
+            
+        Returns:
+            Resultado de la ejecución de la herramienta
+        """
+        try:
+            if not self.initialized:
+                success = self.initialize_sync()
+                if not success:
+                    return {"error": "No se pudo inicializar la conexión con el servidor MCP"}
+            
+            # Usar requests directamente para llamar a la herramienta
+            url = f"{self.base_url}/mcp/v1/tools/{tool_name}"
+            headers = {"Content-Type": "application/json"}
+            
+            response = requests.post(url, headers=headers, json=params, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"Herramienta MCP '{tool_name}' ejecutada exitosamente")
+                return result
+            else:
+                error_msg = f"Error al llamar a {tool_name}: {response.status_code}"
+                if response.text:
+                    error_msg += f" - {response.text}"
+                logger.error(error_msg)
+                return {"error": error_msg}
+        except Exception as e:
+            logger.error(f"Error al llamar a herramienta MCP {tool_name}: {str(e)}")
+            return {"error": f"Error en la llamada a la herramienta: {str(e)}"}
+    
+    def close(self):
+        """
+        Cierra conexiones y finaliza el servidor MCP si fue iniciado por este cliente.
+        """
+        if self.mcp_process and self.mcp_process.poll() is None:
+            logger.info(f"Cerrando servidor MCP con PID: {self.mcp_process.pid}")
+            try:
+                self.mcp_process.terminate()
+                self.mcp_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                logger.warning("El servidor MCP no se cerró correctamente, forzando cierre")
+                self.mcp_process.kill()
+            
+        self.initialized = False
+        self.tools_cache = None
     
     async def initialize(self):
         """
@@ -438,18 +539,89 @@ class MCPClient:
     
     # Métodos síncronos para compatibilidad
     def initialize_sync(self) -> bool:
-        """Versión síncrona de initialize()."""
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(self.initialize())
+        """
+        Implementación puramente síncrona del método de inicialización.
+        No intenta usar el loop de eventos en absoluto.
+        
+        Returns:
+            bool: True si se inicializó con éxito, False en caso contrario
+        """
+        try:
+            # Verificar que el servidor MCP está disponible mediante una llamada HTTP síncrona
+            response = requests.get(f"{self.base_url}/status", timeout=5)
+            if response.status_code != 200:
+                logger.error(f"Error al verificar estado del servidor MCP: {response.status_code}")
+                return False
+                
+            logger.info(f"Conexión con servidor MCP establecida en {self.base_url}")
+            self.initialized = True
+            return True
+        except Exception as e:
+            logger.error(f"Error en inicialización síncrona con MCP: {str(e)}")
+            return False
     
     def list_tools_sync(self) -> List[Dict[str, Any]]:
-        """Versión síncrona de list_tools_async()."""
-        return self.list_tools()
+        """
+        Implementación puramente síncrona para listar herramientas.
+        
+        Returns:
+            Lista de herramientas disponibles
+        """
+        try:
+            if not self.initialized:
+                success = self.initialize_sync()
+                if not success:
+                    return []
+            
+            # Usar requests directamente para obtener las herramientas
+            response = requests.get(f"{self.base_url}/mcp/v1/tools", timeout=5)
+            if response.status_code != 200:
+                logger.error(f"Error al obtener herramientas MCP: {response.status_code}")
+                return []
+                
+            tools = response.json().get("tools", [])
+            logger.info(f"Obtenidas {len(tools)} herramientas del servidor MCP")
+            return tools
+        except Exception as e:
+            logger.error(f"Error al listar herramientas MCP: {str(e)}")
+            return []
     
     def call_tool_sync(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Versión síncrona de call_tool()."""
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(self.call_tool(tool_name, params))
+        """
+        Implementación puramente síncrona para llamar a una herramienta.
+        
+        Args:
+            tool_name: Nombre de la herramienta a llamar
+            params: Parámetros para la herramienta
+            
+        Returns:
+            Resultado de la ejecución de la herramienta
+        """
+        try:
+            if not self.initialized:
+                success = self.initialize_sync()
+                if not success:
+                    return {"error": "No se pudo inicializar la conexión con el servidor MCP"}
+            
+            # Usar requests directamente para llamar a la herramienta
+            url = f"{self.base_url}/mcp/v1/tools/{tool_name}"
+            headers = {"Content-Type": "application/json"}
+            
+            response = requests.post(url, headers=headers, json=params, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"Herramienta MCP '{tool_name}' ejecutada exitosamente")
+                return result
+            else:
+                error_msg = f"Error al llamar a {tool_name}: {response.status_code}"
+                if response.text:
+                    error_msg += f" - {response.text}"
+                logger.error(error_msg)
+                return {"error": error_msg}
+        except Exception as e:
+            logger.error(f"Error al llamar a herramienta MCP {tool_name}: {str(e)}")
+            return {"error": f"Error en la llamada a la herramienta: {str(e)}"}
     
     async def close(self):
         """Cierra la conexión con el servidor MCP."""

@@ -277,7 +277,7 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                 }
             
             # Determinar el agente adecuado para la consulta
-            agent_type = None
+            agent_type = "analysis_agent"  # Valor por defecto en caso de fallos
             confidence = 0.7  # Confianza predeterminada
             
             # Si tenemos OpenAI configurado, usarlo para clasificar
@@ -306,6 +306,18 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                             if response and hasattr(response, 'content'):
                                 response_content = response.content.strip()
                                 logger.info(f"Respuesta de LangChain LLM: {response_content}")
+                                
+                                # Validar que la respuesta sea uno de los agentes válidos
+                                valid_agents = ["finance_agent", "marketing_agent", "analysis_agent"]
+                                if response_content in valid_agents:
+                                    agent_type = response_content
+                                    confidence = 0.9  # Alta confianza para LLM
+                                    logger.info(f"OpenAI clasificó la consulta como: {agent_type} (confianza: {confidence})")
+                                else:
+                                    # Si la respuesta no es un agente válido, usar keywords
+                                    logger.warning(f"OpenAI devolvió respuesta inválida: '{response_content}'. Usando clasificación por keywords.")
+                                    agent_type = self._classify_query_by_keywords(query)
+                                    confidence = 0.7  # Confianza media para keywords
                             else:
                                 # Fallback a cliente directo
                                 raise ValueError("Respuesta de LangChain no válida")
@@ -327,6 +339,18 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                                 # Invocar OpenAI directamente
                                 response = self.invoke_llm(prompt, prompt_type="openai_direct")
                                 response_content = response.choices[0].message.content.strip()
+                                
+                                # Validar que la respuesta sea uno de los agentes válidos
+                                valid_agents = ["finance_agent", "marketing_agent", "analysis_agent"]
+                                if response_content in valid_agents:
+                                    agent_type = response_content
+                                    confidence = 0.9  # Alta confianza para LLM
+                                    logger.info(f"OpenAI clasificó la consulta como: {agent_type} (confianza: {confidence})")
+                                else:
+                                    # Si la respuesta no es un agente válido, usar keywords
+                                    logger.warning(f"OpenAI devolvió respuesta inválida: '{response_content}'. Usando clasificación por keywords.")
+                                    agent_type = self._classify_query_by_keywords(query)
+                                    confidence = 0.7  # Confianza media para keywords
                             else:
                                 # No hay cliente disponible
                                 raise ValueError("No hay LLM ni cliente directo disponible")
@@ -346,18 +370,18 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                         # Invocar OpenAI directamente
                         response = self.invoke_llm(prompt, prompt_type="openai_direct")
                         response_content = response.choices[0].message.content.strip()
-                    
-                    # Normalizar la respuesta
-                    valid_agents = ["finance_agent", "marketing_agent", "analysis_agent"]
-                    if response_content in valid_agents:
-                        agent_type = response_content
-                        confidence = 0.9  # Alta confianza para LLM
-                        logger.info(f"OpenAI clasificó la consulta como: {agent_type} (confianza: {confidence})")
-                    else:
-                        # Si la respuesta no es un agente válido, usar keywords
-                        logger.warning(f"OpenAI devolvió respuesta inválida: '{response_content}'. Usando clasificación por keywords.")
-                        agent_type = self._classify_query_by_keywords(query)
-                        confidence = 0.7  # Confianza media para keywords
+                        
+                        # Normalizar la respuesta
+                        valid_agents = ["finance_agent", "marketing_agent", "analysis_agent"]
+                        if response_content in valid_agents:
+                            agent_type = response_content
+                            confidence = 0.9  # Alta confianza para LLM
+                            logger.info(f"OpenAI clasificó la consulta como: {agent_type} (confianza: {confidence})")
+                        else:
+                            # Si la respuesta no es un agente válido, usar keywords
+                            logger.warning(f"OpenAI devolvió respuesta inválida: '{response_content}'. Usando clasificación por keywords.")
+                            agent_type = self._classify_query_by_keywords(query)
+                            confidence = 0.7  # Confianza media para keywords
                 except Exception as e:
                     logger.error(f"Error al invocar OpenAI: {str(e)}. Usando clasificación por keywords.")
                     agent_type = self._classify_query_by_keywords(query)
@@ -367,21 +391,32 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                 agent_type = self._classify_query_by_keywords(query)
                 logger.info(f"RouterAgent clasificó la consulta como {agent_type} usando keywords")
             
+            # Verificación final para garantizar que agent_type siempre tenga un valor
+            if not agent_type:
+                logger.warning("No se pudo determinar un tipo de agente. Usando 'analysis_agent' por defecto.")
+                agent_type = "analysis_agent"
+            
+            # Imprimir para depuración
+            print(f"*** AGENT_TYPE FINAL: {agent_type} ***")
+            
             # Crear la decisión
             decision = {
-                "agent": agent_type,
+                "agent": agent_type,  # Este es el campo clave que debe estar presente
                 "input": input_data,
                 "confidence": confidence,
                 "reasoning": "Clasificado por análisis de la consulta"
             }
-                
+            
+            # Imprimir para depuración
+            print(f"*** DECISION FINAL: {decision} ***")
+            
             return decision
             
         except Exception as e:
             logger.error(f"Error en RouterAgent: {str(e)}")
             return {
                 "error": f"Error en enrutamiento: {str(e)}",
-                "agent": "error",
+                "agent": "analysis_agent",  # Valor por defecto en caso de error
                 "input": input_data,
                 "confidence": 0.0
             }

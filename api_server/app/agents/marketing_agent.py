@@ -8,7 +8,7 @@ from app.core.logging import logger
 from app.core.metrics import MetricsCollector
 from app.core.config import get_settings
 from app.tools.mcp_client import MCPClient
-from app.agents.mcp_integration import configure_agent_with_mcp, get_mcp_tools
+from app.agents.mcp_integration import configure_agent_with_mcp, get_mcp_tools_sync
 
 # Obtener la configuración
 settings = get_settings()
@@ -49,10 +49,12 @@ class MarketingAgent(BaseAgent):
         self.mcp_client = MCPClient(base_url=settings.MCP_CLIENT_URL)
         
         # Obtener herramientas MCP adaptadas para LangChain
-        mcp_tools = get_mcp_tools()
-        
-        # Configurar el agente con herramientas MCP para LangChain
-        configure_agent_with_mcp(self, mcp_tools)
+        try:
+            mcp_tools = get_mcp_tools_sync()
+            # Configurar el agente con herramientas MCP para LangChain
+            configure_agent_with_mcp(self, mcp_tools)
+        except Exception as e:
+            logger.error(f"Error al configurar herramientas MCP: {str(e)}")
         
         self.services = [
             "Estrategia de marketing",
@@ -68,7 +70,7 @@ class MarketingAgent(BaseAgent):
         ]
         logger.info(f"Agente {self.name} inicializado con {len(self.services)} servicios y herramientas MCP")
 
-    def _execute_impl(self, input_data: Dict[Any, Any]) -> Dict[Any, Any]:
+    def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Implementa la lógica de ejecución del agente de marketing.
         
@@ -82,11 +84,65 @@ class MarketingAgent(BaseAgent):
         query = input_data.get("query", "")
         context = input_data.get("context", {})
         
-        # Logueamos solo los primeros 50 caracteres de la consulta como texto, no como slice
+        # Logueamos la consulta
         query_preview = query[:50] + "..." if len(query) > 50 else query
         logger.info(f"Procesando consulta de marketing: {query_preview}")
         
-        # Si no hay un LLM configurado (por falta de API key), devolver un error
+        # Reinicializar cliente MCP si es necesario
+        try:
+            from app.agents.mcp_integration import _mcp_client, get_mcp_tools_sync
+            mcp_tools = get_mcp_tools_sync()
+            if mcp_tools:
+                logger.info(f"MCP inicializado correctamente, {len(mcp_tools)} herramientas disponibles")
+                self.mcp_initialized = True
+                
+                # Intentar llamar directamente a recomendar_estrategia_marketing
+                if _mcp_client and _mcp_client.initialized:
+                    # Extraer datos relevantes del contexto
+                    industry = context.get("industry", self._extract_industry(query))
+                    budget = context.get("budget", 50000)
+                    goal = context.get("goal", "conversiones")
+                    target_audience = context.get("target_audience", "empresas")
+                    
+                    logger.info(f"Intentando llamar directamente a recomendar_estrategia_marketing con industria={industry}, presupuesto={budget}")
+                    
+                    # Llamar a la herramienta MCP
+                    mcp_result = _mcp_client.call_tool_sync(
+                        "recomendar_estrategia_marketing", 
+                        {
+                            "industria": industry,
+                            "presupuesto": budget,
+                            "objetivo": goal,
+                            "publico_objetivo": target_audience
+                        }
+                    )
+                    
+                    if "error" not in mcp_result:
+                        logger.info(f"Herramienta MCP recomendar_estrategia_marketing llamada exitosamente")
+                        # Usar directamente la respuesta de la herramienta MCP
+                        processing_time = time.time() - start_time
+                        
+                        # Preparar el resultado final
+                        return {
+                            "result": f"Estrategia de marketing recomendada para {industry} con presupuesto de {budget}:\n" + 
+                                      f"Canales: {', '.join(mcp_result.get('result', {}).get('canales_recomendados', []))}\n" +
+                                      f"Distribución: {mcp_result.get('result', {}).get('distribucion_presupuesto', {})}",
+                            "input": query,
+                            "context": context,
+                            "data": mcp_result.get("result", {}),
+                            "confidence": 0.9,
+                            "processing_time": processing_time,
+                            "success": True,
+                            "mcp_used": True
+                        }
+                    else:
+                        logger.warning(f"Error al llamar a herramienta MCP: {mcp_result.get('error')}")
+            else:
+                logger.warning("No se pudo inicializar MCP o no hay herramientas disponibles")
+        except Exception as e:
+            logger.error(f"Error al intentar utilizar MCP: {str(e)}")
+        
+        # Si no tenemos un LLM configurado, devolver un error
         if self.llm is None:
             logger.error("Error: No hay clave API de OpenAI válida. Imposible generar respuesta.")
             processing_time = time.time() - start_time

@@ -9,7 +9,7 @@ from app.core.logging import logger
 from app.core.metrics import MetricsCollector
 from app.core.config import get_settings
 from app.tools.mcp_client import MCPClient
-from app.agents.mcp_integration import configure_agent_with_mcp, get_mcp_tools
+from app.agents.mcp_integration import configure_agent_with_mcp, get_mcp_tools_sync
 
 # Obtener la configuración
 settings = get_settings()
@@ -31,70 +31,73 @@ class FinanceAgent(BaseAgent):
     """
     
     def __init__(self):
-        """Inicializa el agente de finanzas."""
+        """
+        Inicializa el agente de finanzas.
+        """
         super().__init__(
             name="finance_agent",
-            description="Especialista en finanzas, inversiones y análisis financiero."
+            description="Especialista en finanzas, análisis financiero y estrategias de inversión"
         )
         
-        # Comprobar si hay una clave API válida
-        if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "sk-your-key-here":
-            self.llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.2)
-        else:
-            # Crear un modelo ficticio para desarrollo
-            logger.warning("No hay clave API de OpenAI válida. Usando respuestas ficticias para desarrollo.")
-            self.llm = None
-            
-        # Inicializar el cliente MCP con StdioTransport
-        # Obtener la ruta del servidor MCP del settings o utilizar una ruta por defecto
-        mcp_server_path = getattr(settings, "MCP_SERVER_PATH", None)
-        if not mcp_server_path:
-            # Intentar deducir la ruta relativa al directorio actual
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
-            mcp_server_path = os.path.join(project_root, "mcp_server", "main.py")
-            logger.info(f"Usando ruta deducida para servidor MCP: {mcp_server_path}")
-        
-        # Inicializar el cliente MCP directo para llamadas con MCPClient
-        self.mcp_client = MCPClient(
-            base_url=settings.MCP_CLIENT_URL, 
-            use_stdio=True,
-            mcp_server_path=mcp_server_path
-        )
-        
-        # Inicializar herramientas MCP desde el principio
-        try:
-            success = self.mcp_client.initialize_sync()
-            if success:
-                tools = self.mcp_client.list_tools_sync()
-                logger.info(f"Cliente MCP inicializado correctamente. Herramientas disponibles: {len(tools)}")
-                self.available_mcp_tools = [tool["name"] for tool in tools]
-                logger.info(f"Herramientas MCP disponibles: {', '.join(self.available_mcp_tools)}")
-            else:
-                logger.warning("No se pudo inicializar el cliente MCP durante la inicialización del agente")
-                self.available_mcp_tools = []
-        except Exception as e:
-            logger.error(f"Error al inicializar el cliente MCP: {str(e)}")
-            self.available_mcp_tools = []
-        
-        # Obtener herramientas MCP adaptadas para LangChain
-        mcp_tools = get_mcp_tools()
-        
-        # Configurar el agente con herramientas MCP para LangChain
-        configure_agent_with_mcp(self, mcp_tools)
-        
+        # Servicios que puede ofrecer el agente de finanzas
         self.services = [
-            "Análisis financiero",
+            "Análisis financiero", 
             "Modelos financieros",
             "Estrategias de inversión",
-            "Análisis de riesgo",
-            "Valoración de empresas",
+            "Evaluación de riesgos",
             "Planificación financiera",
-            "Optimización fiscal",
+            "Valoración de activos",
             "Presupuestos",
-            "Métricas financieras"
+            "Análisis de costos",
+            "Proyecciones financieras"
         ]
-        logger.info(f"Agente {self.name} inicializado con {len(self.services)} servicios y herramientas MCP")
+        
+        # Configurar el cliente MCP (Model Context Protocol)
+        try:
+            # En lugar de crear un nuevo cliente, usar el global desde mcp_integration
+            from app.agents.mcp_integration import _mcp_client
+            
+            if _mcp_client is None:
+                # Si no existe un cliente global, deducir la ruta del servidor MCP
+                from pathlib import Path
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                project_root = Path(current_dir).parent.parent.parent.parent
+                mcp_server_path = os.path.join(project_root, "mcp_server", "main.py")
+                
+                # Inicializar el cliente MCP en mcp_integration
+                tools = get_mcp_tools_sync()
+                if tools:
+                    self.available_mcp_tools = [tool["name"] for tool in tools]
+                    logger.info(f"Cliente MCP inicializado. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
+                    self.mcp_initialized = True
+                else:
+                    logger.warning("No se pudo inicializar el cliente MCP desde get_mcp_tools_sync")
+                    self.available_mcp_tools = []
+                    self.mcp_initialized = False
+            else:
+                # Usar el cliente global existente
+                self.mcp_initialized = True
+                tools = _mcp_client.list_tools_sync()
+                self.available_mcp_tools = [tool["name"] for tool in tools]
+                logger.info(f"Usando cliente MCP existente. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
+                
+            # Referencia al cliente global
+            self.mcp_client = _mcp_client
+        except Exception as e:
+            logger.error(f"Error al configurar cliente MCP: {str(e)}")
+            self.mcp_client = None
+            self.mcp_initialized = False
+            self.available_mcp_tools = []
+            
+        # Obtener herramientas MCP en formato LangChain
+        try:
+            mcp_tools = get_mcp_tools_sync()
+            configure_agent_with_mcp(self, mcp_tools)
+            logger.info(f"Agente {self.name} inicializado con {len(self.services)} servicios y herramientas MCP")
+        except Exception as e:
+            logger.error(f"Error al configurar agente con herramientas MCP: {str(e)}")
+            
+        logger.info(f"Agente {self.name} inicializado")
     
     def _execute_impl(self, input_data: Dict[Any, Any]) -> Dict[Any, Any]:
         """
@@ -132,18 +135,32 @@ class FinanceAgent(BaseAgent):
         mcp_tools_used = []
         
         # Reinicializar el cliente MCP si es necesario
-        if not self.available_mcp_tools:
+        if not hasattr(self, 'mcp_initialized') or not self.mcp_initialized or not self.available_mcp_tools:
             try:
                 logger.info("Reintentando inicialización del cliente MCP")
-                success = self.mcp_client.initialize_sync()
-                if success:
-                    tools = self.mcp_client.list_tools_sync()
+                
+                # Usar el cliente global desde mcp_integration
+                from app.agents.mcp_integration import _mcp_client, get_mcp_tools_sync
+                
+                # Reinicializar desde get_mcp_tools_sync para asegurar cliente global
+                tools_list = get_mcp_tools_sync()
+                
+                if tools_list:
+                    self.mcp_client = _mcp_client  # Actualizar referencia al cliente global
+                    self.mcp_initialized = True
+                    
+                    # Actualizar lista de herramientas disponibles desde el cliente global
+                    tools = _mcp_client.list_tools_sync()
                     self.available_mcp_tools = [tool["name"] for tool in tools]
-                    logger.info(f"Cliente MCP inicializado exitosamente. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
+                    logger.info(f"Cliente MCP reinicializado exitosamente. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
+                    
+                    # Actualizar herramientas para el agente
+                    configure_agent_with_mcp(self, tools_list)
                 else:
                     logger.warning("No se pudo reinicializar el cliente MCP")
             except Exception as e:
                 logger.error(f"Error al reinicializar el cliente MCP: {str(e)}")
+                self.mcp_initialized = False
         
         # Función auxiliar para ejecutar una herramienta MCP con manejo de errores
         def execute_mcp_tool(tool_name, params, data_key):
