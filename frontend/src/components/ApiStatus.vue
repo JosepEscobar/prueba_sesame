@@ -54,11 +54,42 @@ const fetchHealthStatus = async () => {
 
 const fetchMcpStatus = async () => {
   try {
-    console.log('Consultando estado MCP en http://localhost:8000/mcp/status');
-    const response = await axios.get('/mcp/status');
-    mcpStatus.value = response.data;
+    console.log('Consultando estado MCP en http://localhost:4000/mcp/v1/tools');
+    const response = await axios.get('http://localhost:4000/mcp/v1/tools');
+    
+    console.log('Respuesta del MCP para ApiStatus:', response.data);
+    
+    // Si la respuesta es un array, procesar herramientas
+    if (Array.isArray(response.data)) {
+      mcpStatus.value = {
+        status: response.data.length > 0 ? 'connected' : 'disconnected',
+        tools: response.data.map(tool => {
+          return typeof tool === 'object' ? tool.name : tool;
+        })
+      };
+    } 
+    // Si es un objeto, podría ser otro formato de respuesta
+    else if (response.data && typeof response.data === 'object') {
+      const tools = response.data.tools || [];
+      mcpStatus.value = {
+        status: tools.length > 0 ? 'connected' : 'disconnected',
+        tools: tools
+      };
+    }
+    // Si no es ni array ni objeto, marcar como desconectado
+    else {
+      mcpStatus.value = {
+        status: 'disconnected',
+        tools: []
+      };
+    }
+    
+    console.log('Estado procesado del MCP para ApiStatus:', mcpStatus.value);
   } catch (error) {
-    mcpStatus.value = null;
+    mcpStatus.value = {
+      status: 'disconnected',
+      tools: []
+    };
     console.error('Error al obtener estado de MCP:', error);
   }
 };

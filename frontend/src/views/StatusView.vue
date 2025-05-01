@@ -86,7 +86,7 @@
               >
                 <Wrench class="w-4 h-4 text-gray-300 mr-2 flex-shrink-0" />
                 <div class="min-w-0">
-                  <div class="font-medium text-sm truncate">{{ tool }}</div>
+                  <div class="font-medium text-sm truncate">{{ typeof tool === 'string' ? tool : tool.name }}</div>
                 </div>
               </div>
             </div>
@@ -198,11 +198,53 @@ const fetchMcpStatus = async () => {
   mcpError.value = null;
   
   try {
-    const response = await axios.get('/mcp/status');
-    mcpStatus.value = response.data;
+    const response = await axios.get('http://localhost:4000/mcp/v1/tools');
+    
+    console.log('Respuesta del MCP:', response.data);
+    
+    // Si la respuesta es un array, procesar herramientas
+    if (Array.isArray(response.data)) {
+      mcpStatus.value = {
+        status: 'connected',
+        mcp_url: 'http://localhost:4000',
+        tools: response.data.map(tool => {
+          // Extraer solo el nombre de la herramienta
+          return typeof tool === 'object' ? tool.name : tool;
+        }),
+        tools_available: response.data.length
+      };
+    } 
+    // Si es un objeto, podría ser otro formato de respuesta
+    else if (response.data && typeof response.data === 'object') {
+      mcpStatus.value = {
+        status: 'connected',
+        mcp_url: 'http://localhost:4000',
+        tools: response.data.tools || [],
+        tools_available: (response.data.tools || []).length
+      };
+    }
+    // Si no es ni array ni objeto, marcar como desconectado
+    else {
+      mcpStatus.value = {
+        status: 'disconnected',
+        mcp_url: 'http://localhost:4000',
+        tools: [],
+        tools_available: 0
+      };
+    }
+    
+    console.log('Estado procesado del MCP:', mcpStatus.value);
   } catch (error) {
     mcpError.value = 'No se pudo obtener el estado del MCP: ' + (error.response?.data?.message || error.message);
     console.error('Error al obtener estado de MCP:', error);
+    
+    // En caso de error, marcar como desconectado pero no nulo
+    mcpStatus.value = {
+      status: 'disconnected',
+      mcp_url: 'http://localhost:4000',
+      tools: [],
+      tools_available: 0
+    };
   } finally {
     isLoadingMcp.value = false;
   }
@@ -262,19 +304,11 @@ const apiEndpoints = {
     { method: "GET", path: "/health", description: "Verificar estado del servicio" }
   ],
   "MCP": [
-    { method: "GET", path: "/mcp/status", description: "Estado de conexión con el servidor MCP" },
-    { method: "POST", path: "/api/v1/tools/{tool_name}", description: "Ejecutar una herramienta específica" }
+    { method: "GET", path: "http://localhost:4000/mcp/v1/tools", description: "Listar herramientas MCP disponibles" },
+    { method: "POST", path: "http://localhost:4000/mcp/v1/tools/{tool_name}/execute", description: "Ejecutar una herramienta específica" }
   ],
   "Agentes": [
-    { method: "POST", path: "/api/v1/query", description: "Consulta en lenguaje natural" }
-  ],
-  "Finanzas": [
-    { method: "POST", path: "/api/v1/finance/analyze", description: "Análisis financiero" },
-    { method: "POST", path: "/api/v1/finance/forecast", description: "Pronóstico financiero" }
-  ],
-  "Marketing": [
-    { method: "POST", path: "/api/v1/marketing/analyze", description: "Análisis de marketing" },
-    { method: "POST", path: "/api/v1/marketing/campaign", description: "Generación de campañas" }
+    { method: "POST", path: "/api/v1/query", description: "Consulta en lenguaje natural con sistema multi-agente" }
   ]
 };
 </script> 

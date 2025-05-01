@@ -127,6 +127,11 @@
                 </li>
               </ul>
             </div>
+            
+            <!-- Fallback para cuando no hay ningún formato reconocido -->
+            <div v-if="!resultData.metrics && !resultData.table && !resultData.text && !resultData.items" class="mt-4 p-4 rounded-lg" style="background-color: #292929;">
+              <pre class="text-gray-200 whitespace-pre-wrap overflow-x-auto">{{ formatResult() }}</pre>
+            </div>
           </div>
         </div>
       </div>
@@ -152,17 +157,37 @@ const submitQuery = async () => {
   result.value = null;
   isLoading.value = true;
   
-  const endpoint = activeTab.value === 'analyze' 
-    ? '/api/v1/marketing/analyze'
-    : '/api/v1/marketing/campaign';
+  // Endpoint que vamos a utilizar
+  const endpoint = '/api/v1/query';
+  console.log('Enviando consulta a endpoint:', endpoint);
   
   try {
-    const response = await axios.post(endpoint, {
+    const requestData = {
       query: query.value,
-      context: {}
-    });
+      context: {},
+      agent_preference: 'marketing'
+    };
+    console.log('Datos de la solicitud:', requestData);
     
-    result.value = response.data;
+    const response = await axios.post(endpoint, requestData);
+    console.log('Respuesta recibida:', response.data);
+    
+    // Verificar estructura de la respuesta
+    if (response.data && response.data.result) {
+      console.log('Estructura del resultado:', {
+        type: typeof response.data.result,
+        isNull: response.data.result === null,
+        isEmpty: response.data.result === '',
+        keys: typeof response.data.result === 'object' ? Object.keys(response.data.result) : 'N/A'
+      });
+      
+      result.value = response.data.result;
+      console.log('result.value asignado:', result.value);
+    } else {
+      console.warn('Respuesta sin estructura esperada:', response.data);
+      // Intentar usar el objeto completo como resultado
+      result.value = response.data;
+    }
   } catch (e) {
     console.error(`Error en ${activeTab.value}:`, e);
     error.value = e.response?.data?.message || e.message || 'Error al procesar la consulta';
@@ -188,4 +213,17 @@ const resultData = computed(() => {
     return { text: 'Error al formatear el resultado' };
   }
 });
+
+const formatResult = () => {
+  console.log('Formateando resultado:', result.value);
+  if (!result.value) return 'No hay resultado disponible';
+  
+  if (typeof result.value === 'string') return result.value;
+  
+  try {
+    return JSON.stringify(result.value, null, 2);
+  } catch (e) {
+    return String(result.value);
+  }
+};
 </script> 
