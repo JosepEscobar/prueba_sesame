@@ -6,9 +6,9 @@
         <div class="icon-container">
           <component :is="suggestion.icon" class="w-5 h-5" />
         </div>
-        <span class="text-base font-medium ml-3">{{ suggestion.title }}</span>
+        <span class="text-base font-medium ml-3 text-gray-100">{{ suggestion.title }}</span>
       </div>
-      <p class="text-gray-600 dark:text-gray-400 text-sm">{{ suggestion.text }}</p>
+      <p class="text-gray-400 text-sm">{{ suggestion.text }}</p>
     </div>
   </div>
 </template>
@@ -61,17 +61,19 @@ const suggestions = [
 
 <style scoped>
 .suggestion-card {
-  @apply p-4 rounded-lg bg-gray-50 dark:bg-gray-800 shadow hover:shadow-lg transition-shadow 
-         border border-gray-200 dark:border-gray-700 cursor-pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  @apply p-4 rounded-lg shadow hover:shadow-lg transition-shadow border cursor-pointer;
+  background-color: var(--message-surface);
+  border-color: var(--border-light);
 }
 
 .suggestion-card:hover {
   transform: translateY(-2px);
-  @apply border-primary-300 dark:border-primary-700;
+  border-color: var(--border-medium);
 }
 
 .icon-container {
-  @apply flex items-center justify-center w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400;
+  @apply flex items-center justify-center w-8 h-8 rounded-full;
+  background-color: var(--composer-blue-bg);
+  color: var(--composer-blue-text);
 }
 </style> 

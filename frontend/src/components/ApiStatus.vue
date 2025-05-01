@@ -2,17 +2,17 @@
   <div class="flex items-center text-sm">
     <div class="flex items-center mr-3">
       <div :class="statusColorClass" class="w-2 h-2 rounded-full mr-2"></div>
-      <span>API</span>
+      <span class="text-gray-300">API</span>
     </div>
     
     <div v-if="mcpStatus" class="flex items-center">
-      <div class="mx-2 text-gray-300 dark:text-gray-600">|</div>
+      <div class="mx-2 text-gray-500">|</div>
       <div class="flex items-center">
         <div 
           :class="mcpStatus.status === 'connected' ? 'bg-green-500' : 'bg-red-500'" 
           class="w-2 h-2 rounded-full mr-2"
         ></div>
-        <span>MCP</span>
+        <span class="text-gray-300">MCP</span>
       </div>
     </div>
   </div>
@@ -74,7 +74,7 @@ const healthText = computed(() => {
 
 const statusColorClass = computed(() => {
   return {
-    'loading': 'bg-gray-300 animate-pulse',
+    'loading': 'bg-gray-400 animate-pulse',
     'healthy': 'bg-green-500',
     'degraded': 'bg-yellow-500',
     'unhealthy': 'bg-red-500'

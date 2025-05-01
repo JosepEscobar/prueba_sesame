@@ -1,18 +1,18 @@
 <template>
-  <div class="flex h-screen overflow-hidden">
+  <div class="flex h-screen overflow-hidden bg-black">
     <!-- Sidebar -->
-    <div class="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-      <div class="p-4 border-b border-gray-200 dark:border-gray-700">
-        <h1 class="text-xl font-semibold">Sesame Chat</h1>
+    <div class="w-64 flex flex-col sidebar">
+      <div class="p-4 border-b sidebar-header">
+        <h1 class="text-xl font-semibold sidebar-title">Sesame Chat</h1>
       </div>
       <nav class="flex-1 overflow-y-auto p-2">
         <div v-for="item in navItems" :key="item.name" class="relative mb-1">
           <RouterLink 
             :to="item.to" 
-            class="flex items-center p-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            :class="{ 'bg-gray-100 dark:bg-gray-700': isActive(item.to) }"
+            class="flex items-center p-3 rounded-lg sidebar-link"
+            :class="{ 'sidebar-link-active': isActive(item.to) }"
           >
-            <component :is="item.icon" class="w-5 h-5 mr-2" />
+            <component :is="item.icon" class="w-5 h-5 mr-2 sidebar-icon" />
             {{ item.name }}
           </RouterLink>
           
@@ -20,7 +20,7 @@
           <button 
             v-if="item.name === 'Chat' && isActive(item.to)"
             @click="newChat"
-            class="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600"
+            class="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 sidebar-button rounded-full"
             title="Nuevo chat"
           >
             <PlusCircle class="w-5 h-5" />
@@ -31,11 +31,11 @@
 
     <!-- Main content -->
     <div class="flex-1 flex flex-col overflow-hidden">
-      <header class="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6">
-        <h2 class="text-lg font-medium">{{ currentRoute }}</h2>
+      <header class="h-16 flex items-center justify-between px-6 header">
+        <h2 class="text-lg font-medium header-title">{{ currentRoute }}</h2>
         <ApiStatus class="w-auto" />
       </header>
-      <main class="flex-1 overflow-hidden bg-gray-50 dark:bg-gray-900">
+      <main class="flex-1 overflow-hidden main-content">
         <RouterView />
       </main>
     </div>
@@ -70,4 +70,57 @@ const isActive = (path) => {
 const newChat = () => {
   window.location.reload();
 };
-</script> 
+</script>
+
+<style scoped>
+.sidebar {
+  background-color: var(--main-surface-background);
+  border-right: 1px solid var(--border-light);
+}
+
+.sidebar-header {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.sidebar-title {
+  color: var(--sidebar-title-primary);
+}
+
+.sidebar-link {
+  color: var(--text-secondary);
+}
+
+.sidebar-link:hover {
+  background-color: var(--surface-hover);
+}
+
+.sidebar-link-active {
+  background-color: var(--main-surface-secondary-selected);
+}
+
+.sidebar-icon {
+  color: var(--sidebar-icon);
+}
+
+.sidebar-button {
+  color: var(--sidebar-icon);
+}
+
+.sidebar-button:hover {
+  color: var(--text-primary);
+  background-color: var(--surface-hover);
+}
+
+.header {
+  background-color: var(--main-surface-background);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.header-title {
+  color: var(--text-primary);
+}
+
+.main-content {
+  background-color: var(--main-surface-background);
+}
+</style> 

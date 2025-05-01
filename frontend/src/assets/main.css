@@ -1,12 +1,12 @@
 @import 'tailwindcss/base';
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
+@import './colors.css';
 
 @layer base {
     body {
-        @apply text-gray-800 dark:text-gray-200;
+        @apply text-gray-100 bg-black;
         font-family: 'Inter', sans-serif;
-        background-color: #121827;
     }
 
     h1,
@@ -15,11 +15,11 @@
     h4,
     h5,
     h6 {
-        @apply font-medium;
+        @apply font-medium text-gray-100;
     }
 
     button {
-        @apply focus:outline-none focus:ring-2 focus:ring-primary-500;
+        @apply focus:outline-none focus:ring-2 focus:ring-primary-400;
     }
 }
 
@@ -29,10 +29,71 @@
     }
 
     .user-bubble {
-        @apply chat-bubble bg-primary-600 text-white ml-auto;
+        @apply chat-bubble ml-auto;
+        background-color: var(--composer-blue-bg);
+        color: var(--text-primary);
     }
 
     .api-bubble {
-        @apply chat-bubble bg-secondary-100 dark:bg-secondary-800 text-gray-800 dark:text-gray-200;
+        @apply chat-bubble mr-auto;
+        background-color: var(--message-surface);
+        color: var(--text-primary);
     }
+
+    .chatgpt-sidebar {
+        @apply bg-sidebar-surface-primary border-r border-border-light;
+    }
+
+    .chatgpt-sidebar-link {
+        @apply text-gray-300 hover:bg-surface-hover;
+    }
+
+    .chatgpt-sidebar-link-active {
+        @apply bg-gray-800;
+    }
+
+    .chatgpt-header {
+        @apply bg-sidebar-surface-secondary border-b border-border-light;
+    }
+
+    .chatgpt-input {
+        @apply bg-chatgpt-composer border border-border-medium focus:ring-primary-400 text-gray-100 placeholder-text-placeholder;
+    }
+}
+
+/* Clases personalizadas como CSS normal en lugar de @apply */
+.border-custom-light {
+    border-color: var(--border-light);
+}
+
+.border-custom-medium {
+    border-color: var(--border-medium);
+}
+
+.border-custom-heavy {
+    border-color: var(--border-heavy);
+}
+
+.bg-main-surface {
+    background-color: var(--main-surface-background);
+}
+
+.bg-composer-primary {
+    background-color: var(--composer-surface-primary);
+}
+
+.bg-hover {
+    background-color: var(--surface-hover);
+}
+
+.text-primary {
+    color: var(--text-primary);
+}
+
+.text-secondary {
+    color: var(--text-secondary);
+}
+
+.text-sidebar {
+    color: var(--sidebar-icon);
 }

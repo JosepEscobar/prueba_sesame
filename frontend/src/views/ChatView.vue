@@ -1,11 +1,11 @@
 <template>
   <div class="h-full flex flex-col">
-    <div class="flex-1 overflow-y-auto p-4" ref="chatContainer">
+    <div class="flex-1 overflow-y-auto p-4 chat-container" ref="chatContainer">
       <div class="max-w-4xl mx-auto">
         <div v-if="messages.length === 0" class="h-full flex flex-col items-center justify-center">
           <div class="text-center mb-10">
-            <h2 class="text-3xl font-semibold mb-3">Bienvenido a Sesame Chat</h2>
-            <p class="text-gray-600 dark:text-gray-400 text-lg">¿Qué te gustaría hacer hoy?</p>
+            <h2 class="text-3xl font-semibold mb-3 welcome-title">Bienvenido a Sesame Chat</h2>
+            <p class="welcome-subtitle text-lg">¿Qué te gustaría hacer hoy?</p>
           </div>
           <div class="w-full px-4">
             <SuggestionBubbles @select="sendSuggestion" />
@@ -21,7 +21,7 @@
         </div>
       </div>
     </div>
-    <div class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
+    <div class="input-container border-t p-4">
       <div class="max-w-4xl mx-auto">
         <ChatInput 
           v-model="userInput" 
@@ -101,13 +101,21 @@ const sendMessage = async () => {
     // Limpiar el timeout warning
     clearTimeout(timeoutWarning);
     
+    // Debug - Mostrar la respuesta para entender su formato
+    console.log('Respuesta recibida del backend:', response.data);
+    
     // Reemplazar mensaje de carga con respuesta
     const apiResponseIndex = messages.value.findIndex(msg => msg.isLoading);
     if (apiResponseIndex !== -1) {
-      messages.value[apiResponseIndex] = {
-        content: response.data.result && typeof response.data.result === 'object' ? 
+      const resultContent = response.data.result && typeof response.data.result === 'object' ? 
                  response.data.result.content || JSON.stringify(response.data.result) : 
-                 response.data.result || response.data,
+                 response.data.result || response.data;
+      
+      console.log('Contenido de la respuesta formateado:', resultContent);
+      console.log('Tipo de contenido:', typeof resultContent);
+      
+      messages.value[apiResponseIndex] = {
+        content: resultContent,
         agent: response.data.agent,
         confidence: response.data.confidence,
         isUser: false,
@@ -205,4 +213,24 @@ const fetchWelcomeMessage = async () => {
     });
   }
 };
-</script> 
+
+</script>
+
+<style scoped>
+.chat-container {
+  background-color: var(--main-surface-background);
+}
+
+.welcome-title {
+  color: var(--text-primary);
+}
+
+.welcome-subtitle {
+  color: var(--text-secondary);
+}
+
+.input-container {
+  background-color: var(--main-surface-background);
+  border-color: var(--border-light);
+}
+</style> 

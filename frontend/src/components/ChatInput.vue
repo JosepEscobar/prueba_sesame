@@ -5,9 +5,7 @@
         ref="textareaRef"
         v-model="inputValue"
         placeholder="Escribe un mensaje..."
-        class="w-full py-3 px-4 pr-16 rounded-lg border border-gray-300 dark:border-gray-600 
-               bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 
-               focus:border-transparent resize-none overflow-hidden"
+        class="input-textarea w-full py-3 px-4 pr-16 rounded-lg resize-none overflow-hidden"
         :rows="rows"
         @keydown.enter.prevent="handleEnter"
         @input="resizeTextarea"
@@ -15,14 +13,14 @@
       <div class="absolute right-2 flex items-center space-x-1">
         <button 
           @click="$emit('clear')"
-          class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          class="clear-button p-2"
           title="Limpiar chat"
         >
           <Trash2 class="w-5 h-5" />
         </button>
         <button 
           @click="sendMessage"
-          class="p-2 text-white bg-primary-600 rounded-lg hover:bg-primary-700"
+          class="send-button p-2 rounded-lg"
           :disabled="!inputValue.trim()"
           :class="{ 'opacity-50 cursor-not-allowed': !inputValue.trim() }"
         >
@@ -97,4 +95,39 @@ onMounted(() => {
     textareaRef.value.focus();
   }
 });
-</script> 
+</script>
+
+<style scoped>
+.input-textarea {
+  background-color: var(--composer-surface-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-medium);
+}
+
+.input-textarea:focus {
+  outline: none;
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--border-heavy);
+}
+
+.input-textarea::placeholder {
+  color: var(--text-placeholder);
+}
+
+.clear-button {
+  color: var(--text-secondary);
+}
+
+.clear-button:hover {
+  color: var(--text-primary);
+}
+
+.send-button {
+  background-color: var(--composer-blue-bg);
+  color: var(--text-primary);
+}
+
+.send-button:hover {
+  background-color: var(--composer-blue-hover);
+}
+</style> 
