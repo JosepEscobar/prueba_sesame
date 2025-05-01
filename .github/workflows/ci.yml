@@ -51,6 +51,7 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         file: ./api_server/coverage.xml
         flags: api-server
         fail_ci_if_error: true
@@ -99,6 +100,7 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         file: ./mcp_server/coverage.xml
         flags: mcp-server
         fail_ci_if_error: true
@@ -166,7 +168,7 @@ jobs:
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ secrets.GHCR_TOCKEN }}
         
     - name: Build and push API Server
       uses: docker/build-push-action@v5
