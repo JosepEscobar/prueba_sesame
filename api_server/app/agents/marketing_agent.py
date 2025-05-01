@@ -103,6 +103,9 @@ class MarketingAgent(BaseAgent):
         query = input_data.get("query", "")
         context = input_data.get("context", {})
 
+        # Inicializar marketing_data aquí para evitar UnboundLocalError
+        marketing_data = {}
+
         # Logueamos la consulta
         query_preview = query[:50] + "..." if len(query) > 50 else query
         logger.info(f"Procesando consulta de marketing: {query_preview}")
@@ -190,9 +193,6 @@ class MarketingAgent(BaseAgent):
 
                             marketing_actions = categorization.get("marketing_actions", [])
                             parameters = categorization.get("parameters", {})
-
-                            # Inicializar el diccionario de datos de marketing
-                            marketing_data = {}
 
                             # Procesar acciones de marketing basadas en la categorización
                             try:

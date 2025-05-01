@@ -9,6 +9,10 @@ on:
 jobs:
   test-api-server:
     runs-on: ubuntu-latest
+    permissions: 
+      contents: read
+      issues: write
+      pull-requests: write
     strategy:
       matrix:
         python-version: [3.12]
@@ -77,12 +81,17 @@ jobs:
               Cobertura de pruebas para api_server generada por la ejecución de CI.
               `;
               
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
+              try {
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: body
+                });
+                console.log('Comentario sobre cobertura agregado exitosamente al PR');
+              } catch (commentError) {
+                console.error('Error al agregar comentario al PR:', commentError);
+              }
             });
           } catch (error) {
             console.error('Error al procesar el informe de cobertura:', error);
@@ -90,6 +99,10 @@ jobs:
 
   test-mcp-server:
     runs-on: ubuntu-latest
+    permissions: 
+      contents: read
+      issues: write
+      pull-requests: write
     strategy:
       matrix:
         python-version: [3.12]
@@ -158,12 +171,17 @@ jobs:
               Cobertura de pruebas para mcp_server generada por la ejecución de CI.
               `;
               
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
+              try {
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: body
+                });
+                console.log('Comentario sobre cobertura agregado exitosamente al PR');
+              } catch (commentError) {
+                console.error('Error al agregar comentario al PR:', commentError);
+              }
             });
           } catch (error) {
             console.error('Error al procesar el informe de cobertura:', error);
