@@ -5,9 +5,8 @@ Script principal para iniciar el cliente MCP Sesame.
 Este script facilita la ejecución del cliente desde la línea de comandos.
 """
 
-import sys
 import os
-from pathlib import Path
+import sys
 
 # Asegurar que el directorio actual está en el path de Python
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -16,4 +15,4 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cliente_mcp_sesame import main
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())

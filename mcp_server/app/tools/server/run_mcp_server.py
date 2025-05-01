@@ -1,15 +1,13 @@
 
 import asyncio
-import sys
-import os
 import signal
-from pathlib import Path
+import sys
 
 # Añadir el directorio raíz al path de Python
 sys.path.insert(0, "/Users/josepescobar/Developer/prueba_sesame")
 
+from app.core.logging import logger, setup_logging
 from app.tools.server.server_init import init_mcp_server, run_server
-from app.core.logging import setup_logging, logger
 
 # Configurar logging
 setup_logging()
@@ -28,7 +26,7 @@ async def main():
         logger.info("Iniciando servidor MCP en proceso separado...")
         # Inicializar el servidor
         server = await init_mcp_server(host="localhost", port=4000)
-        
+
         # Ejecutar el servidor (esta función es bloqueante)
         await run_server(server)
     except Exception as e:

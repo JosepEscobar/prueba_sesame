@@ -155,12 +155,9 @@ cython_debug/
 .env
 logs/
 prometheus_data/
-.cursor/
-.vscode/
 
 # IDEs y editores
 .idea/
-.vscode/
 *.swp
 *.swo
 .DS_Store

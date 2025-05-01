@@ -2,24 +2,26 @@
 Modelos Pydantic para la API
 """
 
-from typing import Dict, List, Optional, Any, Union
-from pydantic import BaseModel, Field, validator
 import time
+from typing import Any
+
+from pydantic import BaseModel, Field, validator
+
 
 class ErrorResponse(BaseModel):
     """Modelo para respuestas de error estandarizadas."""
     detail: str = Field(
-        ..., 
+        ...,
         description="Descripción detallada del error",
         example="Error al procesar la consulta: invalid input format"
     )
-    
-    code: Optional[str] = Field(
-        None, 
+
+    code: str | None = Field(
+        None,
         description="Código de error para identificación programática",
         example="INVALID_INPUT"
     )
-    
+
     timestamp: float = Field(
         default_factory=time.time,
         description="Marca de tiempo (epoch) cuando ocurrió el error",
@@ -29,25 +31,25 @@ class ErrorResponse(BaseModel):
 class DataSource(BaseModel):
     """Información sobre una fuente de datos utilizada en una consulta."""
     name: str = Field(
-        ..., 
+        ...,
         description="Nombre de la fuente de datos",
         example="MarketDatabase"
     )
-    
+
     source_type: str = Field(
-        ..., 
+        ...,
         description="Tipo de fuente (API, database, web, etc.)",
         example="API"
     )
-    
+
     reliability: float = Field(
-        ..., 
+        ...,
         description="Puntuación de confiabilidad de la fuente (0.0-1.0)",
         ge=0.0,
         le=1.0,
         example=0.85
     )
-    
+
     timestamp: float = Field(
         default_factory=time.time,
         description="Marca de tiempo cuando se consultó la fuente",
@@ -57,14 +59,14 @@ class DataSource(BaseModel):
 class QueryRequest(BaseModel):
     """Modelo para solicitudes de consulta al sistema multi-agente."""
     query: str = Field(
-        ..., 
-        min_length=3, 
+        ...,
+        min_length=3,
         max_length=2000,
         description="Consulta o pregunta del usuario",
         example="Analiza las tendencias actuales del mercado de comercio electrónico en España"
     )
-    
-    context: Optional[Dict[str, Any]] = Field(
+
+    context: dict[str, Any] | None = Field(
         None,
         description="Contexto adicional para enriquecer la consulta",
         example={
@@ -74,13 +76,13 @@ class QueryRequest(BaseModel):
             "focus_areas": ["Mobile commerce", "Last-mile delivery"]
         }
     )
-    
-    agent_preference: Optional[str] = Field(
+
+    agent_preference: str | None = Field(
         None,
         description="Preferencia de agente específico para procesar la consulta",
         example="analysis_agent"
     )
-    
+
     @validator('query')
     def query_must_be_valid(cls, v):
         """Validador para asegurar que la consulta tiene un formato adecuado."""
@@ -90,7 +92,7 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     """Modelo para respuestas de consultas procesadas por el sistema."""
-    result: Dict[str, Any] = Field(
+    result: dict[str, Any] = Field(
         ...,
         description="Resultado del procesamiento de la consulta",
         example={
@@ -99,19 +101,19 @@ class QueryResponse(BaseModel):
             "recommendations": ["Optimizar experiencia móvil", "Implementar múltiples opciones de pago"]
         }
     )
-    
+
     agent: str = Field(
         ...,
         description="Identificador del agente que procesó la consulta",
         example="analysis_agent"
     )
-    
+
     processing_time: float = Field(
         ...,
         description="Tiempo de procesamiento en segundos",
         example=1.45
     )
-    
+
     confidence: float = Field(
         ...,
         description="Nivel de confianza de la respuesta (0.0-1.0)",
@@ -119,8 +121,8 @@ class QueryResponse(BaseModel):
         le=1.0,
         example=0.87
     )
-    
-    data_sources: Optional[List[DataSource]] = Field(
+
+    data_sources: list[DataSource] | None = Field(
         None,
         description="Lista de fuentes de datos utilizadas para responder",
         example=[
@@ -146,8 +148,8 @@ class DataLookupRequest(BaseModel):
         description="Tipo de búsqueda a realizar (market, news, industry, web, company)",
         example="market"
     )
-    
-    query: Dict[str, Any] = Field(
+
+    query: dict[str, Any] = Field(
         ...,
         description="Parámetros específicos para la búsqueda",
         example={
@@ -156,7 +158,7 @@ class DataLookupRequest(BaseModel):
             "filter": "last_year"
         }
     )
-    
+
     @validator('lookup_type')
     def valid_lookup_type(cls, v):
         """Validador para asegurar que el tipo de búsqueda es válido."""
@@ -164,7 +166,7 @@ class DataLookupRequest(BaseModel):
         if v not in valid_types:
             raise ValueError(f"Tipo de búsqueda no válido. Debe ser uno de: {', '.join(valid_types)}")
         return v
-    
+
     @validator('query')
     def required_query_params(cls, v):
         """Validador para asegurar que los parámetros necesarios están presentes."""
@@ -179,8 +181,8 @@ class DataLookupResponse(BaseModel):
         description="Indica si la búsqueda fue exitosa",
         example=True
     )
-    
-    result: Dict[str, Any] = Field(
+
+    result: dict[str, Any] = Field(
         ...,
         description="Resultados de la búsqueda",
         example={
@@ -204,8 +206,8 @@ class DataLookupResponse(BaseModel):
             "query_time": 0.12
         }
     )
-    
-    query: Dict[str, Any] = Field(
+
+    query: dict[str, Any] = Field(
         ...,
         description="Parámetros utilizados para la búsqueda",
         example={
@@ -213,14 +215,14 @@ class DataLookupResponse(BaseModel):
             "limit": 5
         }
     )
-    
+
     lookup_type: str = Field(
         ...,
         description="Tipo de búsqueda realizada",
         example="market"
     )
-    
-    metadata: Optional[Dict[str, Any]] = Field(
+
+    metadata: dict[str, Any] | None = Field(
         None,
         description="Metadatos adicionales de la búsqueda",
         example={
@@ -228,4 +230,4 @@ class DataLookupResponse(BaseModel):
             "coverage": "Spain, Portugal",
             "sources_used": 3
         }
-    ) 
+    )

@@ -1,9 +1,10 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
 
-from app.main import app
 from app.core.orchestrator import Orchestrator
+from app.main import app
 
 client = TestClient(app)
 
@@ -11,7 +12,7 @@ client = TestClient(app)
 def mock_orchestrator():
     """Fixture para crear un orquestador simulado."""
     orchestrator = MagicMock(spec=Orchestrator)
-    
+
     # Configurar comportamiento del orquestador para diferentes tipos de consultas
     def process_side_effect(query):
         if "error" in query.lower():
@@ -36,7 +37,7 @@ def mock_orchestrator():
                 "confidence": 0.92,
                 "processing_time": 0.8
             }
-    
+
     orchestrator.process.side_effect = process_side_effect
     return orchestrator
 
@@ -45,7 +46,7 @@ def test_basic_endpoints(endpoint):
     """Test de los endpoints básicos."""
     response = client.get(endpoint)
     assert response.status_code == 200
-    
+
     data = response.json()
     assert "status" in data
     assert data["status"] == "ok"
@@ -60,15 +61,15 @@ def test_metrics_endpoint():
 def test_process_endpoint_success(mock_get_orchestrator, mock_orchestrator):
     """Test del endpoint de procesamiento con respuesta exitosa."""
     mock_get_orchestrator.return_value = mock_orchestrator
-    
+
     response = client.post(
         "/api/v1/process",
         json={"query": "Haz un resumen de este documento"}
     )
-    
+
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["status"] == "success"
     assert data["agent_name"] == "SummaryAgent"
     assert "summary" in data["result"]
@@ -79,15 +80,15 @@ def test_process_endpoint_success(mock_get_orchestrator, mock_orchestrator):
 def test_process_endpoint_finance(mock_get_orchestrator, mock_orchestrator):
     """Test del endpoint de procesamiento con consulta financiera."""
     mock_get_orchestrator.return_value = mock_orchestrator
-    
+
     response = client.post(
         "/api/v1/process",
         json={"query": "Analiza estas finanzas corporativas"}
     )
-    
+
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["status"] == "success"
     assert data["agent_name"] == "FinanceAgent"
     assert "analysis" in data["result"]
@@ -97,15 +98,15 @@ def test_process_endpoint_finance(mock_get_orchestrator, mock_orchestrator):
 def test_process_endpoint_error(mock_get_orchestrator, mock_orchestrator):
     """Test del endpoint de procesamiento con error."""
     mock_get_orchestrator.return_value = mock_orchestrator
-    
+
     response = client.post(
         "/api/v1/process",
         json={"query": "Genera un error en el procesamiento"}
     )
-    
+
     assert response.status_code == 500
     data = response.json()
-    
+
     assert data["status"] == "error"
     assert "error_message" in data
     assert "retries" in data
@@ -116,17 +117,17 @@ def test_process_endpoint_validation_error():
         "/api/v1/process",
         json={"invalid_field": "Este campo no es válido"}
     )
-    
+
     assert response.status_code == 422
     data = response.json()
-    
+
     assert "detail" in data
 
 @patch("app.main.get_orchestrator")
 def test_process_endpoint_with_context(mock_get_orchestrator, mock_orchestrator):
     """Test del endpoint de procesamiento con contexto adicional."""
     mock_get_orchestrator.return_value = mock_orchestrator
-    
+
     response = client.post(
         "/api/v1/process",
         json={
@@ -138,9 +139,9 @@ def test_process_endpoint_with_context(mock_get_orchestrator, mock_orchestrator)
             }
         }
     )
-    
+
     assert response.status_code == 200
-    
+
     # Verificar que el contexto fue pasado al orquestador
     call_args = mock_orchestrator.process.call_args[0][0]
-    assert "Haz un resumen de este documento" in call_args 
+    assert "Haz un resumen de este documento" in call_args

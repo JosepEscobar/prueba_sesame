@@ -1,10 +1,8 @@
-from typing import Any, Dict, Optional
 import time
-import json
+from typing import Any
 
 from app.agents.base import BaseAgent
 from app.core.logging import logger
-from app.core.metrics import MetricsCollector
 
 
 class OperationsAgent(BaseAgent):
@@ -30,7 +28,7 @@ class OperationsAgent(BaseAgent):
         self.description = "Especialista en gestión operativa y optimización de procesos"
         logger.info(f"Agente de operaciones inicializado: {self.name}")
 
-    def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_impl(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """
         Implementación de la ejecución del agente de operaciones.
         
@@ -41,15 +39,15 @@ class OperationsAgent(BaseAgent):
             Diccionario con el resultado del procesamiento
         """
         start_time = time.time()
-        
+
         # Preparar entrada para el prompt
         query = input_data.get('query', '')
         content = input_data.get('content', '')
-        
+
         # Loguear la consulta con un límite seguro
         query_preview = query[:100] + "..." if len(query) > 100 else query
         logger.info(f"Procesando consulta de operaciones: {query_preview}")
-        
+
         # Preparar el sistema de prompt para obtener una respuesta estructurada
         prompt = f"""
         Como especialista en operaciones y gestión operativa, analiza la siguiente consulta y proporciona recomendaciones estratégicas:
@@ -78,28 +76,28 @@ class OperationsAgent(BaseAgent):
         
         Utiliza terminología precisa de gestión de operaciones, referencias a mejores prácticas y metodologías estándar del sector.
         """
-        
+
         try:
             # Invocar el modelo de lenguaje
             response = self.invoke_llm(prompt)
-            
+
             # Calcular tiempo de procesamiento
             processing_time = time.time() - start_time
             logger.info(f"Consulta de operaciones procesada en {processing_time:.2f} segundos")
-            
+
             # Establecer un nivel de confianza (puede ser ajustado según criterios específicos)
             confidence = 0.89  # Nivel de confianza para respuestas operativas
-            
+
             return {
                 "result": response,
                 "query": query,
                 "confidence": confidence
             }
-            
+
         except Exception as e:
             logger.error(f"Error al procesar consulta de operaciones: {str(e)}")
             return {
                 "result": f"Error al procesar la consulta de operaciones: {str(e)}",
                 "query": query,
                 "confidence": 0.0
-            } 
+            }

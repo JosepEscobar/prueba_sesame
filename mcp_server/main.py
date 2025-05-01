@@ -11,15 +11,13 @@ Soporta dos modos de operación:
 2. Stdio: Para comunicación directa a través de entrada/salida estándar
 """
 
-from typing import Dict, List, Any, Optional, Callable
+import logging
 import os
 import sys
-import logging
-import asyncio
-import json
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-import requests
+from typing import Any
 
 # Configurar logging
 logs_dir = Path(__file__).parent / "logs"
@@ -36,10 +34,8 @@ logging.basicConfig(
 logger = logging.getLogger("mcp_server")
 
 # Importar FastAPI
-from fastapi import FastAPI, APIRouter, Request, HTTPException
-from fastapi.responses import JSONResponse
 import uvicorn
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 
 # Crear la aplicación FastAPI
 app = FastAPI(
@@ -53,7 +49,7 @@ app = FastAPI(
 async def log_requests(request: Request, call_next):
     # Registrar solicitud entrante
     logger.info(f"Solicitud recibida: {request.method} {request.url.path}")
-    
+
     # Obtener el cuerpo de la solicitud si es POST o PUT
     if request.method in ("POST", "PUT"):
         try:
@@ -68,11 +64,11 @@ async def log_requests(request: Request, call_next):
                 logger.info(f"Cuerpo de la solicitud: {body_str}")
         except Exception as e:
             logger.warning(f"No se pudo leer el cuerpo de la solicitud: {str(e)}")
-    
+
     # Continuar con la solicitud
     response = await call_next(request)
     logger.info(f"Respuesta: {response.status_code}")
-    
+
     return response
 
 # Crear router para la API MCP
@@ -118,15 +114,15 @@ async def execute_tool(tool_name: str, request: Request):
     """Ejecutar una herramienta específica."""
     if tool_name not in tools_registry:
         raise HTTPException(status_code=404, detail=f"Herramienta '{tool_name}' no encontrada")
-    
+
     try:
         # Obtener parámetros de la solicitud
         params = await request.json()
-        
+
         # Ejecutar la herramienta
         tool_func = tools_registry[tool_name]
         result = await tool_func(**params)
-        
+
         # Devolver el resultado
         return {"result": result}
     except Exception as e:
@@ -136,7 +132,7 @@ async def execute_tool(tool_name: str, request: Request):
 # ---- Herramientas de análisis financiero ----
 
 @register_tool()
-async def buscar_datos_financieros(empresa: str, periodo: Optional[str] = None) -> Dict[str, Any]:
+async def buscar_datos_financieros(empresa: str, periodo: str | None = None) -> dict[str, Any]:
     """
     Busca datos financieros de una empresa específica.
     
@@ -151,7 +147,7 @@ async def buscar_datos_financieros(empresa: str, periodo: Optional[str] = None) 
     # Este es un ejemplo simplificado
     hoy = datetime.now().strftime("%Y-%m-%d")
     periodo_actual = periodo or f"Q1 {datetime.now().year}"
-    
+
     return {
         "empresa": empresa,
         "periodo": periodo_actual,
@@ -169,11 +165,11 @@ async def buscar_datos_financieros(empresa: str, periodo: Optional[str] = None) 
 
 @register_tool()
 async def calcular_ratios_financieros(
-    ingresos: float, 
-    beneficio_neto: float, 
-    activos_totales: float, 
+    ingresos: float,
+    beneficio_neto: float,
+    activos_totales: float,
     pasivos_totales: float
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Calcula ratios financieros a partir de datos básicos.
     
@@ -187,28 +183,28 @@ async def calcular_ratios_financieros(
         Ratios financieros calculados
     """
     patrimonio_neto = activos_totales - pasivos_totales
-    
+
     # Evitar divisiones por cero
     if ingresos == 0:
         margen_beneficio = 0
     else:
         margen_beneficio = beneficio_neto / ingresos
-    
+
     if activos_totales == 0:
         roa = 0
     else:
         roa = beneficio_neto / activos_totales
-    
+
     if patrimonio_neto == 0:
         roe = 0
     else:
         roe = beneficio_neto / patrimonio_neto
-    
+
     if pasivos_totales == 0:
         ratio_endeudamiento = 0
     else:
         ratio_endeudamiento = pasivos_totales / activos_totales
-    
+
     return {
         "margen_beneficio": margen_beneficio,
         "ROA": roa,
@@ -226,7 +222,7 @@ async def analizar_rendimiento_campania(
     clics: int,
     conversiones: int,
     coste: float
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Analiza el rendimiento de una campaña de marketing.
     
@@ -246,7 +242,7 @@ async def analizar_rendimiento_campania(
     conversion_rate = conversiones / clics if clics > 0 else 0
     cpa = coste / conversiones if conversiones > 0 else 0
     roi = (conversiones * 100 - coste) / coste if coste > 0 else 0
-    
+
     return {
         "campania": nombre_campania,
         "metricas": {
@@ -266,10 +262,10 @@ async def analizar_rendimiento_campania(
 @register_tool()
 async def recomendar_estrategia_marketing(
     industria: str,
-    presupuesto: float, 
+    presupuesto: float,
     objetivo: str,
-    publico_objetivo: Optional[str] = None
-) -> Dict[str, Any]:
+    publico_objetivo: str | None = None
+) -> dict[str, Any]:
     """
     Recomienda una estrategia de marketing basada en parámetros básicos.
     
@@ -284,7 +280,7 @@ async def recomendar_estrategia_marketing(
     """
     # En una implementación real, esto podría usar un modelo ML o reglas más complejas
     # Este es un ejemplo simplificado
-    
+
     estrategias = {
         "awareness": [
             "Campañas de display en redes sociales",
@@ -302,11 +298,11 @@ async def recomendar_estrategia_marketing(
             "Comunidad en redes sociales"
         ]
     }
-    
+
     objetivo_norm = objetivo.lower()
     if objetivo_norm not in estrategias:
         objetivo_norm = "conversiones"  # Valor por defecto
-    
+
     # Seleccionar canales según presupuesto
     canales = []
     if presupuesto < 10000:
@@ -315,7 +311,7 @@ async def recomendar_estrategia_marketing(
         canales = estrategias[objetivo_norm][:2]  # Canales moderados
     else:
         canales = estrategias[objetivo_norm]  # Todos los canales
-    
+
     # Distribuir presupuesto
     presupuesto_por_canal = {}
     num_canales = len(canales)
@@ -327,7 +323,7 @@ async def recomendar_estrategia_marketing(
             # Los demás se reparten equitativamente
             porcentaje = 100 // num_canales
         presupuesto_por_canal[canal] = porcentaje
-    
+
     return {
         "estrategia": f"Estrategia de {objetivo_norm} para {industria}",
         "canales_recomendados": canales,
@@ -338,9 +334,9 @@ async def recomendar_estrategia_marketing(
 
 @register_tool()
 async def analizar_tendencia(
-    datos: List[float],
-    etiquetas: Optional[List[str]] = None
-) -> Dict[str, Any]:
+    datos: list[float],
+    etiquetas: list[str] | None = None
+) -> dict[str, Any]:
     """
     Analiza la tendencia en una serie de datos.
     
@@ -353,18 +349,18 @@ async def analizar_tendencia(
     """
     if not datos or len(datos) < 2:
         return {"error": "Se necesitan al menos dos puntos de datos"}
-    
+
     # Crear etiquetas si no se proporcionaron
     if not etiquetas:
         etiquetas = [f"Punto {i+1}" for i in range(len(datos))]
     elif len(etiquetas) < len(datos):
         # Completar etiquetas faltantes
         etiquetas.extend([f"Punto {i+1}" for i in range(len(etiquetas), len(datos))])
-    
+
     # Calcular cambio total
     cambio_total = datos[-1] - datos[0]
     cambio_porcentual = (cambio_total / datos[0]) * 100 if datos[0] != 0 else float('inf')
-    
+
     # Determinar dirección de la tendencia
     if cambio_total > 0:
         direccion = "creciente"
@@ -372,12 +368,12 @@ async def analizar_tendencia(
         direccion = "decreciente"
     else:
         direccion = "estable"
-    
+
     # Calcular volatilidad (desviación estándar)
     media = sum(datos) / len(datos)
     varianza = sum((x - media) ** 2 for x in datos) / len(datos)
     volatilidad = varianza ** 0.5
-    
+
     return {
         "tendencia": {
             "direccion": direccion,
@@ -394,7 +390,7 @@ async def analizar_tendencia(
     }
 
 @register_tool()
-async def predecir_valores(datos: List[float], periodos_futuros: int = 3) -> Dict[str, Any]:
+async def predecir_valores(datos: list[float], periodos_futuros: int = 3) -> dict[str, Any]:
     """
     Predice valores futuros basados en datos históricos.
     
@@ -407,37 +403,37 @@ async def predecir_valores(datos: List[float], periodos_futuros: int = 3) -> Dic
     """
     if not datos or len(datos) < 3:
         return {"error": "Se necesitan al menos tres puntos de datos para hacer predicciones"}
-    
+
     if periodos_futuros < 1:
         return {"error": "El número de periodos a predecir debe ser al menos 1"}
-    
+
     # Implementación simple: usamos la tendencia lineal
     x = list(range(len(datos)))
     y = datos
-    
+
     # Calcular pendiente (m) y ordenada (b) de la recta y = mx + b
     n = len(datos)
     sum_x = sum(x)
     sum_y = sum(y)
-    sum_xy = sum(xi * yi for xi, yi in zip(x, y))
+    sum_xy = sum(xi * yi for xi, yi in zip(x, y, strict=False))
     sum_x2 = sum(xi ** 2 for xi in x)
-    
+
     # Fórmulas de regresión lineal
     try:
         m = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x ** 2)
         b = (sum_y - m * sum_x) / n
-        
+
         # Predecir los siguientes periodos
         predicciones = [m * (len(datos) + i) + b for i in range(periodos_futuros)]
-        
+
         # Calcular R^2 (coeficiente de determinación)
         y_pred = [m * xi + b for xi in x]
-        ss_res = sum((yi - pred) ** 2 for yi, pred in zip(y, y_pred))
+        ss_res = sum((yi - pred) ** 2 for yi, pred in zip(y, y_pred, strict=False))
         ss_tot = sum((yi - sum_y / n) ** 2 for yi in y)
         r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
-        
+
         confianza = "alta" if r2 > 0.7 else "media" if r2 > 0.4 else "baja"
-        
+
         return {
             "predicciones": predicciones,
             "metodo": "regresión lineal",
@@ -455,8 +451,8 @@ async def predecir_valores(datos: List[float], periodos_futuros: int = 3) -> Dic
 async def financial_models(
     industria: str,
     metodo: str,
-    datos: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+    datos: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """
     Proporciona modelos financieros y análisis para una industria específica.
     
@@ -499,10 +495,10 @@ async def financial_models(
             "tiempo_recuperacion": 3.1
         }
     }
-    
+
     # Si la industria no está en nuestros datos, usar tecnología como default
     industria_data = modelos_industria.get(industria.lower(), modelos_industria["tecnología"])
-    
+
     # Procesar según el método solicitado
     if metodo == "proyeccion_crecimiento":
         # Proyección de crecimiento para los próximos 5 años
@@ -516,7 +512,7 @@ async def financial_models(
             "proyeccion_5_años": proyeccion,
             "crecimiento_promedio": sum(proyeccion) / len(proyeccion)
         }
-    
+
     elif metodo == "analisis_rentabilidad":
         # Análisis de rentabilidad
         return {
@@ -526,7 +522,7 @@ async def financial_models(
             "roi": industria_data["roi_esperado"],
             "tiempo_recuperacion_años": industria_data["tiempo_recuperacion"]
         }
-    
+
     elif metodo == "comparativa_industria":
         # Comparativa con otras industrias
         comparativa = {}
@@ -540,7 +536,7 @@ async def financial_models(
             "metodo": metodo,
             "comparativa": comparativa
         }
-    
+
     else:
         # Método no reconocido, devolver datos generales
         return {
@@ -592,7 +588,7 @@ def iniciar_servidor():
     # Verificar puerto disponible
     host = os.environ.get("MCP_HOST", "0.0.0.0")
     port = int(os.environ.get("MCP_PORT", "4000"))
-    
+
     # Verificar si el puerto está en uso
     import socket
     try:
@@ -604,13 +600,13 @@ def iniciar_servidor():
         port += 1
         os.environ["MCP_PORT"] = str(port)
         logger.info(f"Puerto {port-1} en uso, usando puerto alternativo: {port}")
-    
+
     # Iniciar el servidor
     logger.info(f"Iniciando servidor MCP en {host}:{port}")
-    
+
     # Añadir un log para mostrar las herramientas registradas
     logger.info(f"Herramientas registradas: {list(tools_registry.keys())}")
-    
+
     # Iniciar uvicorn
     uvicorn.run(
         app,
@@ -620,4 +616,4 @@ def iniciar_servidor():
     )
 
 if __name__ == "__main__":
-    iniciar_servidor() 
+    iniciar_servidor()

@@ -1,24 +1,19 @@
-import asyncio
-import os
-import sys
-from pathlib import Path
 import argparse
-import multiprocessing
-import time
+import asyncio
+import atexit
+import os
 import signal
 import subprocess
-import atexit
-import logging
+import sys
 import tempfile
-from typing import Optional, Dict, Any, Union
-import json
-import socket
+import time
+from pathlib import Path
 
 from app.core.logging import logger
 from app.tools.server.mcp_server import MCPToolServer, run_server
 
 # Variable global para almacenar el proceso del servidor MCP
-_mcp_process: Optional[subprocess.Popen] = None
+_mcp_process: subprocess.Popen | None = None
 
 def init_mcp_server(host: str = "localhost", port: int = 4000) -> MCPToolServer:
     """
@@ -43,16 +38,16 @@ def stop_mcp_server_process() -> bool:
         True si el servidor se detuvo correctamente, False en caso contrario
     """
     global _mcp_process
-    
+
     if _mcp_process is None:
         # No hay proceso para detener
         return True
-        
+
     try:
         # Verificar si el proceso aún está en ejecución
         if _mcp_process.poll() is None:
             logger.info(f"Deteniendo proceso del servidor MCP (PID: {_mcp_process.pid})")
-            
+
             # Intentar terminar el proceso de forma limpia
             try:
                 os.killpg(os.getpgid(_mcp_process.pid), signal.SIGTERM)
@@ -60,7 +55,7 @@ def stop_mcp_server_process() -> bool:
                 logger.warning(f"No se pudo enviar SIGTERM al proceso: {str(e)}")
                 # Intentar terminar directamente el proceso
                 _mcp_process.terminate()
-            
+
             # Esperar a que el proceso termine
             try:
                 _mcp_process.wait(timeout=5)
@@ -71,14 +66,14 @@ def stop_mcp_server_process() -> bool:
                     os.killpg(os.getpgid(_mcp_process.pid), signal.SIGKILL)
                 except (ProcessLookupError, PermissionError, OSError):
                     _mcp_process.kill()
-                    
+
                 # Esperar nuevamente
                 try:
                     _mcp_process.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     logger.error("No se pudo terminar el proceso del servidor MCP")
                     return False
-        
+
         # Limpiar el archivo temporal si existe
         if hasattr(_mcp_process, 'script_path') and os.path.exists(_mcp_process.script_path):
             try:
@@ -86,7 +81,7 @@ def stop_mcp_server_process() -> bool:
                 logger.debug(f"Eliminado script temporal: {_mcp_process.script_path}")
             except OSError as e:
                 logger.warning(f"No se pudo eliminar el script temporal: {str(e)}")
-        
+
         # Limpiar archivo de bandera si existe
         ready_file = Path(__file__).parent.parent.parent.parent / "mcp_server_ready.flag"
         if os.path.exists(ready_file):
@@ -95,19 +90,19 @@ def stop_mcp_server_process() -> bool:
                 logger.debug("Eliminado archivo de bandera del servidor MCP")
             except OSError as e:
                 logger.warning(f"No se pudo eliminar archivo de bandera: {str(e)}")
-        
+
         # Limpiar la referencia global
         _mcp_process = None
         logger.info("Proceso del servidor MCP detenido correctamente")
         return True
-        
+
     except Exception as e:
         logger.error(f"Error al detener el proceso del servidor MCP: {str(e)}")
         # Limpiar la referencia global en caso de error
         _mcp_process = None
         return False
 
-def start_mcp_server_process(host: str = "localhost", port: int = 4000) -> Optional[subprocess.Popen]:
+def start_mcp_server_process(host: str = "localhost", port: int = 4000) -> subprocess.Popen | None:
     """
     Inicia el servidor MCP en un proceso separado.
     
@@ -119,19 +114,19 @@ def start_mcp_server_process(host: str = "localhost", port: int = 4000) -> Optio
         El proceso de Popen si el servidor se inició correctamente, None en caso contrario
     """
     global _mcp_process
-    
+
     # Detener cualquier servidor MCP existente
     stop_mcp_server_process()
-    
+
     # Crear un script temporal para ejecutar el servidor MCP
     try:
         # Crear un archivo temporal que ejecutará el servidor MCP
         fd, script_path = tempfile.mkstemp(suffix='.py', prefix='mcp_server_')
         logger.debug(f"Creando script temporal en {script_path}")
-        
+
         # Obtener la ruta del proyecto para importaciones correctas
         project_root = Path(__file__).parent.parent.parent.parent
-        
+
         # Escribir el contenido del script
         with os.fdopen(fd, 'w') as f:
             f.write(f"""
@@ -353,13 +348,13 @@ if __name__ == "__main__":
         logger.info("Finalizando proceso del servidor MCP")
         sys.exit(0)
 """)
-        
+
         # Ejecutar el script en un proceso separado
         logger.info(f"Iniciando proceso separado para el servidor MCP en {host}:{port}")
-        
+
         # Construir el comando
         python_executable = sys.executable
-        
+
         # Iniciar el proceso
         process = subprocess.Popen(
             [python_executable, script_path],
@@ -371,52 +366,52 @@ if __name__ == "__main__":
             # Desacoplar el proceso para que sea independiente
             start_new_session=True
         )
-        
+
         # Almacenar el proceso y el path del script
         _mcp_process = process
         _mcp_process.script_path = script_path  # Guardar el path para eliminarlo después
-        
+
         # Registrar el método de limpieza
         atexit.register(stop_mcp_server_process)
-        
+
         # Verificar si el proceso inició correctamente (esperar un poco)
         time.sleep(2.0)  # Esperar más tiempo para que el proceso arranque completamente
-        
+
         # Verificar si el proceso sigue en ejecución
         if process.poll() is not None:
             # El proceso terminó inmediatamente, algo salió mal
             stdout, stderr = process.communicate()
             logger.error(f"Error al iniciar el servidor MCP en proceso separado: {stderr}")
-            
+
             # Limpiar
             if os.path.exists(script_path):
                 os.unlink(script_path)
-            
+
             return None
-        
+
         # Verificar si el servidor está respondiendo
         # Intentar varias veces con un breve retraso
         max_retries = 10
         retry_delay = 0.5
         server_up = False
-        
+
         # Archivo indicador que el servidor MCP crea cuando está listo
         ready_file = Path(project_root) / "mcp_server_ready.flag"
-        
+
         for attempt in range(max_retries):
             if os.path.exists(ready_file):
                 try:
-                    with open(ready_file, 'r') as f:
+                    with open(ready_file) as f:
                         flag_content = f.read()
                     logger.info(f"Servidor MCP listo: {flag_content}")
                     server_up = True
                     break
                 except Exception as e:
                     logger.warning(f"Error al leer archivo indicador: {str(e)}")
-            
+
             logger.info(f"Esperando a que el servidor MCP esté listo (intento {attempt+1}/{max_retries})")
             time.sleep(retry_delay)
-        
+
         if not server_up:
             logger.error("El servidor MCP no está respondiendo después de varios intentos")
             # Leer la salida del proceso para diagnóstico
@@ -425,21 +420,21 @@ if __name__ == "__main__":
                 logger.info(f"Salida del servidor: {stdout}")
             if stderr:
                 logger.error(f"Error del servidor: {stderr}")
-            
+
             # Intentar detener el proceso
             stop_mcp_server_process()
             return None
-        
+
         logger.info(f"Proceso del servidor MCP iniciado con PID {process.pid}")
         return process
-        
+
     except Exception as e:
         logger.error(f"Error al iniciar el servidor MCP en proceso separado: {str(e)}")
-        
+
         # Limpiar si algo sale mal
         if 'script_path' in locals() and os.path.exists(script_path):
             os.unlink(script_path)
-            
+
         return None
 
 async def init_mcp_server(host: str = "localhost", port: int = 4000) -> MCPToolServer:
@@ -455,26 +450,28 @@ async def init_mcp_server(host: str = "localhost", port: int = 4000) -> MCPToolS
     """
     # Crear el servidor MCP
     server = MCPToolServer(host=host, port=port)
-    
+
     # Cargar esquemas desde el directorio de esquemas
     schemas_dir = Path(__file__).parent.parent / "schemas"
     server.register_tools_from_directory(schemas_dir)
-    
+
     # Registrar implementación de financial_models
     try:
-        from app.tools.implementations.financial_models import FinancialModelsImplementation
+        from app.tools.implementations.financial_models import (
+            FinancialModelsImplementation,
+        )
         financial_models_impl = FinancialModelsImplementation()
-        
+
         server.register_tool_implementation(
-            "financial_models", 
+            "financial_models",
             financial_models_impl.execute
         )
         logger.info("Implementación de financial_models registrada correctamente")
     except Exception as e:
         logger.error(f"Error al registrar implementación de financial_models: {str(e)}")
-    
+
     # Agregar implementaciones para otras herramientas aquí
-    
+
     return server
 
 async def main():
@@ -484,13 +481,13 @@ async def main():
     parser.add_argument("--host", default="localhost", help="Host para el servidor MCP")
     parser.add_argument("--port", type=int, default=4000, help="Puerto para el servidor MCP")
     args = parser.parse_args()
-    
+
     # Inicializar el servidor
     server = await init_mcp_server(host=args.host, port=args.port)
-    
+
     # Ejecutar el servidor
     await run_server(server)
 
 if __name__ == "__main__":
     # Ejecutar el bucle de eventos
-    asyncio.run(main()) 
+    asyncio.run(main())

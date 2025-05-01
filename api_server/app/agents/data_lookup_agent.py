@@ -1,14 +1,14 @@
-from typing import Dict, Any, List, Optional
-import time
 import json
 import os
+import time
 from pathlib import Path
+from typing import Any
 
 from langchain_openai import ChatOpenAI
+
 from app.agents.base import BaseAgent
-from app.core.logging import logger
-from app.core.metrics import MetricsCollector
 from app.core.config import get_settings
+from app.core.logging import logger
 from app.tools.mcp_client import MCPClient
 
 # Obtener configuración
@@ -24,14 +24,14 @@ class DataLookupAgent(BaseAgent):
     - Recuperar datos específicos según criterios
     - Proporcionar contexto adicional para otros agentes
     """
-    
+
     def __init__(self):
         """Inicializa el agente de búsqueda de datos."""
         super().__init__(
             name="data_lookup_agent",
             description="Especialista en búsqueda y recuperación de datos de múltiples fuentes."
         )
-        
+
         # Comprobar si hay una clave API válida
         if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "sk-your-key-here":
             self.llm = ChatOpenAI(model_name="gpt-4.1-mini", temperature=0.1)
@@ -39,7 +39,7 @@ class DataLookupAgent(BaseAgent):
             # Crear un modelo ficticio para desarrollo
             logger.warning("No hay clave API de OpenAI válida. Usando respuestas ficticias para desarrollo.")
             self.llm = None
-            
+
         # Inicializar el cliente MCP con StdioTransport
         mcp_server_path = str(Path(os.path.abspath("mcp_server/main.py")))
         self.mcp_client = MCPClient(
@@ -47,7 +47,7 @@ class DataLookupAgent(BaseAgent):
             use_stdio=True,  # Activar StdioTransport
             mcp_server_path=mcp_server_path
         )
-        
+
         self.services = [
             "Búsqueda de datos financieros",
             "Búsqueda de noticias",
@@ -56,8 +56,8 @@ class DataLookupAgent(BaseAgent):
             "Información de empresas"
         ]
         logger.info(f"Agente {self.name} inicializado con {len(self.services)} servicios usando StdioTransport")
-    
-    def _execute_impl(self, input_data: Dict[Any, Any]) -> Dict[Any, Any]:
+
+    def _execute_impl(self, input_data: dict[Any, Any]) -> dict[Any, Any]:
         """
         Implementa la lógica de ejecución del agente de búsqueda de datos.
         
@@ -71,21 +71,21 @@ class DataLookupAgent(BaseAgent):
         query = input_data.get("query", "")
         context = input_data.get("context", {})
         lookup_type = input_data.get("lookup_type", "general")
-        
+
         # Logueamos solo los primeros 50 caracteres de la consulta como texto, no como slice
         query_preview = query[:50] + "..." if len(query) > 50 else query
         logger.info(f"Procesando consulta de datos ({lookup_type}): {query_preview}")
-        
+
         # Preparar los datos para la búsqueda
         lookup_data = {}
-        
+
         try:
             # Inicializar el cliente MCP
             initialized = self.mcp_client.initialize_sync()
-            
+
             if initialized:
                 logger.info("Cliente MCP inicializado correctamente con StdioTransport. Ejecutando búsqueda de datos.")
-                
+
                 # Usar LLM para categorizar y extraer parámetros de la consulta
                 if self.llm:
                     categorization_prompt = f"""
@@ -107,15 +107,15 @@ class DataLookupAgent(BaseAgent):
                     
                     Devuelve SOLAMENTE el JSON, sin texto adicional.
                     """
-                    
+
                     try:
                         response = self.llm.invoke(categorization_prompt)
                         categorization = json.loads(response.content.strip())
                         logger.info(f"Categorización por LLM: {categorization}")
-                        
+
                         lookup_category = categorization.get("lookup_category", "general")
                         parameters = categorization.get("parameters", {})
-                        
+
                         # Procesar según la categoría identificada por el LLM
                         if lookup_category == "financial":
                             company = parameters.get("empresa", context.get("company"))
@@ -127,11 +127,11 @@ class DataLookupAgent(BaseAgent):
                                 financial_data = self.mcp_client.call_tool_sync("buscar_datos_financieros", financial_params)
                                 lookup_data["financial_data"] = financial_data
                                 logger.info(f"Datos financieros obtenidos para: {company}")
-                        
+
                         elif lookup_category == "marketing":
                             campaign = parameters.get("campaign", context.get("campaign"))
                             metrics = parameters.get("metrics", context.get("metrics", {}))
-                            
+
                             if campaign and metrics:
                                 marketing_params = {
                                     "nombre_campania": campaign,
@@ -143,7 +143,7 @@ class DataLookupAgent(BaseAgent):
                                 marketing_data = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", marketing_params)
                                 lookup_data["marketing_data"] = marketing_data
                                 logger.info(f"Datos de marketing obtenidos para: {campaign}")
-                        
+
                         # Siempre realizar una búsqueda general de datos
                         general_params = {
                             "lookup_type": lookup_category,
@@ -152,11 +152,11 @@ class DataLookupAgent(BaseAgent):
                         general_data = self.mcp_client.call_tool_sync("data_lookup", general_params)
                         lookup_data["general_data"] = general_data
                         logger.info(f"Búsqueda general completada para tipo: {lookup_category}")
-                        
+
                         # Procesar tendencias si están en la categorización
                         if lookup_category == "trends":
                             numerical_data = parameters.get("numerical_data", context.get("numerical_data"))
-                            
+
                             if numerical_data:
                                 trends_params = {
                                     "datos": numerical_data,
@@ -165,7 +165,7 @@ class DataLookupAgent(BaseAgent):
                                 trends_data = self.mcp_client.call_tool_sync("analizar_tendencia", trends_params)
                                 lookup_data["trends_data"] = trends_data
                                 logger.info("Análisis de tendencias completado")
-                                
+
                                 # Si se solicita además predicción
                                 if parameters.get("predict", context.get("predict", False)):
                                     predict_params = {
@@ -175,7 +175,7 @@ class DataLookupAgent(BaseAgent):
                                     prediction_data = self.mcp_client.call_tool_sync("predecir_valores", predict_params)
                                     lookup_data["prediction_data"] = prediction_data
                                     logger.info("Predicción de valores completada")
-                    
+
                     except Exception as e:
                         logger.error(f"Error al procesar la categorización con LLM: {str(e)}")
                         # Caer en el enfoque anterior como fallback
@@ -186,17 +186,17 @@ class DataLookupAgent(BaseAgent):
             else:
                 logger.warning("No se pudo inicializar el cliente MCP. Usando método alternativo.")
                 # Implementar lógica alternativa si es necesario
-        
+
         except Exception as e:
             logger.error(f"Error al obtener datos mediante MCP: {str(e)}")
             # Implementar lógica alternativa si es necesario
-        
+
         # Generar un resumen de los datos encontrados
         result_summary = self._generate_data_summary(query, lookup_data, lookup_type)
-        
+
         # Estructurar la respuesta
         processing_time = time.time() - start_time
-        
+
         result = {
             "result": {
                 "content": result_summary,
@@ -209,12 +209,12 @@ class DataLookupAgent(BaseAgent):
             "processing_time": processing_time,
             "model": "gpt-4.1-mini" if self.llm else "direct_lookup"
         }
-        
+
         logger.info(f"Búsqueda de datos completada en {processing_time:.2f} segundos")
-        
+
         return result
-    
-    def _generate_data_summary(self, query: str, data: Dict[str, Any], lookup_type: str) -> str:
+
+    def _generate_data_summary(self, query: str, data: dict[str, Any], lookup_type: str) -> str:
         """
         Genera un resumen de los datos encontrados.
         
@@ -229,10 +229,10 @@ class DataLookupAgent(BaseAgent):
         if not self.llm:
             # Si no hay LLM, generar un resumen básico
             return f"Datos encontrados para consulta: {query}. Tipo: {lookup_type}."
-        
+
         # Formatear los datos para el prompt
         formatted_data = json.dumps(data, indent=2, ensure_ascii=False)
-        
+
         prompt = f"""
         Genera un resumen conciso de los siguientes datos encontrados para la consulta:
         
@@ -244,11 +244,11 @@ class DataLookupAgent(BaseAgent):
         
         Proporciona solo los puntos más importantes y relevantes para la consulta.
         """
-        
+
         # Generar el resumen usando el LLM
         response = self.llm.invoke(prompt)
         return response.content
-    
+
     def _extract_entity(self, query: str, entity_type: str) -> str:
         """
         Extrae entidades de la consulta del usuario.
@@ -262,25 +262,25 @@ class DataLookupAgent(BaseAgent):
         """
         # En una implementación real se usaría NER o un LLM
         # Esta es una implementación simple basada en palabras clave
-        
+
         query_lower = query.lower()
-        
+
         if entity_type == "company":
             companies = ["apple", "microsoft", "google", "amazon", "tesla", "meta", "facebook"]
             for company in companies:
                 if company in query_lower:
                     return company
-        
+
         elif entity_type == "campaign":
             campaigns = ["black friday", "navidad", "verano", "primavera", "lanzamiento"]
             for campaign in campaigns:
                 if campaign in query_lower:
                     return campaign
-        
+
         # Si no encontramos nada, devolver una cadena vacía
         return ""
 
-    def _legacy_lookup_processing(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _legacy_lookup_processing(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
         """
         Método legacy para procesar consultas sin usar LLM para categorización.
         Este método se usa como fallback cuando el LLM no está disponible o falla.
@@ -294,13 +294,13 @@ class DataLookupAgent(BaseAgent):
         """
         lookup_data = {}
         lookup_type = context.get("lookup_type", "general")
-        
+
         try:
             # Determinar qué tipo de datos necesitamos buscar
             if lookup_type == "financial":
                 # Buscar datos financieros específicos
                 company = context.get("company", self._extract_entity(query, "company"))
-                
+
                 if company:
                     financial_params = {
                         "empresa": company,
@@ -309,11 +309,11 @@ class DataLookupAgent(BaseAgent):
                     financial_data = self.mcp_client.call_tool_sync("buscar_datos_financieros", financial_params)
                     lookup_data["financial_data"] = financial_data
                     logger.info(f"Datos financieros obtenidos para: {company}")
-            
+
             elif lookup_type == "marketing":
                 # Buscar datos de marketing
                 campaign = context.get("campaign", self._extract_entity(query, "campaign"))
-                
+
                 if campaign and "metrics" in context:
                     metrics = context["metrics"]
                     marketing_params = {
@@ -326,7 +326,7 @@ class DataLookupAgent(BaseAgent):
                     marketing_data = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", marketing_params)
                     lookup_data["marketing_data"] = marketing_data
                     logger.info(f"Datos de marketing obtenidos para: {campaign}")
-            
+
             # Siempre realizar una búsqueda general de datos
             general_params = {
                 "lookup_type": lookup_type,
@@ -335,7 +335,7 @@ class DataLookupAgent(BaseAgent):
             general_data = self.mcp_client.call_tool_sync("data_lookup", general_params)
             lookup_data["general_data"] = general_data
             logger.info(f"Búsqueda general completada para tipo: {lookup_type}")
-            
+
             # Si se solicitan tendencias y tenemos datos numéricos
             if lookup_type == "trends" and "numerical_data" in context:
                 trends_params = {
@@ -345,7 +345,7 @@ class DataLookupAgent(BaseAgent):
                 trends_data = self.mcp_client.call_tool_sync("analizar_tendencia", trends_params)
                 lookup_data["trends_data"] = trends_data
                 logger.info("Análisis de tendencias completado")
-                
+
                 # Si se solicita además predicción
                 if context.get("predict", False):
                     predict_params = {
@@ -355,8 +355,8 @@ class DataLookupAgent(BaseAgent):
                     prediction_data = self.mcp_client.call_tool_sync("predecir_valores", predict_params)
                     lookup_data["prediction_data"] = prediction_data
                     logger.info("Predicción de valores completada")
-        
+
         except Exception as e:
             logger.error(f"Error en el procesamiento legacy: {str(e)}")
-        
-        return lookup_data 
+
+        return lookup_data

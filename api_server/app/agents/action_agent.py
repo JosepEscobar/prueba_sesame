@@ -1,13 +1,15 @@
-from typing import Dict, Any
-import time
-from langchain_core.prompts import ChatPromptTemplate
-from app.agents.base import BaseAgent
-from app.core.logging import logger
-from app.core.config import get_settings
-from langchain_openai import ChatOpenAI
-from app.tools.mcp_client import MCPClient
 import os
+import time
 from pathlib import Path
+from typing import Any
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+
+from app.agents.base import BaseAgent
+from app.core.config import get_settings
+from app.core.logging import logger
+from app.tools.mcp_client import MCPClient
 
 # Obtener la configuración
 settings = get_settings()
@@ -55,21 +57,21 @@ class ActionAgent(BaseAgent):
             use_stdio=True,
             mcp_server_path=mcp_path
         )
-        
-    def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _execute_impl(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """Ejecuta la acción solicitada."""
         start_time = time.time()
-        
+
         # Extraer la consulta
         query = input_data.get("query", "")
-        
+
         # Loguear la consulta con un límite seguro
         query_preview = query[:50] + "..." if len(query) > 50 else query
         logger.info(f"ActionAgent procesando consulta: {query_preview}")
-        
+
         # Formatear el prompt correctamente
         formatted_prompt = self.prompt.format(input=query)
-        
+
         # Llamar a la herramienta MCP 'query_kb'
         mcp_result = self.mcp_client.call_tool_sync("query_kb", {"query": query})
         processing_time = time.time() - start_time
@@ -78,4 +80,4 @@ class ActionAgent(BaseAgent):
             "input": input_data,
             "confidence": mcp_result.get("confidence", 0.0),
             "processing_time": processing_time
-        } 
+        }

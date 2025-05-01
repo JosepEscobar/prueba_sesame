@@ -2,17 +2,17 @@
 Agent encargado de crear resúmenes concisos y claros de información compleja.
 """
 
-from typing import Dict, Any, List, Optional
-import time
 import json
 import os
+import time
 from pathlib import Path
+from typing import Any
 
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
+
 from app.agents.base import BaseAgent
-from app.core.logging import logger
 from app.core.config import get_settings
+from app.core.logging import logger
 from app.tools.mcp_client import MCPClient
 
 # Obtener la configuración
@@ -35,7 +35,7 @@ class SummaryAgent(BaseAgent):
     información compleja. Este agente es útil para condensar análisis extensos,
     reportes de mercado o grandes volúmenes de información en puntos clave.
     """
-    
+
     def __init__(self, model=None):
         """Inicializa el SummaryAgent"""
         super().__init__(
@@ -51,9 +51,9 @@ class SummaryAgent(BaseAgent):
             use_stdio=True,
             mcp_server_path=mcp_path
         )
-        logger.info(f"SummaryAgent inicializado")
-    
-    def _execute_impl(self, input_data: Dict[Any, Any]) -> Dict[Any, Any]:
+        logger.info("SummaryAgent inicializado")
+
+    def _execute_impl(self, input_data: dict[Any, Any]) -> dict[Any, Any]:
         """
         Ejecuta la operación de resumen basada en los datos de entrada.
         
@@ -66,17 +66,17 @@ class SummaryAgent(BaseAgent):
         """
         try:
             start_time = time.time()
-            
+
             # Extraer la consulta
             query = input_data.get("query", "")
-            
+
             # Loguear la consulta con un límite seguro
             query_preview = query[:50] + "..." if len(query) > 50 else query
             logger.info(f"SummaryAgent procesando solicitud: {query_preview}")
-            
+
             # Extraer el contexto
             context = input_data.get("context", {})
-            
+
             # Convertir contexto a formato de texto
             if isinstance(context, dict):
                 # Caso 1: El contexto tiene un campo 'content' directo (caso más común)
@@ -105,7 +105,7 @@ class SummaryAgent(BaseAgent):
                 context_text = context.content
             else:
                 context_text = str(context)
-            
+
             # Registrar el contenido recibido para ayudar en depuración
             try:
                 content_length = len(context_text) if context_text is not None else 0
@@ -123,18 +123,18 @@ class SummaryAgent(BaseAgent):
                 except:
                     logger.error("No se pudo convertir el contenido a string.")
                     context_text = "Error al procesar el contenido."
-            
+
             # Si hay poco o ningún contexto, intentar recopilar información adicional
             if not context_text or context_text.strip() in ["", "{}", "[]"]:
                 logger.info("Contexto insuficiente, buscando información...")
-                
+
                 try:
                     # Intentar obtener artículos relacionados mediante el cliente MCP
                     articles_data = self.mcp_client.call_tool_sync(
-                        "search_articles", 
+                        "search_articles",
                         {"query": query}
                     )
-                    
+
                     if articles_data and "result" in articles_data:
                         articles = articles_data["result"]
                         if articles and len(articles) > 0:
@@ -144,7 +144,7 @@ class SummaryAgent(BaseAgent):
                                 context_text += f"   {article.get('snippet', 'Sin descripción')}\n"
                 except Exception as e:
                     logger.warning(f"Error al buscar artículos: {str(e)}")
-            
+
             # Preparar el prompt para el resumen
             prompt = f"""
             Eres un experto en crear resúmenes claros, concisos y estructurados. Tu tarea es generar un resumen
@@ -167,7 +167,7 @@ class SummaryAgent(BaseAgent):
             Tu respuesta debe estar bien estructurada, con títulos de sección, párrafos coherentes
             y formato que facilite la lectura y comprensión.
             """
-            
+
             # Si no hay LLM, usar una respuesta básica
             if not self.llm:
                 processing_time = time.time() - start_time
@@ -182,18 +182,18 @@ class SummaryAgent(BaseAgent):
                     "confidence": 0.5,
                     "processing_time": processing_time
                 }
-                
+
             # Generar el resumen usando el LLM
-            from langchain_core.messages import SystemMessage, HumanMessage
-            
+            from langchain_core.messages import HumanMessage, SystemMessage
+
             messages = [
                 SystemMessage(content="Eres un especialista en generar resúmenes concisos, claros y completos."),
                 HumanMessage(content=prompt)
             ]
-            
+
             response = self.invoke_llm(messages, prompt_type="langchain")
             summary_content = response.content
-            
+
             # Verificar que el resumen no sea demasiado breve (lo que podría indicar un problema)
             if len(summary_content) < 100 and len(context_text) > 500:
                 logger.warning(f"Resumen generado demasiado breve ({len(summary_content)} caracteres) para un contexto de {len(context_text)} caracteres")
@@ -210,20 +210,20 @@ class SummaryAgent(BaseAgent):
                 cifras, recomendaciones y estructura. El resumen debe tener suficiente detalle para reemplazar 
                 al texto original.
                 """
-                
+
                 retry_messages = [
                     SystemMessage(content="Eres un especialista en generar resúmenes DETALLADOS y COMPLETOS que preservan toda la información importante."),
                     HumanMessage(content=retry_prompt)
                 ]
-                
+
                 retry_response = self.invoke_llm(retry_messages, prompt_type="langchain")
                 summary_content = retry_response.content
-            
+
             # También intentar obtener artículos relevantes
             try:
                 mcp_result = self.mcp_client.call_tool_sync("search_articles", {"query": query})
                 articles = mcp_result.get("result", [])
-                
+
                 if articles and isinstance(articles, list) and len(articles) > 0:
                     # Añadir enlaces a artículos relevantes al final del resumen
                     summary_content += "\n\nFuentes adicionales relevantes:\n"
@@ -233,13 +233,13 @@ class SummaryAgent(BaseAgent):
                             summary_content += f"{i}. {title}\n"
             except Exception as e:
                 logger.warning(f"No se pudieron obtener artículos relevantes: {str(e)}")
-            
+
             # Registrar el resumen generado para ayudar en depuración
             logger.info(f"Resumen generado de longitud: {len(summary_content)}")
             logger.info(f"Extracto del resumen: {summary_content[:200]}...")
-            
+
             processing_time = time.time() - start_time
-            
+
             # Determinar la fuente original del contenido
             source = "unknown"
             if isinstance(context, dict):
@@ -247,7 +247,7 @@ class SummaryAgent(BaseAgent):
                     source = context["source"]
                 elif "current_agent" in context:
                     source = context["current_agent"]
-            
+
             return {
                 "result": {
                     "content": summary_content,
@@ -259,7 +259,7 @@ class SummaryAgent(BaseAgent):
                 "confidence": 0.9,
                 "processing_time": processing_time
             }
-            
+
         except Exception as e:
             logger.error(f"Error en SummaryAgent: {str(e)}")
             return {
@@ -267,4 +267,4 @@ class SummaryAgent(BaseAgent):
                 "input": input_data,
                 "confidence": 0.0,
                 "processing_time": 0.0
-            } 
+            }

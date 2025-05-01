@@ -1,16 +1,12 @@
-from typing import Dict, Any, List, Optional, Union
-import time
-import os
 import json
-import logging
-import traceback
+import os
+import time
+from typing import Any
 
-from langchain_core.prompts import ChatPromptTemplate
-from langchain.schema import SystemMessage, HumanMessage
-from langchain.llms.base import BaseLLM
 from app.agents.base import BaseAgent
-from app.core.logging import logger
 from app.core.config import get_settings
+from app.core.logging import logger
+
 
 # Definir función para cargar credenciales de manera segura
 def load_api_credentials():
@@ -22,24 +18,24 @@ def load_api_credentials():
     """
     # Obtener la configuración usando la función cacheada
     settings = get_settings()
-    
+
     # Verificar si hay proxies en las variables de entorno y manejarlos correctamente
     http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
     https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
-    
+
     if http_proxy or https_proxy:
         # Configurar las variables de entorno minúsculas usadas por las bibliotecas
         os.environ["http_proxy"] = http_proxy or ""
         os.environ["https_proxy"] = https_proxy or http_proxy or ""
         logger.info("Variables de proxy configuradas en el entorno")
-    
+
     # Verificar si la clave API de OpenAI existe y es válida
     has_valid_key = settings.is_openai_api_key_valid()
-    
+
     if not has_valid_key:
         logger.warning("La API key de OpenAI no está configurada o no es válida. Verifique el archivo .env")
         return None, False
-    
+
     # La clave parece válida
     logger.info("API key de OpenAI cargada correctamente")
     return settings.OPENAI_API_KEY, True
@@ -60,7 +56,7 @@ client = None
 try:
     if has_openai:
         from openai import OpenAI
-        
+
         # Inicializar cliente con configuración básica (sin parámetros adicionales)
         client = OpenAI(
             api_key=openai_api_key
@@ -77,7 +73,7 @@ class RouterAgent(BaseAgent):
     El Router analiza la consulta entrante y la dirige al agente más adecuado
     basándose en su contenido, contexto y requerimientos específicos.
     """
-    
+
     def __init__(self, model=None):
         """Inicializa el agente router."""
         super().__init__(
@@ -86,19 +82,19 @@ class RouterAgent(BaseAgent):
         )
         # Inicializar atributos
         self.client = None
-        
+
         # Verificamos si tenemos LLM disponible (desde BaseAgent)
         self.has_openai = (self.llm is not None)
-        
+
         # Si no tenemos llm pero tenemos cliente global del módulo, lo usamos
         if not self.has_openai and client is not None:
             self.client = client
             self.has_openai = True
-        
+
         # Asumimos que la conexión es válida para evitar llamadas innecesarias
         # que pueden causdar errores 429 (Too Many Requests)
         logger.info("Omitiendo verificación explícita de conexión para ahorrar llamadas a la API")
-        
+
         # Definir los agentes disponibles y sus capacidades
         self.available_agents = {
             "finance_agent": {
@@ -115,7 +111,7 @@ class RouterAgent(BaseAgent):
                     "planificación de flujo de caja"
                 ],
                 "keywords": [
-                    "financiero", "finanzas", "ingresos", "beneficio", "margen", 
+                    "financiero", "finanzas", "ingresos", "beneficio", "margen",
                     "roi", "ganancia", "rentabilidad", "balance", "contabilidad",
                     "fiscal", "impuestos", "patrimonio", "capital", "inversión",
                     "activos", "pasivos", "presupuesto", "costes", "gastos"
@@ -136,7 +132,7 @@ class RouterAgent(BaseAgent):
                     "planificación de campañas"
                 ],
                 "keywords": [
-                    "marketing", "mercado", "campaña", "publicidad", "promoción", 
+                    "marketing", "mercado", "campaña", "publicidad", "promoción",
                     "ventas", "clientes", "segmentación", "conversión", "marca",
                     "audiencia", "consumidor", "target", "posicionamiento", "social",
                     "digital", "comunicación", "medios", "engagement", "producto"
@@ -160,7 +156,7 @@ class RouterAgent(BaseAgent):
                 ]
             }
         }
-        
+
         # Definir el sistema de prompt
         self.system_prompt = """Eres un agente router inteligente que decide qué agente especializado debe manejar una consulta empresarial.
 
@@ -177,12 +173,12 @@ class RouterAgent(BaseAgent):
 
 Analiza cuidadosamente la consulta del usuario y elige el agente más apropiado en función del contenido.
 Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketing_agent", o "analysis_agent". No incluyas explicaciones ni otros textos."""
-        
+
         if self.has_openai:
-            logger.info(f"RouterAgent inicializado con OpenAI API")
+            logger.info("RouterAgent inicializado con OpenAI API")
         else:
             logger.warning("RouterAgent inicializado sin OpenAI API. Se usará clasificación por keywords.")
-    
+
     def verify_openai_connection(self):
         """
         DEPRECATED: Método eliminado para evitar llamadas innecesarias a la API.
@@ -191,8 +187,8 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
         """
         # Simplemente devolvemos el estado actual sin hacer llamadas a la API
         return self.has_openai
-    
-    def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _execute_impl(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """
         Implementación específica de ejecución del agente de enrutamiento.
         
@@ -204,13 +200,13 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
         """
         # Iniciar temporizador para métricas
         self.start_time = time.time()
-        
+
         try:
             # Obtener la consulta para poder analizarla
             query = input_data.get("query", "")
             # Obtener el contexto
             context = input_data.get("context", {})
-            
+
             if not query:
                 logger.warning("Consulta vacía proporcionada al RouterAgent")
                 return {
@@ -218,12 +214,12 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                     "input": input_data,
                     "confidence": 0.5
                 }
-            
+
             # Variable para almacenar la decisión sobre qué agente usar
             agent_type = None
             # Nivel de confianza en la decisión (0-1)
             confidence = 0.0
-            
+
             # Si hay una preferencia de agente especificada, usarla
             agent_preference = input_data.get("agent_preference")
             if agent_preference and isinstance(agent_preference, str):
@@ -232,7 +228,7 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                     agent_type = agent_preference
                     logger.info(f"Usando agente preferido: {agent_type}")
                     confidence = 1.0  # Máxima confianza para preferencia explícita
-                    
+
                     # Crear la decisión para el agente preferido
                     decision = {
                         "agent": agent_type,
@@ -240,7 +236,7 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                         "confidence": confidence,
                         "reasoning": "Preferencia de agente explícita"
                     }
-                    
+
                     # Registrar métricas de ejecución
                     from app.core.metrics import MetricsCollector
                     execution_time = time.time() - self.start_time
@@ -249,13 +245,13 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                         status=True,
                         execution_time=execution_time
                     )
-                    
+
                     return decision
-            
+
             # Determinar el agente adecuado para la consulta
             agent_type = "analysis_agent"  # Valor por defecto en caso de fallos
             confidence = 0.7  # Confianza predeterminada
-            
+
             # Si tenemos OpenAI configurado, usarlo para clasificar
             if self.has_openai:
                 try:
@@ -266,23 +262,26 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                         for key, value in context.items():
                             context_text += f"- {key}: {value}\n"
                         user_prompt = f"{query}\n\n{context_text}"
-                    
+
                     # Intentar primero con LLM de LangChain si está disponible
                     if self.llm is not None:
                         try:
-                            from langchain_core.messages import SystemMessage, HumanMessage
-                            
+                            from langchain_core.messages import (
+                                HumanMessage,
+                                SystemMessage,
+                            )
+
                             messages = [
                                 SystemMessage(content=self.system_prompt),
                                 HumanMessage(content=user_prompt)
                             ]
-                            
+
                             response = self.invoke_llm(messages, prompt_type="langchain")
-                            
+
                             if response and hasattr(response, 'content'):
                                 response_content = response.content.strip()
                                 logger.info(f"Respuesta de LangChain LLM: {response_content}")
-                                
+
                                 # Validar que la respuesta sea uno de los agentes válidos
                                 valid_agents = ["finance_agent", "marketing_agent", "analysis_agent"]
                                 if response_content in valid_agents:
@@ -297,7 +296,7 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                             else:
                                 # Fallback a cliente directo
                                 raise ValueError("Respuesta de LangChain no válida")
-                                
+
                         except Exception as e:
                             logger.warning(f"Error con LangChain: {str(e)}. Usando cliente directo.")
                             # Si falla LangChain, intentar con cliente directo
@@ -311,11 +310,11 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                                     ],
                                     "temperature": settings.TEMPERATURE
                                 }
-                                
+
                                 # Invocar OpenAI directamente
                                 response = self.invoke_llm(prompt, prompt_type="openai_direct")
                                 response_content = response.choices[0].message.content.strip()
-                                
+
                                 # Validar que la respuesta sea uno de los agentes válidos
                                 valid_agents = ["finance_agent", "marketing_agent", "analysis_agent"]
                                 if response_content in valid_agents:
@@ -330,7 +329,7 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                             else:
                                 # No hay cliente disponible
                                 raise ValueError("No hay LLM ni cliente directo disponible")
-                    
+
                     # Si no hay LLM pero hay cliente directo
                     elif hasattr(self, 'client') and self.client:
                         # Crear prompt para OpenAI
@@ -342,11 +341,11 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                             ],
                             "temperature": settings.TEMPERATURE
                         }
-                        
+
                         # Invocar OpenAI directamente
                         response = self.invoke_llm(prompt, prompt_type="openai_direct")
                         response_content = response.choices[0].message.content.strip()
-                        
+
                         # Normalizar la respuesta
                         valid_agents = ["finance_agent", "marketing_agent", "analysis_agent"]
                         if response_content in valid_agents:
@@ -366,19 +365,19 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                 # Si no hay OpenAI, usar clasificación por keywords
                 agent_type = self._classify_query_by_keywords(query)
                 logger.info(f"RouterAgent clasificó la consulta como {agent_type} usando keywords")
-            
+
             # Verificación final para garantizar que agent_type siempre tenga un valor
             if not agent_type:
                 logger.warning("No se pudo determinar un tipo de agente. Usando 'analysis_agent' por defecto.")
                 agent_type = "analysis_agent"
-            
+
             # Usar logger.debug en lugar de print para depuración
             logger.debug(f"AGENT_TYPE FINAL: {agent_type}", extra={"agent_type": agent_type, "confidence": confidence})
-            
+
             # Registrar métrica de confianza para este agente
             from app.core.metrics import MetricsCollector
             MetricsCollector.record_agent_confidence("router_agent", confidence)
-            
+
             # Crear la decisión
             decision = {
                 "agent": agent_type,  # Este es el campo clave que debe estar presente
@@ -386,22 +385,22 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                 "confidence": confidence,
                 "reasoning": "Clasificado por análisis de la consulta"
             }
-            
+
             # Usar logger.debug en lugar de print para depuración
             logger.debug(f"DECISION FINAL: {decision}", extra={"decision": str(decision)})
-            
+
             # Registrar métricas de ejecución
             MetricsCollector.record_agent_execution(
                 agent_name="router_agent",
                 status=True,
                 execution_time=time.time() - self.start_time
             )
-            
+
             return decision
-            
+
         except Exception as e:
             logger.error(f"Error en RouterAgent: {str(e)}")
-            
+
             # Registrar métricas de error
             from app.core.metrics import MetricsCollector
             MetricsCollector.record_error("router_agent", str(e))
@@ -410,14 +409,14 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                 status=False,
                 execution_time=time.time() - self.start_time if hasattr(self, 'start_time') else 0.0
             )
-            
+
             return {
                 "error": f"Error en enrutamiento: {str(e)}",
                 "agent": "analysis_agent",  # Valor por defecto en caso de error
                 "input": input_data,
                 "confidence": 0.0
             }
-    
+
     def _classify_query_by_keywords(self, query: str) -> str:
         """
         Clasifica una consulta usando LLM o, como fallback, por palabras clave.
@@ -450,46 +449,46 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                 
                 No incluyas texto adicional en tu respuesta, solo el JSON.
                 """
-                
+
                 response = self.llm.invoke(categorization_prompt)
                 categorization = json.loads(response.content.strip())
                 logger.info(f"Categorización por LLM: {categorization}")
-                
+
                 agent_type = categorization.get("agent", "analysis_agent")
                 logger.info(f"LLM seleccionó agente: {agent_type}")
-                
+
                 return agent_type
-                
+
             except Exception as e:
                 logger.error(f"Error al usar LLM para categorización JSON: {str(e)}. Usando clasificación por keywords como fallback.")
                 # Continuar con el método de palabras clave como fallback
-        
+
         # Fallback: clasificación por palabras clave
         # Convertir la consulta a minúsculas
         query_lower = query.lower()
-        
+
         # Calcular puntuaciones para cada agente
         scores = {}
         for agent_name, agent_info in self.available_agents.items():
             keywords = agent_info.get("keywords", [])
             score = sum(1 for kw in keywords if kw in query_lower)
             scores[agent_name] = score
-        
+
         # Encontrar el agente con mayor puntuación
         if not scores:
             return "analysis_agent"  # Por defecto
-            
+
         max_score = max(scores.values())
         if max_score == 0:
             return "analysis_agent"  # Si ninguno tiene keywords, usar análisis
-            
+
         # Si hay múltiples con la misma puntuación máxima, priorizar en este orden
         priority = ["finance_agent", "marketing_agent", "analysis_agent"]
         max_agents = [agent for agent, score in scores.items() if score == max_score]
-        
+
         for p in priority:
             if p in max_agents:
                 return p
-                
+
         # Si ninguno de los priorizados está en los máximos, tomar el primero
-        return max_agents[0] 
+        return max_agents[0]

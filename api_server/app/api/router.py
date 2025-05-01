@@ -1,18 +1,18 @@
-from fastapi import APIRouter, HTTPException, Depends, Request, status, BackgroundTasks
-from typing import Dict, Any, List
 import time
 import uuid
+from typing import Any
 
-from app.core.logging import logger
-from app.core.orchestrator import Orchestrator
-from app.core.config import get_settings, Settings
-from app.services.data_lookup import DataLookupService
-from app.core.metrics import MetricsCollector
-
-# Modelo de datos para las solicitudes y respuestas
-from app.api.models import QueryRequest, QueryResponse, DataLookupRequest, DataLookupResponse, ErrorResponse
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 
 from app.api.endpoints import tools
+
+# Modelo de datos para las solicitudes y respuestas
+from app.api.models import DataLookupResponse, ErrorResponse, QueryResponse
+from app.core.config import get_settings
+from app.core.logging import logger
+from app.core.metrics import MetricsCollector
+from app.core.orchestrator import Orchestrator
+from app.services.data_lookup import DataLookupService
 
 # Crear router de la API
 api_router = APIRouter()
@@ -23,20 +23,26 @@ orchestrator = Orchestrator()
 # Instancia del servicio de búsqueda de datos
 data_lookup_service = DataLookupService()
 
+
 # Dependencia para obtener configuraciones
 def get_config():
     return get_settings()
 
+
 # Incluir routers de endpoints
 api_router.include_router(tools.router, prefix="/tools", tags=["tools"])
 
+
 @api_router.post(
-    "/query", 
+    "/query",
     response_model=QueryResponse,
     status_code=status.HTTP_200_OK,
     responses={
-        400: {"model": ErrorResponse, "description": "Error de validación en la entrada"},
-        500: {"model": ErrorResponse, "description": "Error interno del servidor"}
+        400: {
+            "model": ErrorResponse,
+            "description": "Error de validación en la entrada",
+        },
+        500: {"model": ErrorResponse, "description": "Error interno del servidor"},
     },
     summary="Procesar una consulta mediante el sistema multi-agente",
     description="""
@@ -47,68 +53,68 @@ api_router.include_router(tools.router, prefix="/tools", tags=["tools"])
 
     Se puede proporcionar contexto adicional para mejorar la precisión de la respuesta, 
     así como una preferencia de agente específico para el procesamiento.
-    """
+    """,
 )
 async def process_query(
-    request: Dict[str, Any], 
-    background_tasks: BackgroundTasks, 
-    req: Request
+    request: dict[str, Any], background_tasks: BackgroundTasks, req: Request
 ):
     """
     Procesa una consulta utilizando el sistema multi-agente.
-    
+
     La consulta es enrutada al agente más adecuado para procesarla.
-    
+
     Args:
         request: Diccionario con la consulta y contexto opcional
         background_tasks: Tareas en segundo plano para métricas
         req: Objeto Request de FastAPI
-        
+
     Returns:
         Respuesta del sistema multi-agente
     """
     request_id = str(uuid.uuid4())
     logger.info(f"Procesando consulta (request_id: {request_id})")
-    
+
     start_time = time.time()
-    
+
     try:
         # Llamada síncrona al orquestador
         result = orchestrator.process_query(request)
-        
+
         # Calcular tiempo de procesamiento
         processing_time = time.time() - start_time
-        
+
         # Registrar métricas en segundo plano
         background_tasks.add_task(
             MetricsCollector.record_query_execution,
             success=True,
             agent=result.get("agent", "unknown"),
             confidence=result.get("confidence", 0.0),
-            execution_time=processing_time
+            execution_time=processing_time,
         )
-        
-        logger.info(f"Consulta procesada en {processing_time:.4f}s por {result.get('agent', 'unknown')} (request_id: {request_id})")
-        
+
+        logger.info(
+            f"Consulta procesada en {processing_time:.4f}s por {result.get('agent', 'unknown')} (request_id: {request_id})"
+        )
+
         # Preparar la respuesta según el modelo QueryResponse
         # Asegurándonos de que todos los campos requeridos estén presentes
         response = {
             "result": result.get("result", {}),
             "agent": result.get("agent", "unknown"),
             "processing_time": processing_time,
-            "confidence": result.get("confidence", 0.0)
+            "confidence": result.get("confidence", 0.0),
         }
-        
+
         # Agregar campos opcionales si están presentes
         if "data_sources" in result:
             response["data_sources"] = result["data_sources"]
-        
+
         return response
-        
+
     except Exception as e:
         # Calcular tiempo en caso de error
         processing_time = time.time() - start_time
-        
+
         # Registrar métricas en segundo plano
         background_tasks.add_task(
             MetricsCollector.record_query_execution,
@@ -116,28 +122,23 @@ async def process_query(
             agent="error",
             confidence=0.0,
             execution_time=processing_time,
-            error=str(e)
+            error=str(e),
         )
-        
+
         logger.error(f"Error al procesar consulta: {str(e)} (request_id: {request_id})")
-        
+
         return {
-            "result": {
-                "error": "Error al procesar la consulta",
-                "detail": str(e)
-            },
+            "result": {"error": "Error al procesar la consulta", "detail": str(e)},
             "agent": "error",
             "processing_time": processing_time,
             "confidence": 0.0,
-            "metadata": {
-                "request_id": request_id,
-                "success": False
-            }
+            "metadata": {"request_id": request_id, "success": False},
         }
 
+
 @api_router.get(
-    "/agents", 
-    response_model=List[Dict[str, Any]],
+    "/agents",
+    response_model=list[dict[str, Any]],
     status_code=status.HTTP_200_OK,
     summary="Obtener lista de agentes disponibles",
     description="""
@@ -152,7 +153,7 @@ async def process_query(
     
     Esta información es útil para entender las capacidades del sistema y para decidir
     qué agente especificar en las solicitudes de consulta si se desea uno en particular.
-    """
+    """,
 )
 async def get_available_agents():
     try:
@@ -163,16 +164,17 @@ async def get_available_agents():
         MetricsCollector.record_error("orchestrator", "fetch_agents")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al obtener agentes disponibles: {str(e)}"
+            detail=f"Error al obtener agentes disponibles: {str(e)}",
         )
 
+
 @api_router.get(
-    "/agents/{agent_id}", 
-    response_model=Dict[str, Any],
+    "/agents/{agent_id}",
+    response_model=dict[str, Any],
     status_code=status.HTTP_200_OK,
     responses={
         404: {"model": ErrorResponse, "description": "Agente no encontrado"},
-        500: {"model": ErrorResponse, "description": "Error interno del servidor"}
+        500: {"model": ErrorResponse, "description": "Error interno del servidor"},
     },
     summary="Obtener información detallada de un agente específico",
     description="""
@@ -187,7 +189,7 @@ async def get_available_agents():
     
     Esta información es útil para comprender en profundidad las capacidades
     y el rendimiento de un agente específico antes de utilizarlo.
-    """
+    """,
 )
 async def get_agent_info(agent_id: str):
     try:
@@ -195,7 +197,7 @@ async def get_agent_info(agent_id: str):
         if not agent_info:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Agente con ID '{agent_id}' no encontrado"
+                detail=f"Agente con ID '{agent_id}' no encontrado",
             )
         return agent_info
     except HTTPException:
@@ -205,12 +207,13 @@ async def get_agent_info(agent_id: str):
         MetricsCollector.record_error("orchestrator", "fetch_agent_info")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al obtener información del agente: {str(e)}"
+            detail=f"Error al obtener información del agente: {str(e)}",
         )
 
+
 @api_router.get(
-    "/stats", 
-    response_model=Dict[str, Any],
+    "/stats",
+    response_model=dict[str, Any],
     status_code=status.HTTP_200_OK,
     summary="Obtener estadísticas del sistema multi-agente",
     description="""
@@ -226,7 +229,7 @@ async def get_agent_info(agent_id: str):
     
     Esta información es valiosa para monitorear la salud y rendimiento del sistema,
     identificar áreas de mejora, y entender patrones de uso.
-    """
+    """,
 )
 async def get_system_stats():
     try:
@@ -237,16 +240,23 @@ async def get_system_stats():
         MetricsCollector.record_error("orchestrator", "fetch_stats")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al obtener estadísticas del sistema: {str(e)}"
+            detail=f"Error al obtener estadísticas del sistema: {str(e)}",
         )
 
+
 @api_router.post(
-    "/lookup", 
+    "/lookup",
     response_model=DataLookupResponse,
     status_code=status.HTTP_200_OK,
     responses={
-        400: {"model": ErrorResponse, "description": "Error de validación en la solicitud"},
-        500: {"model": ErrorResponse, "description": "Error durante la búsqueda de datos"}
+        400: {
+            "model": ErrorResponse,
+            "description": "Error de validación en la solicitud",
+        },
+        500: {
+            "model": ErrorResponse,
+            "description": "Error durante la búsqueda de datos",
+        },
     },
     summary="Buscar información en fuentes de datos externas",
     description="""
@@ -264,36 +274,38 @@ async def get_system_stats():
     
     Los resultados incluirán la información obtenida, metadatos sobre la búsqueda
     y detalles sobre las fuentes utilizadas.
-    """
+    """,
 )
-async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks):
+async def lookup_data(request: dict[str, Any], background_tasks: BackgroundTasks):
     """
     Busca información en fuentes externas.
-    
+
     Args:
         request: Diccionario con el tipo de búsqueda y parámetros
         background_tasks: Tareas en segundo plano para métricas
-        
+
     Returns:
         Resultados de la búsqueda
-        
+
     Raises:
         HTTPException: Si el tipo de búsqueda no es válido
     """
     request_id = str(uuid.uuid4())
     lookup_type = request.get("type", "")
     query = request.get("query", "")
-    
-    logger.info(f"Realizando búsqueda de tipo '{lookup_type}': '{query}' (request_id: {request_id})")
-    
+
+    logger.info(
+        f"Realizando búsqueda de tipo '{lookup_type}': '{query}' (request_id: {request_id})"
+    )
+
     start_time = time.time()
-    
+
     # Utilizar el servicio de búsqueda del orquestador
     data_lookup = orchestrator.data_lookup_service
-    
+
     try:
         result = {}
-        
+
         # Ejecutar el tipo de búsqueda adecuado
         if lookup_type == "market":
             result = data_lookup.search_market_data(query)
@@ -309,23 +321,24 @@ async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks
             result = data_lookup.lookup_company_data(company)
         else:
             raise HTTPException(
-                status_code=400, 
-                detail=f"Tipo de búsqueda no válido: {lookup_type}"
+                status_code=400, detail=f"Tipo de búsqueda no válido: {lookup_type}"
             )
-        
+
         # Calcular tiempo de procesamiento
         processing_time = time.time() - start_time
-        
+
         # Registrar métricas en segundo plano
         background_tasks.add_task(
             MetricsCollector.record_lookup_execution,
             lookup_type=lookup_type,
             success=True,
-            execution_time=processing_time
+            execution_time=processing_time,
         )
-        
-        logger.info(f"Búsqueda '{lookup_type}' completada en {processing_time:.4f}s (request_id: {request_id})")
-        
+
+        logger.info(
+            f"Búsqueda '{lookup_type}' completada en {processing_time:.4f}s (request_id: {request_id})"
+        )
+
         # Formatear la respuesta según el modelo DataLookupResponse
         response = {
             "success": True,
@@ -335,35 +348,40 @@ async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks
             "metadata": {
                 "request_id": request_id,
                 "lookup_type": lookup_type,
-                "processing_time": processing_time
-            }
+                "processing_time": processing_time,
+            },
         }
-        
+
         return response
-        
+
     except Exception as e:
         # Calcular tiempo en caso de error
         processing_time = time.time() - start_time
-        
+
         # Registrar métricas en segundo plano
         background_tasks.add_task(
             MetricsCollector.record_lookup_execution,
             lookup_type=lookup_type,
             success=False,
             execution_time=processing_time,
-            error=str(e)
+            error=str(e),
         )
-        
-        logger.error(f"Error en búsqueda '{lookup_type}': {str(e)} (request_id: {request_id})")
-        
+
+        logger.error(
+            f"Error en búsqueda '{lookup_type}': {str(e)} (request_id: {request_id})"
+        )
+
         return {
             "success": False,
-            "result": {"error": f"Error al realizar búsqueda de tipo '{lookup_type}'", "detail": str(e)},
+            "result": {
+                "error": f"Error al realizar búsqueda de tipo '{lookup_type}'",
+                "detail": str(e),
+            },
             "query": {"term": query},
             "lookup_type": lookup_type,
             "metadata": {
                 "request_id": request_id,
                 "processing_time": processing_time,
-                "success": False
-            }
-        } 
+                "success": False,
+            },
+        }

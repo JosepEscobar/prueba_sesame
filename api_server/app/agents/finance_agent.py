@@ -1,15 +1,11 @@
-from typing import Dict, Any, List, Optional
-import time
-import json
 import os
+import time
+from typing import Any
 
-from langchain_openai import ChatOpenAI
 from app.agents.base import BaseAgent
-from app.core.logging import logger
-from app.core.metrics import MetricsCollector
-from app.core.config import get_settings
-from app.tools.mcp_client import MCPClient
 from app.agents.mcp_integration import configure_agent_with_mcp, get_mcp_tools_sync
+from app.core.config import get_settings
+from app.core.logging import logger
 
 # Obtener la configuración
 settings = get_settings()
@@ -29,7 +25,7 @@ class FinanceAgent(BaseAgent):
     - Presupuestos y control de costos
     - Métricas y KPIs financieros
     """
-    
+
     def __init__(self):
         """
         Inicializa el agente de finanzas.
@@ -38,10 +34,10 @@ class FinanceAgent(BaseAgent):
             name="finance_agent",
             description="Especialista en finanzas, análisis financiero y estrategias de inversión"
         )
-        
+
         # Servicios que puede ofrecer el agente de finanzas
         self.services = [
-            "Análisis financiero", 
+            "Análisis financiero",
             "Modelos financieros",
             "Estrategias de inversión",
             "Evaluación de riesgos",
@@ -51,26 +47,26 @@ class FinanceAgent(BaseAgent):
             "Análisis de costos",
             "Proyecciones financieras"
         ]
-        
+
         # Configurar el cliente MCP (Model Context Protocol)
         try:
             # En lugar de crear un nuevo cliente, usar el global desde mcp_integration
             from app.agents.mcp_integration import _mcp_client
-            
+
             if _mcp_client is None:
                 # Si no existe un cliente global, deducir la ruta del servidor MCP
                 from pathlib import Path
                 current_dir = os.path.dirname(os.path.abspath(__file__))
                 project_root = Path(current_dir).parent.parent.parent.parent
                 mcp_server_path = os.path.join(project_root, "mcp_server", "main.py")
-                
+
                 # Inicializar el cliente MCP en mcp_integration
                 tools = get_mcp_tools_sync()
                 if tools:
                     # Volver a intentar obtener el cliente global después de inicializar
                     from app.agents.mcp_integration import _mcp_client
                     self.mcp_client = _mcp_client  # Asignar el cliente global a self.mcp_client
-                    
+
                     if self.mcp_client is not None:
                         self.available_mcp_tools = [tool["name"] for tool in tools]
                         logger.info(f"Cliente MCP inicializado. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
@@ -95,7 +91,7 @@ class FinanceAgent(BaseAgent):
             self.mcp_client = None
             self.mcp_initialized = False
             self.available_mcp_tools = []
-            
+
         # Obtener herramientas MCP en formato LangChain
         try:
             mcp_tools = get_mcp_tools_sync()
@@ -103,10 +99,10 @@ class FinanceAgent(BaseAgent):
             logger.info(f"Agente {self.name} inicializado con {len(self.services)} servicios y herramientas MCP")
         except Exception as e:
             logger.error(f"Error al configurar agente con herramientas MCP: {str(e)}")
-            
+
         logger.info(f"Agente {self.name} inicializado")
-    
-    def _execute_impl(self, input_data: Dict[Any, Any]) -> Dict[Any, Any]:
+
+    def _execute_impl(self, input_data: dict[Any, Any]) -> dict[Any, Any]:
         """
         Ejecuta el análisis financiero.
         
@@ -117,23 +113,23 @@ class FinanceAgent(BaseAgent):
             Resultado del análisis financiero
         """
         start_time = time.time()
-        
+
         try:
             # Obtener la consulta
             query = input_data.get("query", "")
-            
+
             # Obtener contexto adicional si existe
             context = input_data.get("context", {})
-            
+
             # Extraer la industria relevante de la consulta o el contexto
             industry = context.get("industry") if context and "industry" in context else self._extract_industry(query)
-            
+
             # Obtener datos financieros si los hay
             financial_data = {}
-            
+
             # Intentar extraer nombre de la empresa
             company_name = context.get("company") if context and "company" in context else self._extract_company(query)
-            
+
             # Si tenemos nombre de empresa, intentar obtener sus datos financieros
             if company_name:
                 try:
@@ -146,39 +142,39 @@ class FinanceAgent(BaseAgent):
                         )
                         if tool_response and isinstance(tool_response, dict) and "result" in tool_response:
                             company_data = tool_response["result"]
-                    
+
                     if company_data:
                         financial_data = self._summarize_financial_data(company_data)
                 except Exception as e:
                     logger.warning(f"No se pudieron obtener datos financieros para {company_name}: {str(e)}")
-            
+
             # Comprobar si tenemos acceso a LLM
             if self.llm is None:
                 raise Exception("LLM no disponible para generar análisis financiero")
-                
+
             # Construir el prompt para el modelo
             prompt_data = {
                 "query": query,
                 "context": context,
                 "financial_data": financial_data
             }
-            
+
             prompt = self._format_finance_prompt(prompt_data)
-            
+
             # Realizar consulta al LLM
-            from langchain_core.messages import SystemMessage, HumanMessage
-            
+            from langchain_core.messages import HumanMessage, SystemMessage
+
             messages = [
                 SystemMessage(content="Eres un analista financiero experto. Tu tarea es proporcionar análisis financieros precisos y recomendaciones basadas en datos."),
                 HumanMessage(content=prompt)
             ]
-            
+
             # Invocar el LLM
             response = self.invoke_llm(messages)
-            
+
             # Procesar el tiempo y devolver resultado
             processing_time = time.time() - start_time
-            
+
             return {
                 "result": {
                     "content": response.content,
@@ -191,11 +187,11 @@ class FinanceAgent(BaseAgent):
                 "processing_time": processing_time,
                 "reasoning": "Generado con OpenAI API"
             }
-            
+
         except Exception as e:
             logger.error(f"Error al ejecutar FinanceAgent: {str(e)}")
             processing_time = time.time() - start_time
-            
+
             # En caso de error, devolver detalles del error
             return {
                 "error": str(e),
@@ -210,7 +206,7 @@ class FinanceAgent(BaseAgent):
                 "reasoning": f"Error durante el procesamiento: {str(e)}"
             }
 
-    def _format_finance_prompt(self, input_data: Dict[str, Any]) -> str:
+    def _format_finance_prompt(self, input_data: dict[str, Any]) -> str:
         """
         Formatea el prompt para el modelo de lenguaje.
         
@@ -223,7 +219,7 @@ class FinanceAgent(BaseAgent):
         query = input_data.get("query", "")
         context = input_data.get("context", {})
         financial_data = input_data.get("financial_data", {})
-        
+
         prompt = f"""
         Eres un experto financiero actuando como parte de un sistema de asistencia 
         empresarial. Debes proporcionar un análisis financiero detallado y 
@@ -265,10 +261,10 @@ class FinanceAgent(BaseAgent):
         
         Proporciona un análisis completo y útil que permita tomar decisiones informadas.
         """
-        
+
         return prompt
-        
-    def _extract_industry(self, query: str) -> Optional[str]:
+
+    def _extract_industry(self, query: str) -> str | None:
         """
         Extrae la industria mencionada en la consulta.
         Método simplificado para propósitos de ejemplo.
@@ -287,17 +283,17 @@ class FinanceAgent(BaseAgent):
             "manufactura": ["manufactura", "fabricación", "industrial", "fábrica"],
             "energía": ["energía", "petróleo", "gas", "renovable", "electricidad"]
         }
-        
+
         query_lower = query.lower()
-        
+
         for industry, keywords in industry_keywords.items():
             for keyword in keywords:
                 if keyword in query_lower:
                     return industry
-        
-        return None 
 
-    def _summarize_financial_data(self, financial_data: Dict[str, Any]) -> Dict[str, Any]:
+        return None
+
+    def _summarize_financial_data(self, financial_data: dict[str, Any]) -> dict[str, Any]:
         """
         Genera un resumen de los datos financieros obtenidos para incluir en la respuesta.
         
@@ -308,24 +304,24 @@ class FinanceAgent(BaseAgent):
             Resumen de los datos financieros
         """
         summary = {}
-        
+
         if "market_data" in financial_data:
             summary["market_data_available"] = True
             if isinstance(financial_data["market_data"], dict) and "source" in financial_data["market_data"]:
                 summary["market_data_source"] = financial_data["market_data"]["source"]
-                
+
         if "financial_models" in financial_data:
             summary["models_available"] = True
             if isinstance(financial_data["financial_models"], dict) and "model_type" in financial_data["financial_models"]:
                 summary["model_type"] = financial_data["financial_models"]["model_type"]
-        
+
         if "financial_news" in financial_data:
             summary["news_available"] = True
-            
+
         if "company_data" in financial_data:
             summary["company_data_available"] = True
-            
-        return summary 
+
+        return summary
 
     def _extract_company(self, query: str) -> str:
         """
@@ -339,9 +335,9 @@ class FinanceAgent(BaseAgent):
         """
         # Implementación simple - en producción usaríamos NER o un modelo específico
         common_companies = ["Apple", "Tesla", "Amazon", "Google", "Microsoft", "Facebook", "IBM", "Intel"]
-        
+
         for company in common_companies:
             if company.lower() in query.lower():
                 return company
-        
-        return "" 
+
+        return ""

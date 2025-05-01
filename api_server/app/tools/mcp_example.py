@@ -11,15 +11,16 @@ Uso:
     python -m app.tools.mcp_example
 """
 
-import asyncio
 import argparse
+import asyncio
 import json
-from typing import Dict, Any, List, Optional
+from typing import Any
 
-from app.tools.mcp_client import MCPClient
 from app.core.config import get_settings
+from app.tools.mcp_client import MCPClient
 
-async def list_tools(client: MCPClient) -> List[Dict[str, Any]]:
+
+async def list_tools(client: MCPClient) -> list[dict[str, Any]]:
     """
     Lista las herramientas disponibles en el servidor MCP.
     
@@ -31,7 +32,7 @@ async def list_tools(client: MCPClient) -> List[Dict[str, Any]]:
     """
     return await client.list_tools()
 
-async def call_tool(client: MCPClient, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+async def call_tool(client: MCPClient, tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
     """
     Llama a una herramienta específica en el servidor MCP.
     
@@ -53,21 +54,21 @@ async def main():
     parser.add_argument("--tool", help="Herramienta a ejecutar")
     parser.add_argument("--params", help="Parámetros para la herramienta (formato JSON)")
     args = parser.parse_args()
-    
+
     # Configuración
     settings = get_settings()
-    
+
     # Inicializar el cliente MCP
     client = MCPClient(
         base_url=args.url if args.url else settings.MCP_CLIENT_URL
     )
-    
+
     # Inicializar el cliente
     initialized = await client.initialize()
     if not initialized:
         print("No se pudo inicializar el cliente MCP")
         return
-    
+
     # Si no se especifica una herramienta, mostrar la lista de herramientas disponibles
     if not args.tool:
         print("Herramientas disponibles:")
@@ -78,7 +79,7 @@ async def main():
         except Exception as e:
             print(f"Error al listar herramientas: {str(e)}")
         return
-    
+
     # Si se especifica una herramienta, llamarla con los parámetros proporcionados
     tool_name = args.tool
     try:
@@ -90,7 +91,7 @@ async def main():
             except json.JSONDecodeError:
                 print(f"Error al parsear parámetros JSON: {args.params}")
                 return
-        
+
         # Ejemplo básico si no se proporcionan parámetros
         if not params and tool_name == "financial_models":
             params = {"model_type": "cash_flow"}
@@ -98,22 +99,22 @@ async def main():
             params = {"query": "inteligencia artificial", "kb_name": "general"}
         elif not params and tool_name == "search_articles":
             params = {"query": "machine learning"}
-        
+
         print(f"Llamando a herramienta '{tool_name}' con parámetros:")
         print(json.dumps(params, indent=2, ensure_ascii=False))
-        
+
         # Llamar a la herramienta
         result = await call_tool(client, tool_name, params)
-        
+
         # Mostrar el resultado
         print("\nResultado:")
         print(json.dumps(result, indent=2, ensure_ascii=False))
-        
+
     except Exception as e:
         print(f"Error al llamar a la herramienta {tool_name}: {str(e)}")
-    
+
     # Cerrar el cliente MCP
     await client.close()
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())
