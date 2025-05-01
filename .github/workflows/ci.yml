@@ -20,6 +20,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Check file structure
+      run: |
+        ls -la
+        if [ ! -f "requirements.txt" ]; then
+          echo "ERROR: requirements.txt not found in api_server directory"
+          exit 1
+        fi
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
@@ -37,6 +45,7 @@ jobs:
 
     - name: Run tests
       run: |
+        pip install pytest pytest-cov
         pytest --cov=app --cov-report=xml
 
     - name: Upload coverage to Codecov
@@ -59,6 +68,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Check file structure
+      run: |
+        ls -la
+        if [ ! -f "requirements.txt" ]; then
+          echo "ERROR: requirements.txt not found in mcp_server directory"
+          exit 1
+        fi
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
@@ -76,6 +93,7 @@ jobs:
 
     - name: Run tests
       run: |
+        pip install pytest pytest-cov
         pytest --cov=app --cov-report=xml
 
     - name: Upload coverage to Codecov
@@ -93,6 +111,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Check file structure
+      run: |
+        ls -la
+        if [ ! -f "package.json" ]; then
+          echo "ERROR: package.json not found in frontend directory"
+          exit 1
+        fi
 
     - name: Set up Node.js
       uses: actions/setup-node@v4
@@ -120,6 +146,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    
+    - name: Check directories
+      run: |
+        echo "Checking directory structure..."
+        ls -la
+        echo "API Server directory:"
+        ls -la api_server || echo "API Server directory not found!"
+        echo "MCP Server directory:"
+        ls -la mcp_server || echo "MCP Server directory not found!"
+        echo "Frontend directory:"
+        ls -la frontend || echo "Frontend directory not found!"
     
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
