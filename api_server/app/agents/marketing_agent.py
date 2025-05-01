@@ -1,4 +1,3 @@
-import json
 import time
 from typing import Any
 
@@ -6,7 +5,9 @@ from langchain_openai import ChatOpenAI
 
 from app.agents.base import BaseAgent
 from app.agents.mcp_integration import configure_agent_with_mcp, get_mcp_tools_sync
+from app.core.ai_prompt_builder import AIPromptBuilder
 from app.core.config import get_settings
+from app.core.llm import parse_llm_json_response
 from app.core.logging import logger
 from app.tools.mcp_client import MCPClient
 
@@ -117,42 +118,75 @@ class MarketingAgent(BaseAgent):
 
                     # Usar LLM para categorizar y extraer parámetros de la consulta de marketing
                     if self.llm:
-                        categorization_prompt = f"""
-                        Analiza la siguiente consulta de marketing y extrae los parámetros relevantes.
-
-                        Consulta: "{query}"
-
-                        Devuelve SOLAMENTE un objeto JSON con esta estructura:
-                        {{
+                        # Definir la estructura JSON esperada
+                        json_schema = {
                             "marketing_actions": [
                                 "strategy",
                                 "trend_analysis",
                                 "campaign_analysis",
-                                "financial_analysis"
+                                "financial_analysis",
                             ],
-                            "parameters": {{
+                            "parameters": {
                                 "industry": "nombre de la industria si se menciona",
-                                "budget": número si se menciona un presupuesto,
+                                "budget": "número si se menciona un presupuesto",
                                 "goal": "objetivo de marketing mencionado (awareness, conversiones, tráfico, etc.)",
                                 "target_audience": "público objetivo mencionado",
-                                "campaign": {{
+                                "campaign": {
                                     "name": "nombre de campaña si se menciona",
-                                    "impressions": número de impresiones si se mencionan,
-                                    "clicks": número de clics si se mencionan,
-                                    "conversions": número de conversiones si se mencionan,
-                                    "cost": costo si se menciona
-                                }}
-                            }}
-                        }}
+                                    "impressions": "número de impresiones si se mencionan",
+                                    "clicks": "número de clics si se mencionan",
+                                    "conversions": "número de conversiones si se mencionan",
+                                    "cost": "costo si se menciona",
+                                },
+                            },
+                        }
 
-                        Cada acción debe ser incluida solo si es relevante para la consulta.
-                        No incluyas texto adicional en tu respuesta, solo el JSON.
-                        """
+                        # Crear un ejemplo JSON para guiar la respuesta
+                        example_json = {
+                            "marketing_actions": ["strategy", "campaign_analysis"],
+                            "parameters": {
+                                "industry": "tecnología",
+                                "budget": 50000,
+                                "goal": "brand awareness",
+                                "target_audience": "profesionales 25-45 años",
+                                "campaign": {
+                                    "name": "Lanzamiento Q4",
+                                    "impressions": 150000,
+                                    "clicks": 8500,
+                                    "conversions": 950,
+                                    "cost": 12000,
+                                },
+                            },
+                        }
+
+                        # Crear el constructor de prompts
+                        prompt_builder = AIPromptBuilder(
+                            role="analista de marketing especializado en estrategias y análisis de campañas",
+                            task="Analiza la consulta del usuario y extrae los parámetros y acciones de marketing relevantes.",
+                            input_data=query,
+                            schema=json_schema,
+                            criteria="Identifica las acciones de marketing más relevantes según la consulta y extrae todos los parámetros mencionados.",
+                            constraints="Incluye solo las acciones de marketing relevantes para la consulta. Los valores numéricos deben ser números sin comillas.",
+                            examples=[example_json],
+                        )
+
+                        # Crear el prompt usando el builder
+                        categorization_prompt = prompt_builder.build_json_prompt(query)
 
                         try:
                             response = self.llm.invoke(categorization_prompt)
-                            categorization = json.loads(response.content.strip())
-                            logger.info(f"Categorización por LLM: {categorization}")
+
+                            # Usar la utilidad de parseo JSON seguro
+                            default_value = {
+                                "marketing_actions": ["strategy"],
+                                "parameters": {
+                                    "industry": self._extract_industry(query),
+                                    "budget": context.get("budget", 50000),
+                                    "goal": context.get("goal", "awareness"),
+                                    "target_audience": context.get("target_audience", "general"),
+                                },
+                            }
+                            categorization = parse_llm_json_response(response, default_value)
 
                             marketing_actions = categorization.get("marketing_actions", [])
                             parameters = categorization.get("parameters", {})
@@ -201,15 +235,35 @@ class MarketingAgent(BaseAgent):
                                 # 2. Estrategia de marketing si está en las acciones
                                 if "strategy" in marketing_actions and parameters.get("industry"):
                                     try:
-                                        industry = parameters.get("industry")
+                                        # Asegurarse de que industry sea un string válido
+                                        industry = parameters.get("industry", "tecnología")
+                                        if industry is None:
+                                            industry = "tecnología"
+
+                                        # Asegurarse de que el resto de parámetros también tengan valores por defecto válidos
+                                        presupuesto = parameters.get("budget")
+                                        if presupuesto is None or not isinstance(presupuesto, (int, float)):
+                                            presupuesto = context.get("budget", 50000)
+
+                                        objetivo = parameters.get("goal")
+                                        if objetivo is None or objetivo == "":
+                                            objetivo = context.get("goal", "awareness")
+
+                                        publico = parameters.get("target_audience")
+                                        if publico is None or publico == "":
+                                            publico = context.get("target_audience", "general")
+
+                                        # Construir parámetros con valores validados
                                         strategy_params = {
-                                            "industria": industry,
-                                            "presupuesto": parameters.get("budget", context.get("budget", 50000)),
-                                            "objetivo": parameters.get("goal", context.get("goal", "awareness")),
-                                            "publico_objetivo": parameters.get(
-                                                "target_audience", context.get("target_audience", "general")
-                                            ),
+                                            "industria": str(industry),  # Forzar conversión a string
+                                            "presupuesto": int(presupuesto)
+                                            if isinstance(presupuesto, (int, float))
+                                            else 50000,
+                                            "objetivo": str(objetivo) if objetivo else "awareness",
+                                            "publico_objetivo": str(publico) if publico else "general",
                                         }
+
+                                        logger.info(f"Parámetros de estrategia: {strategy_params}")
 
                                         # Verificar que existe el cliente MCP
                                         if not hasattr(self, "mcp_client") or self.mcp_client is None:
@@ -239,6 +293,11 @@ class MarketingAgent(BaseAgent):
                                         logger.info(f"Estrategia de marketing obtenida para {industry}")
                                     except Exception as e:
                                         logger.error(f"Error al obtener estrategia de marketing: {str(e)}")
+                                        # No detener todo el proceso por un error en esta herramienta
+                                        marketing_data["marketing_strategy"] = {
+                                            "estrategia": "No se pudo obtener la estrategia de marketing debido a un error.",
+                                            "error": str(e),
+                                        }
 
                                 # 3. Análisis de campaña si está en las acciones
                                 if "campaign_analysis" in marketing_actions and parameters.get("campaign"):

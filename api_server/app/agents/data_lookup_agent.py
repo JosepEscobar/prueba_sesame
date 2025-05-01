@@ -7,7 +7,9 @@ from typing import Any
 from langchain_openai import ChatOpenAI
 
 from app.agents.base import BaseAgent
+from app.core.ai_prompt_builder import AIPromptBuilder
 from app.core.config import get_settings
+from app.core.llm import parse_llm_json_response
 from app.core.logging import logger
 from app.tools.mcp_client import MCPClient
 
@@ -89,30 +91,59 @@ class DataLookupAgent(BaseAgent):
 
                 # Usar LLM para categorizar y extraer parámetros de la consulta
                 if self.llm:
-                    categorization_prompt = f"""
-                    Analiza la siguiente consulta y categoriza el tipo de búsqueda que se necesita realizar.
+                    # Definir la estructura JSON esperada
+                    json_schema = {
+                        "lookup_category": "financial | marketing | trends | general",
+                        "parameters": {
+                            "empresa": "nombre de empresa (para financial)",
+                            "periodo": "periodo de análisis (para financial)",
+                            "campaign": "nombre de campaña (para marketing)",
+                            "metrics": {
+                                "impressions": "número de impresiones (para marketing)",
+                                "clicks": "número de clics (para marketing)",
+                                "conversions": "número de conversiones (para marketing)",
+                                "cost": "costo (para marketing)",
+                            },
+                            "numerical_data": "datos numéricos para análisis (para trends)",
+                            "labels": "etiquetas para datos (para trends)",
+                            "predict": "si se debe hacer predicción (para trends)",
+                            "future_periods": "periodos futuros a predecir (para trends)",
+                        },
+                    }
 
-                    Consulta: "{query}"
+                    # Ejemplo para guiar al modelo
+                    example_json = {
+                        "lookup_category": "financial",
+                        "parameters": {"empresa": "Apple", "periodo": "Q2 2023"},
+                    }
 
-                    Devuelve una respuesta en formato JSON con esta estructura:
-                    {{
-                        "lookup_category": "financial" | "marketing" | "trends" | "general",
-                        "parameters": {{
-                            // Parámetros específicos según la categoría
-                            // Para financial: empresa, periodo
-                            // Para marketing: campaign, metrics (clicks, impressions, conversions, cost)
-                            // Para trends: numerical_data, labels, predict, future_periods
-                            // Para general: solo tema principal
-                        }}
-                    }}
+                    # Crear el constructor de prompts
+                    prompt_builder = AIPromptBuilder(
+                        role="especialista en búsqueda y recuperación de datos",
+                        task="Analiza la consulta del usuario e identifica la categoría de datos a buscar y los parámetros relevantes.",
+                        input_data=query,
+                        schema=json_schema,
+                        criteria="""
+                        Analiza cuidadosamente la consulta e identifica la categoría de búsqueda:
+                        - financial: para datos financieros, inversiones, empresas, etc.
+                        - marketing: para campañas, métricas de marketing, etc.
+                        - trends: para análisis de tendencias, predicciones, etc.
+                        - general: para consultas generales no específicas
+                        
+                        Incluye solo los parámetros relevantes para la categoría identificada.
+                        """,
+                        examples=[example_json],
+                    )
 
-                    Devuelve SOLAMENTE el JSON, sin texto adicional.
-                    """
+                    # Crear el prompt usando el builder
+                    categorization_prompt = prompt_builder.build_json_prompt(query)
 
                     try:
                         response = self.llm.invoke(categorization_prompt)
-                        categorization = json.loads(response.content.strip())
-                        logger.info(f"Categorización por LLM: {categorization}")
+
+                        # Usar la utilidad de parseo JSON seguro
+                        default_value = {"lookup_category": "general", "parameters": {}}
+                        categorization = parse_llm_json_response(response, default_value)
 
                         lookup_category = categorization.get("lookup_category", "general")
                         parameters = categorization.get("parameters", {})

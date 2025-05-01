@@ -1,10 +1,11 @@
-import json
 import os
 import time
 from typing import Any
 
 from app.agents.base import BaseAgent
+from app.core.ai_prompt_builder import AIPromptBuilder
 from app.core.config import get_settings
+from app.core.llm import parse_llm_json_response
 from app.core.logging import logger
 
 
@@ -485,29 +486,49 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
         # Intentar usar LLM si está disponible para categorización JSON
         if self.llm is not None:
             try:
-                categorization_prompt = f"""
-                Analiza la siguiente consulta y determina qué agente especializado debería manejarla.
+                # Definir la estructura JSON esperada
+                json_schema = {
+                    "agent": "finance_agent | marketing_agent | analysis_agent",
+                    "confidence": 0.7,
+                    "reasoning": "breve explicación de la elección",
+                }
 
-                Consulta: "{query}"
+                # Ejemplo para guiar al modelo
+                example_json = {
+                    "agent": "finance_agent",
+                    "confidence": 0.9,
+                    "reasoning": "La consulta menciona presupuestos y análisis financiero",
+                }
 
-                Devuelve SOLAMENTE un objeto JSON con esta estructura:
-                {{
-                    "agent": "finance_agent" | "marketing_agent" | "analysis_agent",
-                    "confidence": float entre 0 y 1,
-                    "reasoning": "breve explicación de la elección"
-                }}
+                # Crear el constructor de prompts
+                prompt_builder = AIPromptBuilder(
+                    role="agente router que dirige consultas a agentes especializados",
+                    task="Analiza la consulta del usuario y determina qué agente especializado debe manejarla.",
+                    input_data=query,
+                    schema=json_schema,
+                    criteria="""
+                    Criterios para cada agente:
+                    - finance_agent: Consultas sobre finanzas, inversiones, contabilidad, análisis financiero, presupuestos, etc.
+                    - marketing_agent: Consultas sobre marketing, publicidad, campañas, estrategias de mercado, clientes, etc.
+                    - analysis_agent: Consultas generales de análisis, tendencias, datos, información general, etc.
+                    
+                    El campo "confidence" debe ser un número entre 0 y 1 que representa tu nivel de confianza en esta elección.
+                    """,
+                    examples=[example_json],
+                )
 
-                Criterios para cada agente:
-                - finance_agent: Consultas sobre finanzas, inversiones, contabilidad, análisis financiero, presupuestos, etc.
-                - marketing_agent: Consultas sobre marketing, publicidad, campañas, estrategias de mercado, clientes, etc.
-                - analysis_agent: Consultas generales de análisis, tendencias, datos, información general, etc.
-
-                No incluyas texto adicional en tu respuesta, solo el JSON.
-                """
+                # Crear el prompt usando el builder
+                categorization_prompt = prompt_builder.build_json_prompt(query)
 
                 response = self.llm.invoke(categorization_prompt)
-                categorization = json.loads(response.content.strip())
-                logger.info(f"Categorización por LLM: {categorization}")
+
+                # Usar la utilidad de parseo JSON seguro
+                default_value = {
+                    "agent": "analysis_agent",
+                    "confidence": 0.7,
+                    "reasoning": "Fallback por error de formato JSON",
+                }
+                categorization = parse_llm_json_response(response, default_value)
 
                 agent_type = categorization.get("agent", "analysis_agent")
                 logger.info(f"LLM seleccionó agente: {agent_type}")

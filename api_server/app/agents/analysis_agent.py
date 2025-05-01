@@ -1,4 +1,3 @@
-import json
 import os
 import time
 from pathlib import Path
@@ -8,7 +7,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
 from app.agents.base import BaseAgent
+from app.core.ai_prompt_builder import AIPromptBuilder
 from app.core.config import get_settings
+from app.core.llm import parse_llm_json_response
 from app.core.logging import logger
 from app.tools.mcp_client import MCPClient
 
@@ -123,33 +124,43 @@ class AnalysisAgent(BaseAgent):
 
             # Usar LLM para categorizar el tipo de análisis necesario
             if self.llm:
-                categorization_prompt = f"""
-                Analiza la siguiente consulta y determina qué tipo de análisis se necesita realizar.
+                # Definir la estructura JSON esperada
+                json_schema = {
+                    "analysis_type": "trend_analysis | article_search | general",
+                    "parameters": {
+                        "has_numerical_data": "true/false (solo para trend_analysis)",
+                        "data_source": "fuente de los datos numéricos (solo para trend_analysis)",
+                        "search_query": "consulta de búsqueda refinada (solo para article_search)",
+                    },
+                }
 
-                Consulta: "{query}"
+                # Ejemplo para guiar al modelo
+                example_json = {
+                    "analysis_type": "trend_analysis",
+                    "parameters": {"has_numerical_data": True, "data_source": "datos proporcionados en el contexto"},
+                }
 
-                Devuelve SOLAMENTE un objeto JSON con esta estructura:
-                {{
-                    "analysis_type": "trend_analysis" | "article_search" | "general",
-                    "parameters": {{
-                        // Parámetros específicos según el tipo de análisis
-                    }}
-                }}
+                # Crear el constructor de prompts
+                prompt_builder = AIPromptBuilder(
+                    role="analista especializado en datos y tendencias",
+                    task="Analiza la consulta del usuario y determina qué tipo de análisis se requiere.",
+                    input_data=query,
+                    schema=json_schema,
+                    criteria="""Para cada tipo de análisis, incluye solo los parámetros relevantes. 
+                    Si es un análisis de tendencia, determina si hay datos numéricos disponibles.
+                    Si es una búsqueda de artículos, refina la consulta para obtener mejores resultados.""",
+                    examples=[example_json],
+                )
 
-                Si es un análisis de tendencia (trend_analysis), incluye:
-                - has_numerical_data: true/false
-                - data_source: dónde se encuentran los datos numéricos
-
-                Si es una búsqueda de artículos (article_search), incluye:
-                - search_query: la consulta de búsqueda refinada
-
-                No incluyas texto adicional en tu respuesta, solo el JSON.
-                """
+                # Crear el prompt usando el builder
+                categorization_prompt = prompt_builder.build_json_prompt(query)
 
                 try:
                     response = self.llm.invoke(categorization_prompt)
-                    categorization = json.loads(response.content.strip())
-                    logger.info(f"Categorización por LLM: {categorization}")
+
+                    # Usar la utilidad de parseo JSON seguro
+                    default_value = {"analysis_type": "general", "parameters": {"search_query": query}}
+                    categorization = parse_llm_json_response(response, default_value)
 
                     analysis_type = categorization.get("analysis_type", "general")
                     parameters = categorization.get("parameters", {})
