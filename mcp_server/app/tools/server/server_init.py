@@ -15,25 +15,29 @@ from app.tools.server.mcp_server import MCPToolServer, run_server
 # Variable global para almacenar el proceso del servidor MCP
 _mcp_process: subprocess.Popen | None = None
 
+
 def init_mcp_server(host: str = "localhost", port: int = 4000) -> MCPToolServer:
     """
     Inicializa el servidor MCP (para uso dentro del mismo proceso).
     Esta función se mantiene por compatibilidad pero ya no se recomienda su uso.
-    
+
     Args:
         host: Host donde se iniciará el servidor MCP
         port: Puerto donde se iniciará el servidor MCP
-        
+
     Returns:
         Una instancia de MCPToolServer inicializada
     """
-    logger.warning("Usar init_mcp_server está obsoleto. Se recomienda usar start_mcp_server_process para ejecutar el servidor en un proceso separado.")
+    logger.warning(
+        "Usar init_mcp_server está obsoleto. Se recomienda usar start_mcp_server_process para ejecutar el servidor en un proceso separado."
+    )
     return MCPToolServer(host=host, port=port)
+
 
 def stop_mcp_server_process() -> bool:
     """
     Detiene el proceso del servidor MCP si está en ejecución.
-    
+
     Returns:
         True si el servidor se detuvo correctamente, False en caso contrario
     """
@@ -75,7 +79,7 @@ def stop_mcp_server_process() -> bool:
                     return False
 
         # Limpiar el archivo temporal si existe
-        if hasattr(_mcp_process, 'script_path') and os.path.exists(_mcp_process.script_path):
+        if hasattr(_mcp_process, "script_path") and os.path.exists(_mcp_process.script_path):
             try:
                 os.unlink(_mcp_process.script_path)
                 logger.debug(f"Eliminado script temporal: {_mcp_process.script_path}")
@@ -102,14 +106,15 @@ def stop_mcp_server_process() -> bool:
         _mcp_process = None
         return False
 
+
 def start_mcp_server_process(host: str = "localhost", port: int = 4000) -> subprocess.Popen | None:
     """
     Inicia el servidor MCP en un proceso separado.
-    
+
     Args:
         host: Host donde se iniciará el servidor MCP
         port: Puerto donde se iniciará el servidor MCP
-        
+
     Returns:
         El proceso de Popen si el servidor se inició correctamente, None en caso contrario
     """
@@ -121,14 +126,14 @@ def start_mcp_server_process(host: str = "localhost", port: int = 4000) -> subpr
     # Crear un script temporal para ejecutar el servidor MCP
     try:
         # Crear un archivo temporal que ejecutará el servidor MCP
-        fd, script_path = tempfile.mkstemp(suffix='.py', prefix='mcp_server_')
+        fd, script_path = tempfile.mkstemp(suffix=".py", prefix="mcp_server_")
         logger.debug(f"Creando script temporal en {script_path}")
 
         # Obtener la ruta del proyecto para importaciones correctas
         project_root = Path(__file__).parent.parent.parent.parent
 
         # Escribir el contenido del script
-        with os.fdopen(fd, 'w') as f:
+        with os.fdopen(fd, "w") as f:
             f.write(f"""
 import os
 import sys
@@ -149,7 +154,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("{project_root / 'logs' / 'mcp_server.log'}")
+        logging.FileHandler("{project_root / "logs" / "mcp_server.log"}")
     ]
 )
 logger = logging.getLogger("mcp_server")
@@ -193,30 +198,30 @@ from app.tools.server.mcp_server import MCPToolServer
 # Función principal
 async def main():
     global server_running, server_ready
-    
+
     try:
         # Crear instancia del servidor
         server = MCPToolServer(host="{host}", port={port})
-        
+
         # Cargar las herramientas (desde los archivos JSON)
-        tool_schemas_dir = Path("{project_root / 'app' / 'tools' / 'schemas'}")
+        tool_schemas_dir = Path("{project_root / "app" / "tools" / "schemas"}")
         loaded_tools = 0
-        
+
         if not tool_schemas_dir.exists():
             logger.error(f"Directorio de esquemas no encontrado: {{tool_schemas_dir}}")
             return False
-            
+
         json_files = list(tool_schemas_dir.glob("*.json"))
         if not json_files:
             logger.error(f"No se encontraron archivos JSON en {{tool_schemas_dir}}")
             logger.info(f"Contenido del directorio: {{[f.name for f in tool_schemas_dir.iterdir()]}}")
             return False
-        
+
         # Cargar todas las herramientas disponibles
         for json_file in json_files:
             try:
                 logger.info(f"Cargando herramienta '{{json_file.stem}}' desde {{json_file.name}}")
-                
+
                 # Verificar que el archivo sea un JSON válido
                 try:
                     with open(json_file, 'r') as schema_file:
@@ -228,7 +233,7 @@ async def main():
                 except json.JSONDecodeError:
                     logger.error(f"El archivo {{json_file}} no es un JSON válido")
                     continue
-                    
+
                 # Registrar la herramienta
                 success = await server.register_tool_from_json(json_file)
                 if success:
@@ -238,83 +243,83 @@ async def main():
                     logger.warning(f"No se pudo cargar la herramienta desde {{json_file}}")
             except Exception as e:
                 logger.error(f"Error al cargar herramienta desde {{json_file}}: {{str(e)}}", exc_info=True)
-        
+
         if loaded_tools == 0:
             logger.error("No se pudo cargar ninguna herramienta. Verificar los archivos de esquema.")
             return False
-            
+
         logger.info(f"Cargadas {{loaded_tools}} herramientas")
-        
+
         # Registrar implementaciones específicas
         try:
             # Registrar implementación de financial_models
             from app.tools.implementations.financial_models import FinancialModelsImplementation
             financial_models_impl = FinancialModelsImplementation()
-            
+
             success = server.register_tool_implementation(
-                "financial_models", 
+                "financial_models",
                 financial_models_impl.execute
             )
-            
+
             if success:
                 logger.info("Implementación de financial_models registrada correctamente")
             else:
                 logger.warning("No se pudo registrar la implementación de financial_models")
-                
+
             # Registrar implementación de data_lookup
             from app.tools.implementations.data_lookup import DataLookupImplementation
             data_lookup_impl = DataLookupImplementation()
-            
+
             success = server.register_tool_implementation(
-                "data_lookup", 
+                "data_lookup",
                 data_lookup_impl.execute
             )
-            
+
             if success:
                 logger.info("Implementación de data_lookup registrada correctamente")
             else:
                 logger.warning("No se pudo registrar la implementación de data_lookup")
         except Exception as e:
             logger.error(f"Error al registrar implementaciones: {{str(e)}}", exc_info=True)
-        
+
         # Configurar el servidor MCP antes de iniciarlo
         server.mcp_server.server_host = "{host}"
         server.mcp_server.server_port = {port}
-        
+
         # Iniciar el servidor directamente (no a través de start_server)
         logger.info("Iniciando servidor MCP...")
-        
+
         # Iniciar el servidor MCP directamente
         # Crear y ejecutar el servidor
         server_task = asyncio.create_task(server.mcp_server.run())
         server._is_running = True
-        
+
         # Marcar que el servidor está listo
         server_running = True
         server_ready = True
-        
+
         logger.info(f"Servidor MCP iniciado en http://{host}:{port}")
-        
+
         # Escribir un archivo indicador para señalar que estamos listos
         ready_file = Path("{project_root}/mcp_server_ready.flag")
         with open(ready_file, 'w') as f:
             f.write(f"Servidor MCP listo en {{time.time()}}")
-        
+
         logger.info(f"Servidor MCP escuchando y listo para recibir solicitudes")
-        
+
         # Mantener el servidor en ejecución
         while server_running:
             await asyncio.sleep(1)
-            
+
         # Limpiar y detener el servidor al salir del bucle
         if os.path.exists(ready_file):
             os.unlink(ready_file)
-            
+
         logger.info("Deteniendo servidor MCP...")
         server_task.cancel()
         server._is_running = False
         logger.info("Servidor MCP detenido correctamente")
-        
+
         return True
     except Exception as e:
         logger.error(f"Error en el servidor MCP: {{str(e)}}", exc_info=True)
@@ -325,20 +330,20 @@ if __name__ == "__main__":
     try:
         # Ejecutar la función principal y esperar a que esté listo
         result = asyncio.run(main())
-        
+
         # Si hubo un error al inicializar, salir
         if not result:
             logger.error("No se pudo inicializar el servidor MCP")
             sys.exit(1)
-            
+
         # Si llegamos aquí, el servidor se inició correctamente
         # Mantener el proceso en ejecución
         logger.info("Servidor MCP iniciado correctamente, manteniendo proceso")
-        
+
         # Esto mantiene el proceso activo hasta que se reciba una señal
         while server_running:
             time.sleep(1)
-            
+
     except KeyboardInterrupt:
         logger.info("Proceso interrumpido por teclado")
     except Exception as e:
@@ -355,8 +360,25 @@ if __name__ == "__main__":
         # Construir el comando
         python_executable = sys.executable
 
-        # Iniciar el proceso
-        process = subprocess.Popen(
+        # Validar que el ejecutable de Python existe y es absoluto
+        if not os.path.exists(python_executable) or not os.path.isabs(python_executable):
+            logger.error(f"No se encontró el ejecutable de Python en: {python_executable}")
+            return None
+
+        # Validar que el script existe y es absoluto
+        if not os.path.exists(script_path) or not os.path.isabs(script_path):
+            logger.error(f"No se encontró el script en: {script_path}")
+            return None
+
+        # Asegurar que el script es un archivo regular y no un enlace simbólico
+        if not os.path.isfile(script_path) or os.path.islink(script_path):
+            logger.error(f"El script no es un archivo regular: {script_path}")
+            return None
+
+        # En lugar de marcar el error como S603, vamos a ignorarlo explícitamente
+        # ya que hemos validado las entradas y son confiables (rutas absolutas y existentes)
+        # Usamos una lista en lugar de una cadena para evitar la inyección de shell
+        process = subprocess.Popen(  # noqa: S603
             [python_executable, script_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -364,7 +386,7 @@ if __name__ == "__main__":
             # No redirigir stdin para evitar bloqueos
             stdin=subprocess.DEVNULL,
             # Desacoplar el proceso para que sea independiente
-            start_new_session=True
+            start_new_session=True,
         )
 
         # Almacenar el proceso y el path del script
@@ -409,7 +431,7 @@ if __name__ == "__main__":
                 except Exception as e:
                     logger.warning(f"Error al leer archivo indicador: {str(e)}")
 
-            logger.info(f"Esperando a que el servidor MCP esté listo (intento {attempt+1}/{max_retries})")
+            logger.info(f"Esperando a que el servidor MCP esté listo (intento {attempt + 1}/{max_retries})")
             time.sleep(retry_delay)
 
         if not server_up:
@@ -432,19 +454,20 @@ if __name__ == "__main__":
         logger.error(f"Error al iniciar el servidor MCP en proceso separado: {str(e)}")
 
         # Limpiar si algo sale mal
-        if 'script_path' in locals() and os.path.exists(script_path):
+        if "script_path" in locals() and os.path.exists(script_path):
             os.unlink(script_path)
 
         return None
 
-async def init_mcp_server(host: str = "localhost", port: int = 4000) -> MCPToolServer:
+
+async def init_mcp_server_async(host: str = "localhost", port: int = 4000) -> MCPToolServer:
     """
     Inicializa y configura un servidor MCP con las herramientas disponibles.
-    
+
     Args:
         host: Host en el que se ejecutará el servidor
         port: Puerto en el que se ejecutará el servidor
-        
+
     Returns:
         Instancia del servidor MCP configurado
     """
@@ -460,12 +483,10 @@ async def init_mcp_server(host: str = "localhost", port: int = 4000) -> MCPToolS
         from app.tools.implementations.financial_models import (
             FinancialModelsImplementation,
         )
+
         financial_models_impl = FinancialModelsImplementation()
 
-        server.register_tool_implementation(
-            "financial_models",
-            financial_models_impl.execute
-        )
+        server.register_tool_implementation("financial_models", financial_models_impl.execute)
         logger.info("Implementación de financial_models registrada correctamente")
     except Exception as e:
         logger.error(f"Error al registrar implementación de financial_models: {str(e)}")
@@ -473,6 +494,7 @@ async def init_mcp_server(host: str = "localhost", port: int = 4000) -> MCPToolS
     # Agregar implementaciones para otras herramientas aquí
 
     return server
+
 
 async def main():
     """Punto de entrada principal para iniciar el servidor MCP."""
@@ -483,10 +505,11 @@ async def main():
     args = parser.parse_args()
 
     # Inicializar el servidor
-    server = await init_mcp_server(host=args.host, port=args.port)
+    server = await init_mcp_server_async(host=args.host, port=args.port)
 
     # Ejecutar el servidor
     await run_server(server)
+
 
 if __name__ == "__main__":
     # Ejecutar el bucle de eventos

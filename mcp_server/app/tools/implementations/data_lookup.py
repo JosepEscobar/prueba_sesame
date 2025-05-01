@@ -41,10 +41,10 @@ class DataLookupImplementation:
     def search_market_data(self, query: str) -> dict[str, Any]:
         """
         Busca datos de mercado relevantes para la consulta.
-        
+
         Args:
             query: Consulta sobre datos de mercado
-            
+
         Returns:
             Datos de mercado encontrados
         """
@@ -122,10 +122,10 @@ class DataLookupImplementation:
     def search_news(self, query: str) -> dict[str, Any]:
         """
         Busca noticias relevantes para la consulta.
-        
+
         Args:
             query: Consulta sobre noticias
-            
+
         Returns:
             Noticias encontradas
         """
@@ -203,10 +203,10 @@ class DataLookupImplementation:
     def search_industry_reports(self, industry: str) -> dict[str, Any]:
         """
         Busca informes de industria.
-        
+
         Args:
             industry: Nombre de la industria
-            
+
         Returns:
             Informes de la industria
         """
@@ -248,10 +248,10 @@ class DataLookupImplementation:
     def search_web(self, query: str) -> dict[str, Any]:
         """
         Busca información en la web.
-        
+
         Args:
             query: Consulta para buscar en la web
-            
+
         Returns:
             Resultados de la búsqueda web
         """
@@ -332,10 +332,10 @@ class DataLookupImplementation:
     def lookup_company_data(self, company: str) -> dict[str, Any]:
         """
         Busca información sobre una empresa.
-        
+
         Args:
             company: Nombre de la empresa
-            
+
         Returns:
             Datos de la empresa
         """
@@ -378,10 +378,10 @@ class DataLookupImplementation:
         """
         Ejecuta la búsqueda según los parámetros proporcionados.
         Método principal para compatibilidad con el servidor MCP.
-        
+
         Args:
             params: Parámetros para la búsqueda
-            
+
         Returns:
             Resultados de la búsqueda
         """
@@ -567,11 +567,11 @@ class DataLookupImplementation:
 async def buscar_datos_financieros(empresa: str, periodo: str | None = None) -> dict[str, Any]:
     """
     Busca datos financieros de una empresa específica.
-    
+
     Args:
         empresa: Nombre o ticker de la empresa
         periodo: Periodo para los datos (trimestre/año). Si no se especifica, se usa el último disponible.
-    
+
     Returns:
         Datos financieros de la empresa
     """
@@ -682,12 +682,12 @@ async def buscar_datos_financieros(empresa: str, periodo: str | None = None) -> 
 async def data_lookup(lookup_type: str, query: str, filters: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Busca información general según el tipo de búsqueda y consulta.
-    
+
     Args:
         lookup_type: Tipo de búsqueda ('market_data', 'news', 'company', etc.)
         query: Consulta de búsqueda
         filters: Filtros adicionales para la búsqueda
-        
+
     Returns:
         Resultados de la búsqueda
     """

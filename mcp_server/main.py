@@ -617,7 +617,7 @@ async def execute_tool_root(tool_name: str, request: Request):
 def iniciar_servidor():
     """Inicia el servidor MCP."""
     # Verificar puerto disponible
-    host = os.environ.get("MCP_HOST", "0.0.0.0")
+    host = os.environ.get("MCP_HOST", "127.0.0.1")
     port = int(os.environ.get("MCP_PORT", "4000"))
 
     try:
