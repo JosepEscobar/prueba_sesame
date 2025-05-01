@@ -6,16 +6,26 @@
         <h1 class="text-xl font-semibold">Sesame Chat</h1>
       </div>
       <nav class="flex-1 overflow-y-auto p-2">
-        <RouterLink 
-          v-for="item in navItems" 
-          :key="item.name" 
-          :to="item.to" 
-          class="flex items-center p-3 rounded-lg mb-1 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-          :class="{ 'bg-gray-100 dark:bg-gray-700': isActive(item.to) }"
-        >
-          <component :is="item.icon" class="w-5 h-5 mr-2" />
-          {{ item.name }}
-        </RouterLink>
+        <div v-for="item in navItems" :key="item.name" class="relative mb-1">
+          <RouterLink 
+            :to="item.to" 
+            class="flex items-center p-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            :class="{ 'bg-gray-100 dark:bg-gray-700': isActive(item.to) }"
+          >
+            <component :is="item.icon" class="w-5 h-5 mr-2" />
+            {{ item.name }}
+          </RouterLink>
+          
+          <!-- Botón de nuevo chat al lado de Chat -->
+          <button 
+            v-if="item.name === 'Chat' && isActive(item.to)"
+            @click="newChat"
+            class="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600"
+            title="Nuevo chat"
+          >
+            <PlusCircle class="w-5 h-5" />
+          </button>
+        </div>
       </nav>
     </div>
 
@@ -35,7 +45,7 @@
 <script setup>
 import { computed } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
-import { MessageSquare, Wrench, BarChart, Megaphone, Activity } from 'lucide-vue-next';
+import { MessageSquare, Wrench, BarChart, Megaphone, Activity, PlusCircle } from 'lucide-vue-next';
 import ApiStatus from './components/ApiStatus.vue';
 
 const route = useRoute();
@@ -55,5 +65,9 @@ const currentRoute = computed(() => {
 
 const isActive = (path) => {
   return route.path === path;
+};
+
+const newChat = () => {
+  window.location.reload();
 };
 </script> 
