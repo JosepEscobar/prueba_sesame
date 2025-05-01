@@ -21,6 +21,7 @@ pydantic-settings>=2.0.3
 python-jose>=3.3.0
 python-multipart>=0.0.6
 loguru>=0.7.2
+python-json-logger>=2.0.0
 
 # Herramientas de desarrollo
 pytest>=7.4.0
