@@ -46,7 +46,7 @@
             v-model="query"
             rows="3"
             class="w-full rounded-lg border border-gray-300 dark:border-gray-600" 
-            style="background-color: #292929;"
+            style="background-color: #292929; padding: 1em;"
             :placeholder="activeTab === 'analyze' 
               ? 'Ej: Analiza el rendimiento financiero del último trimestre' 
               : 'Ej: Genera un pronóstico de ingresos para los próximos 3 meses'"

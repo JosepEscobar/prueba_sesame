@@ -9,7 +9,7 @@
           <select 
             v-model="selectedTool" 
             class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white" 
-            style="background-color: #292929;"
+            style="background-color: #292929; padding: 0.5em;"
           >
             <option value="" disabled>Seleccione una herramienta</option>
             <option v-for="tool in tools" :key="tool.name" :value="tool.name">
@@ -26,7 +26,7 @@
               v-model="paramValues[param.name]" 
               type="text" 
               class="w-full rounded-lg border border-gray-300 dark:border-gray-600" 
-              style="background-color: #292929;"
+              style="background-color: #292929; padding: 0.5em;"
               :placeholder="param.description || param.name"
             />
             <p v-if="param.description" class="text-xs text-gray-500">{{ param.description }}</p>

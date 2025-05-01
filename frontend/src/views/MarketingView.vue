@@ -46,7 +46,7 @@
             v-model="query"
             rows="3"
             class="w-full rounded-lg border border-gray-300 dark:border-gray-600" 
-            style="background-color: #292929;"
+            style="background-color: #292929; padding: 1em;"
             :placeholder="activeTab === 'analyze' 
               ? 'Ej: Analiza el rendimiento de nuestra última campaña en redes sociales' 
               : 'Ej: Diseña una campaña para aumentar la conversión de visitantes a clientes'"
