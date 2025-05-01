@@ -65,6 +65,59 @@ api_server/
 - `POST /api/lookup`: Buscar información específica
 - `POST /api/finance`: Obtener análisis financiero
 
+## Agentes del Sistema
+
+El API Server implementa un sistema multiagente con los siguientes componentes:
+
+### Router Agent
+- **Función**: Analiza la consulta del usuario y determina qué agente especializado debe procesarla.
+- **Características**:
+  - Utiliza análisis semántico para clasificar las consultas.
+  - Implementa un sistema de fallback basado en palabras clave.
+  - Asigna la consulta al agente más adecuado según su especialidad.
+
+### Guardrail Agent
+- **Función**: Verifica que las consultas estén dentro del ámbito permitido por el sistema.
+- **Características**:
+  - Bloquea consultas potencialmente peligrosas o fuera de alcance.
+  - Proporciona respuestas de error amigables cuando una consulta es rechazada.
+  - Permite consultas sobre el estado y capacidades del sistema.
+
+### Finance Agent
+- **Función**: Gestiona consultas relacionadas con análisis financiero y económico.
+- **Características**:
+  - Accede a herramientas de análisis financiero a través del servidor MCP.
+  - Proporciona análisis de ratios, tendencias y proyecciones.
+  - Consulta datos históricos de empresas y mercados.
+
+### Marketing Agent
+- **Función**: Atiende consultas sobre estrategias de marketing y análisis de mercado.
+- **Características**:
+  - Analiza rendimiento de campañas y estrategias de marketing.
+  - Genera recomendaciones personalizadas basadas en datos.
+  - Accede a herramientas especializadas a través del servidor MCP.
+
+### Analysis Agent
+- **Función**: Realiza análisis generales de datos y tendencias que no son específicamente financieros o de marketing.
+- **Características**:
+  - Procesa series temporales y detecta patrones.
+  - Proporciona interpretaciones de datos complejos.
+  - Facilita la comprensión de tendencias y correlaciones.
+
+### System Info Agent
+- **Función**: Proporciona información sobre el estado y capacidades del sistema.
+- **Características**:
+  - Responde a consultas sobre las funcionalidades disponibles.
+  - Muestra estadísticas del sistema y estado de los servicios.
+  - Permite a los usuarios conocer qué agentes están disponibles y sus capacidades.
+
+### Summary Agent
+- **Función**: Genera resúmenes concisos de respuestas extensas generadas por otros agentes.
+- **Características**:
+  - Extrae los puntos clave de respuestas detalladas.
+  - Formatea la información de manera clara y concisa.
+  - Mejora la experiencia del usuario con respuestas legibles.
+
 ## Integración con el servidor MCP
 
 Esta API se comunica con un servidor MCP para acceder a herramientas externas. El servidor MCP debe estar en ejecución para que algunas funcionalidades estén disponibles.
@@ -73,6 +126,15 @@ Configuración de conexión en el archivo `.env`:
 ```
 MCP_CLIENT_URL=http://localhost:4000
 ```
+
+## Flujo de procesamiento de consultas
+
+1. El usuario envía una consulta a `/api/v1/query`.
+2. El `GuardrailAgent` verifica si la consulta está dentro del ámbito del sistema.
+3. Si es válida, el `RouterAgent` determina qué agente especializado debe manejarla.
+4. El agente seleccionado procesa la consulta, utilizando herramientas del MCP si es necesario.
+5. Si corresponde, el `SummaryAgent` formatea la respuesta final.
+6. La respuesta se devuelve al usuario.
 
 ## Docker
 
