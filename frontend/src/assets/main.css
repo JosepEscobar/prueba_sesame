@@ -1,0 +1,41 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+@layer base {
+    body {
+        @apply text-gray-800 dark:text-gray-200;
+        font-family: 'Inter', sans-serif;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        @apply font-medium;
+    }
+
+    button {
+        @apply focus:outline-none focus:ring-2 focus:ring-primary-500;
+    }
+}
+
+@layer components {
+    .chat-bubble {
+        @apply p-4 rounded-lg max-w-[80%] relative;
+    }
+
+    .user-bubble {
+        @apply chat-bubble bg-primary-600 text-white ml-auto;
+    }
+
+    .api-bubble {
+        @apply chat-bubble bg-secondary-100 dark:bg-secondary-800 text-gray-800 dark:text-gray-200;
+    }
+
+    .suggestion-bubble {
+        @apply p-3 rounded-lg bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-shadow border border-gray-200 dark:border-gray-700 cursor-pointer text-sm;
+    }
+}
