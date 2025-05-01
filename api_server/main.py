@@ -39,199 +39,193 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.FileHandler(logs_dir / "app.log"),
-        logging.StreamHandler(sys.stderr)
-    ]
+        logging.StreamHandler(sys.stderr),
+    ],
 )
 logger = logging.getLogger("api_server")
 
 # Importamos el Router Agent - después de configurar el logger
 try:
     from app.core.graph import AgentGraph
+
     logger.info("RouterAgent importado correctamente")
 except Exception as e:
     logger.error(f"Error al importar RouterAgent: {str(e)}")
+
 
 # ---- Modelos de datos Pydantic ----
 class HealthResponse(BaseModel):
     """
     Respuesta del endpoint de health check que proporciona información sobre el estado del sistema.
-    
+
     Permite monitorear la salud de la API y su conexión con el servidor MCP.
     """
+
     status: str = Field(
         description="Estado actual del servicio API (healthy, degraded, unhealthy)",
-        example="healthy"
+        example="healthy",
     )
-    version: str = Field(
-        description="Versión actual de la API Sesame",
-        example="0.1.0"
-    )
+    version: str = Field(description="Versión actual de la API Sesame", example="0.1.0")
     mcp_status: str = Field(
         description="Estado de la conexión con el servidor MCP (connected, disconnected, initializing)",
-        example="connected"
+        example="connected",
     )
+
 
 class MCPStatusResponse(BaseModel):
     """
     Información detallada sobre el estado de la conexión con el servidor MCP.
-    
+
     Proporciona detalles sobre la disponibilidad del servidor MCP, su URL y las herramientas registradas.
     """
+
     status: str = Field(
         description="Estado actual de la conexión con MCP (connected, disconnected, initializing)",
-        example="connected"
+        example="connected",
     )
     mcp_url: str = Field(
         description="URL del servidor MCP al que está conectada la API",
-        example="http://localhost:4000"
+        example="http://localhost:4000",
     )
     tools_available: int = Field(
         description="Número total de herramientas disponibles en el servidor MCP",
-        example=6
+        example=6,
     )
     tools: list[str] = Field(
         description="Lista de identificadores de las herramientas disponibles en el servidor MCP",
-        example=["buscar_datos_financieros", "calcular_ratios_financieros"]
+        example=["buscar_datos_financieros", "calcular_ratios_financieros"],
     )
+
 
 class QueryRequest(BaseModel):
     """
     Formato de petición para consultas a los agentes.
-    
+
     Contiene la consulta en lenguaje natural y contexto adicional opcional.
     """
+
     query: str = Field(
         description="Consulta o instrucción en lenguaje natural para el agente",
         example="Analiza el rendimiento financiero de mi empresa",
         min_length=3,
-        max_length=1000
+        max_length=1000,
     )
     context: dict[str, Any] | None = Field(
         default={},
         description="Contexto adicional para enriquecer la consulta (empresa, periodos, etc.)",
-        example={"empresa": "MiEmpresa", "periodo": "Q1 2025", "region": "Europa"}
+        example={"empresa": "MiEmpresa", "periodo": "Q1 2025", "region": "Europa"},
     )
+
 
 class FinancialMetrics(BaseModel):
     """
     Métricas financieras estándar proporcionadas en respuestas de análisis financiero.
-    
+
     Incluye indicadores clave de rendimiento financiero como ingresos, beneficios y ratios.
     """
+
     revenue: float = Field(
-        description="Ingresos totales en la moneda base",
-        example=1250000,
-        gt=0
+        description="Ingresos totales en la moneda base", example=1250000, gt=0
     )
     profit: float = Field(
-        description="Beneficio neto en la moneda base",
-        example=450000
+        description="Beneficio neto en la moneda base", example=450000
     )
     growth: str = Field(
         description="Porcentaje de crecimiento respecto al periodo anterior",
-        example="15%"
+        example="15%",
     )
     margin: float | None = Field(
-        description="Margen de beneficio (profit/revenue)",
-        example=0.36,
-        ge=0,
-        le=1
+        description="Margen de beneficio (profit/revenue)", example=0.36, ge=0, le=1
     )
-    roi: float | None = Field(
-        description="Retorno de inversión",
-        example=0.22
-    )
+    roi: float | None = Field(description="Retorno de inversión", example=0.22)
+
 
 class FinanceResponse(BaseModel):
     """
     Respuesta estándar para los endpoints de análisis financiero.
-    
+
     Incluye un texto descriptivo y las métricas financieras calculadas.
     """
+
     result: str = Field(
         description="Resultado textual del análisis financiero",
         example="Análisis financiero completo de MiEmpresa para Q1 2025",
-        min_length=5
+        min_length=5,
     )
     metrics: FinancialMetrics = Field(
         description="Conjunto de métricas financieras calculadas"
     )
 
+
 class MarketingMetrics(BaseModel):
     """
     Métricas de marketing estándar proporcionadas en respuestas de análisis de marketing.
-    
+
     Incluye indicadores clave de rendimiento de marketing y campañas.
     """
+
     ctr: float = Field(
-        description="Click-through rate (tasa de clics)",
-        example=0.025,
-        ge=0,
-        le=1
+        description="Click-through rate (tasa de clics)", example=0.025, ge=0, le=1
     )
     conversion_rate: float = Field(
         description="Tasa de conversión (porcentaje de conversiones sobre visitas)",
         example=0.032,
         ge=0,
-        le=1
+        le=1,
     )
-    roi: float = Field(
-        description="Retorno de inversión de marketing",
-        example=2.4
-    )
+    roi: float = Field(description="Retorno de inversión de marketing", example=2.4)
     cpa: float | None = Field(
-        description="Coste por adquisición en la moneda base",
-        example=45.0,
-        gt=0
+        description="Coste por adquisición en la moneda base", example=45.0, gt=0
     )
     campaign_count: int | None = Field(
-        description="Número de campañas incluidas en el análisis",
-        example=5,
-        ge=0
+        description="Número de campañas incluidas en el análisis", example=5, ge=0
     )
+
 
 class MarketingResponse(BaseModel):
     """
     Respuesta estándar para los endpoints de análisis de marketing.
-    
+
     Incluye un texto descriptivo y las métricas de marketing calculadas.
     """
+
     result: str = Field(
         description="Resultado textual del análisis de marketing",
         example="Análisis de marketing completo para la campaña Verano 2025",
-        min_length=5
+        min_length=5,
     )
     metrics: MarketingMetrics = Field(
         description="Conjunto de métricas de marketing calculadas"
     )
 
+
 class AgentResponse(BaseModel):
     """
     Respuesta genérica de un agente del sistema.
-    
+
     Contiene el resultado de la consulta procesada junto con metadatos
     sobre el procesamiento y el agente que lo realizó.
     """
+
     result: str = Field(
         description="Resultado textual generado por el agente",
         example="Análisis completo realizado. Los ingresos han aumentado un 15% respecto al trimestre anterior.",
-        min_length=5
+        min_length=5,
     )
     agent: str = Field(
         description="Identificador del agente que procesó la solicitud",
-        example="finance_agent"
+        example="finance_agent",
     )
     confidence: float = Field(
         description="Nivel de confianza del agente en el resultado (0-1)",
         example=0.95,
         ge=0,
-        le=1
+        le=1,
     )
     processing_time: float | None = Field(
-        description="Tiempo de procesamiento en segundos",
-        example=1.25,
-        gt=0
+        description="Tiempo de procesamiento en segundos", example=1.25, gt=0
     )
+
 
 # Crear la aplicación FastAPI
 app = FastAPI(
@@ -265,56 +259,53 @@ app = FastAPI(
     contact={
         "name": "Equipo de Desarrollo Sesame",
         "url": "https://sesame.example.com",
-        "email": "soporte@sesame.example.com"
+        "email": "soporte@sesame.example.com",
     },
-    license_info={
-        "name": "MIT",
-        "url": "https://opensource.org/licenses/MIT"
-    },
+    license_info={"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
     openapi_tags=[
         {
             "name": "General",
             "description": "Operaciones de estado y bienvenida",
             "externalDocs": {
                 "description": "Documentación externa",
-                "url": "https://sesame.example.com/docs/general"
-            }
+                "url": "https://sesame.example.com/docs/general",
+            },
         },
         {
             "name": "MCP",
             "description": "Endpoints para interacción con el servidor MCP (Model Context Protocol)",
             "externalDocs": {
                 "description": "Documentación sobre MCP",
-                "url": "https://sesame.example.com/docs/mcp"
-            }
+                "url": "https://sesame.example.com/docs/mcp",
+            },
         },
         {
             "name": "Agentes",
             "description": "Consultas procesadas mediante agentes especializados con IA",
             "externalDocs": {
                 "description": "Guía de agentes",
-                "url": "https://sesame.example.com/docs/agents"
-            }
+                "url": "https://sesame.example.com/docs/agents",
+            },
         },
         {
             "name": "Finanzas",
             "description": "Análisis de datos financieros y pronósticos económicos",
             "externalDocs": {
                 "description": "Documentación sobre análisis financiero",
-                "url": "https://sesame.example.com/docs/finance"
-            }
+                "url": "https://sesame.example.com/docs/finance",
+            },
         },
         {
             "name": "Marketing",
             "description": "Análisis de campañas y planificación de estrategias de marketing",
             "externalDocs": {
                 "description": "Guía de marketing",
-                "url": "https://sesame.example.com/docs/marketing"
-            }
-        }
+                "url": "https://sesame.example.com/docs/marketing",
+            },
+        },
     ],
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # Configurar CORS
@@ -330,6 +321,7 @@ app.add_middleware(
 # Información sobre el servidor MCP
 mcp_url = os.environ.get("MCP_SERVER_URL", "http://localhost:4000")
 logger.info(f"URL del servidor MCP configurada como: {mcp_url}")
+
 
 # ---- Rutas API ----
 @app.get(
@@ -350,21 +342,19 @@ logger.info(f"URL del servidor MCP configurada como: {mcp_url}")
                 "application/json": {
                     "example": {
                         "message": "¡Bienvenido a la API de Sesame!",
-                        "docs": "/docs"
+                        "docs": "/docs",
                     }
                 }
-            }
+            },
         }
-    }
+    },
 )
 async def root():
     """
     Ruta raíz que proporciona información básica sobre la API.
     """
-    return {
-        "message": "¡Bienvenido a la API de Sesame!",
-        "docs": "/docs"
-    }
+    return {"message": "¡Bienvenido a la API de Sesame!", "docs": "/docs"}
+
 
 @app.get(
     "/health",
@@ -396,25 +386,22 @@ async def root():
                     "example": {
                         "status": "healthy",
                         "version": "0.1.0",
-                        "mcp_status": "connected"
+                        "mcp_status": "connected",
                     }
                 }
-            }
+            },
         }
-    }
+    },
 )
 async def health_check():
     """
     Verificar el estado de la API.
-    
+
     Retorna el estado de salud del servicio, incluyendo información sobre la
     conexión con el servidor MCP.
     """
-    return {
-        "status": "healthy",
-        "version": "0.1.0",
-        "mcp_status": "connected"
-    }
+    return {"status": "healthy", "version": "0.1.0", "mcp_status": "connected"}
+
 
 @app.get(
     "/mcp/status",
@@ -452,18 +439,18 @@ async def health_check():
                             "analizar_rendimiento_campania",
                             "recomendar_estrategia_marketing",
                             "analizar_tendencia",
-                            "predecir_valores"
-                        ]
+                            "predecir_valores",
+                        ],
                     }
                 }
-            }
+            },
         }
-    }
+    },
 )
 async def mcp_status():
     """
     Verificar el estado del cliente MCP.
-    
+
     Proporciona información detallada sobre la conexión con el servidor MCP
     y las herramientas disponibles.
     """
@@ -477,9 +464,10 @@ async def mcp_status():
             "analizar_rendimiento_campania",
             "recomendar_estrategia_marketing",
             "analizar_tendencia",
-            "predecir_valores"
-        ]
+            "predecir_valores",
+        ],
     }
+
 
 @app.post(
     "/api/v1/query",
@@ -501,18 +489,15 @@ async def mcp_status():
     * "Analiza el rendimiento financiero del último trimestre"
     * "Evalúa el impacto de nuestra campaña de marketing digital"
     * "¿Cuáles son las tendencias actuales de nuestro mercado?"
-    """
+    """,
 )
-async def process_query(
-    request: Request,
-    query_data: QueryRequest
-):
+async def process_query(request: Request, query_data: QueryRequest):
     """
     Endpoint para procesar consultas generales.
-    
+
     Args:
         query_data: Datos de la consulta
-    
+
     Returns:
         Respuesta procesada
     """
@@ -529,7 +514,9 @@ async def process_query(
         # Extraer el contexto
         context = query_data.context
 
-        logger.info(f"Recibida consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}...")
+        logger.info(
+            f"Recibida consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}..."
+        )
 
         # Inicializar el grafo de agentes
         try:
@@ -546,14 +533,23 @@ async def process_query(
             }
 
             # Usar logger en lugar de print para depuración
-            logger.debug(f"Enviando consulta al grafo: {input_data}", extra={"request_id": request_id})
+            logger.debug(
+                f"Enviando consulta al grafo: {input_data}",
+                extra={"request_id": request_id},
+            )
 
             # Ejecutar el grafo de agentes
-            logger.info("Ejecutando grafo de agentes con la consulta", extra={"request_id": request_id})
+            logger.info(
+                "Ejecutando grafo de agentes con la consulta",
+                extra={"request_id": request_id},
+            )
             try:
                 final_result = agent_graph.run(input_data)
             except Exception as e:
-                logger.error(f"Error al procesar consulta con el grafo: {str(e)}", extra={"request_id": request_id})
+                logger.error(
+                    f"Error al procesar consulta con el grafo: {str(e)}",
+                    extra={"request_id": request_id},
+                )
                 logger.error(traceback.format_exc(), extra={"request_id": request_id})
 
                 # Usar logger para errores, no print
@@ -561,6 +557,7 @@ async def process_query(
 
                 # Registrar métrica del error
                 from app.core.metrics import MetricsCollector
+
                 MetricsCollector.record_error("agent_graph", str(e))
 
                 # No usamos fallback, devolvemos un error apropiado
@@ -570,15 +567,18 @@ async def process_query(
                     "result": {
                         "content": f"Error al procesar la consulta: {str(e)}",
                         "source": "error",
-                        "model_type": "error"
+                        "model_type": "error",
                     },
                     "agent": "error",
                     "confidence": 0.0,
-                    "processing_time": processing_time
+                    "processing_time": processing_time,
                 }
 
             # Usar logger en lugar de print para depuración
-            logger.debug(f"Resultado final del grafo: {final_result}", extra={"request_id": request_id})
+            logger.debug(
+                f"Resultado final del grafo: {final_result}",
+                extra={"request_id": request_id},
+            )
 
             # Verificar si tenemos un resultado válido
             if isinstance(final_result, dict):
@@ -587,7 +587,7 @@ async def process_query(
                 if "result" not in result:
                     result["result"] = {
                         "content": "Error: Resultado incompleto sin campo 'result'",
-                        "source": "error"
+                        "source": "error",
                     }
                 if "agent" not in result:
                     result["agent"] = "unknown_agent"
@@ -595,16 +595,19 @@ async def process_query(
                     result["confidence"] = 0.0
             else:
                 # Resultado inválido, devolver error
-                logger.error(f"Resultado inválido del grafo: {final_result}", extra={"request_id": request_id})
+                logger.error(
+                    f"Resultado inválido del grafo: {final_result}",
+                    extra={"request_id": request_id},
+                )
                 return {
                     "error": "Resultado inválido del grafo",
                     "result": {
                         "content": "Error: El grafo de agentes devolvió un resultado con formato inválido",
-                        "source": "error"
+                        "source": "error",
                     },
                     "agent": "error",
                     "confidence": 0.0,
-                    "processing_time": time.time() - start_time
+                    "processing_time": time.time() - start_time,
                 }
 
             # Calcular tiempo de procesamiento
@@ -612,20 +615,27 @@ async def process_query(
 
             # Registrar métrica usando MetricsCollector
             from app.core.metrics import MetricsCollector
-            agent_name = result.get('agent', 'desconocido')
-            confidence = result.get('confidence', 0.0)
+
+            agent_name = result.get("agent", "desconocido")
+            confidence = result.get("confidence", 0.0)
 
             # Registrar ejecución y confianza
             MetricsCollector.record_query_execution(
                 success=True,
                 agent=agent_name,
                 confidence=confidence,
-                execution_time=processing_time
+                execution_time=processing_time,
             )
 
             # Registrar en el logger
-            logger.info(f"Consulta procesada por {agent_name} con confianza {confidence}",
-                       extra={"request_id": request_id, "processing_time": processing_time, "agent": agent_name})
+            logger.info(
+                f"Consulta procesada por {agent_name} con confianza {confidence}",
+                extra={
+                    "request_id": request_id,
+                    "processing_time": processing_time,
+                    "agent": agent_name,
+                },
+            )
 
             # Añadir tiempo de procesamiento
             result["processing_time"] = processing_time
@@ -633,11 +643,15 @@ async def process_query(
             return result
 
         except Exception as e:
-            logger.error(f"Error al procesar consulta con el grafo: {str(e)}", extra={"request_id": request_id})
+            logger.error(
+                f"Error al procesar consulta con el grafo: {str(e)}",
+                extra={"request_id": request_id},
+            )
             logger.error(traceback.format_exc(), extra={"request_id": request_id})
 
             # Registrar métrica del error
             from app.core.metrics import MetricsCollector
+
             MetricsCollector.record_error("query_processing", str(e))
 
             # Error global, devolver información clara del error
@@ -646,19 +660,23 @@ async def process_query(
                 "error": str(e),
                 "result": {
                     "content": f"Error al procesar su consulta: {str(e)}",
-                    "source": "error"
+                    "source": "error",
                 },
                 "agent": "error",
                 "confidence": 0.0,
-                "processing_time": processing_time
+                "processing_time": processing_time,
             }
 
     except Exception as e:
-        logger.error(f"Error global al procesar consulta: {str(e)}", extra={"request_id": request_id})
+        logger.error(
+            f"Error global al procesar consulta: {str(e)}",
+            extra={"request_id": request_id},
+        )
         logger.error(traceback.format_exc(), extra={"request_id": request_id})
 
         # Registrar métrica del error global
         from app.core.metrics import MetricsCollector
+
         MetricsCollector.record_error("global", str(e))
 
         processing_time = time.time() - start_time
@@ -666,43 +684,92 @@ async def process_query(
             "error": str(e),
             "result": {
                 "content": f"Error crítico al procesar su consulta: {str(e)}",
-                "source": "error"
+                "source": "error",
             },
             "agent": "error",
             "confidence": 0.0,
-            "processing_time": processing_time
+            "processing_time": processing_time,
         }
+
 
 def classify_query_by_keywords(query: str) -> str:
     """
     Clasifica una consulta por palabras clave.
-    
+
     Args:
         query: La consulta a clasificar
-    
+
     Returns:
         El tipo de agente más adecuado
     """
     # Diccionario de agentes con sus palabras clave
     agents_keywords = {
         "finance_agent": [
-            "financiero", "finanzas", "ingresos", "beneficio", "margen",
-            "roi", "ganancia", "rentabilidad", "balance", "contabilidad",
-            "fiscal", "impuestos", "patrimonio", "capital", "inversión",
-            "activos", "pasivos", "presupuesto", "costes", "gastos"
+            "financiero",
+            "finanzas",
+            "ingresos",
+            "beneficio",
+            "margen",
+            "roi",
+            "ganancia",
+            "rentabilidad",
+            "balance",
+            "contabilidad",
+            "fiscal",
+            "impuestos",
+            "patrimonio",
+            "capital",
+            "inversión",
+            "activos",
+            "pasivos",
+            "presupuesto",
+            "costes",
+            "gastos",
         ],
         "marketing_agent": [
-            "marketing", "mercado", "campaña", "publicidad", "promoción",
-            "ventas", "clientes", "segmentación", "conversión", "marca",
-            "audiencia", "consumidor", "target", "posicionamiento", "social",
-            "digital", "comunicación", "medios", "engagement", "producto"
+            "marketing",
+            "mercado",
+            "campaña",
+            "publicidad",
+            "promoción",
+            "ventas",
+            "clientes",
+            "segmentación",
+            "conversión",
+            "marca",
+            "audiencia",
+            "consumidor",
+            "target",
+            "posicionamiento",
+            "social",
+            "digital",
+            "comunicación",
+            "medios",
+            "engagement",
+            "producto",
         ],
         "analysis_agent": [
-            "tendencia", "análisis", "analiza", "predicción", "pronóstico",
-            "proyección", "futuro", "evolución", "comparativa", "datos",
-            "información", "patrones", "insights", "métricas", "indicadores",
-            "histórico", "estadística", "correlación", "hallazgos", "síntesis"
-        ]
+            "tendencia",
+            "análisis",
+            "analiza",
+            "predicción",
+            "pronóstico",
+            "proyección",
+            "futuro",
+            "evolución",
+            "comparativa",
+            "datos",
+            "información",
+            "patrones",
+            "insights",
+            "métricas",
+            "indicadores",
+            "histórico",
+            "estadística",
+            "correlación",
+            "hallazgos",
+            "síntesis",
+        ],
     }
 
     # Convertir la consulta a minúsculas
@@ -733,6 +800,7 @@ def classify_query_by_keywords(query: str) -> str:
     # Si ninguno de los priorizados está en los máximos, tomar el primero
     return max_agents[0]
 
+
 def simulate_agent_response(agent_name: str, query: str) -> str:
     """
     Genera una respuesta simulada para el modo de desarrollo sin API key.
@@ -745,6 +813,7 @@ def simulate_agent_response(agent_name: str, query: str) -> str:
         return f"[SIMULACIÓN] Análisis de marketing para: {query_preview}\n\nEste es un resultado simulado para el agente de marketing en modo desarrollo."
     else:
         return f"[SIMULACIÓN] Análisis general para: {query_preview}\n\nEste es un resultado simulado para el agente de análisis en modo desarrollo."
+
 
 @app.post(
     "/api/v1/finance/analyze",
@@ -793,21 +862,19 @@ def simulate_agent_response(agent_name: str, query: str) -> str:
                             "profit": 450000,
                             "growth": "15%",
                             "margin": 0.36,
-                            "roi": 2.1
-                        }
+                            "roi": 2.1,
+                        },
                     }
                 }
-            }
+            },
         },
-        422: {
-            "description": "Consulta inválida o incompleta"
-        }
-    }
+        422: {"description": "Consulta inválida o incompleta"},
+    },
 )
 async def analyze_finance(request: QueryRequest = Body(...)):
     """
     Analizar datos financieros.
-    
+
     Procesa una consulta relacionada con finanzas utilizando el agente
     especializado en análisis financiero.
     """
@@ -818,9 +885,10 @@ async def analyze_finance(request: QueryRequest = Body(...)):
             "profit": 450000,
             "growth": "15%",
             "margin": 0.36,
-            "roi": 2.1
-        }
+            "roi": 2.1,
+        },
     }
+
 
 @app.post(
     "/api/v1/finance/forecast",
@@ -867,21 +935,19 @@ async def analyze_finance(request: QueryRequest = Body(...)):
                             "profit": 520000,
                             "growth": "18%",
                             "margin": 0.365,
-                            "roi": 2.3
-                        }
+                            "roi": 2.3,
+                        },
                     }
                 }
-            }
+            },
         },
-        422: {
-            "description": "Consulta inválida o incompleta"
-        }
-    }
+        422: {"description": "Consulta inválida o incompleta"},
+    },
 )
 async def financial_forecast(request: QueryRequest = Body(...)):
     """
     Generar pronósticos financieros.
-    
+
     Procesa una consulta para proyectar tendencias financieras futuras
     basándose en datos históricos.
     """
@@ -889,12 +955,13 @@ async def financial_forecast(request: QueryRequest = Body(...)):
         "result": f"Pronóstico financiero para: {request.query[:30]}...",
         "metrics": {
             "revenue": 1425000,  # Proyección
-            "profit": 520000,    # Proyección
+            "profit": 520000,  # Proyección
             "growth": "18%",
             "margin": 0.365,
-            "roi": 2.3
-        }
+            "roi": 2.3,
+        },
     }
+
 
 @app.post(
     "/api/v1/marketing/analyze",
@@ -939,21 +1006,19 @@ async def financial_forecast(request: QueryRequest = Body(...)):
                             "conversion_rate": 0.032,
                             "roi": 2.4,
                             "cpa": 45.0,
-                            "campaign_count": 5
-                        }
+                            "campaign_count": 5,
+                        },
                     }
                 }
-            }
+            },
         },
-        422: {
-            "description": "Consulta inválida o incompleta"
-        }
-    }
+        422: {"description": "Consulta inválida o incompleta"},
+    },
 )
 async def analyze_marketing(request: QueryRequest = Body(...)):
     """
     Analizar estrategias y resultados de marketing.
-    
+
     Procesa una consulta relacionada con marketing utilizando el agente
     especializado en análisis de marketing.
     """
@@ -964,9 +1029,10 @@ async def analyze_marketing(request: QueryRequest = Body(...)):
             "conversion_rate": 0.032,
             "roi": 2.4,
             "cpa": 45.0,
-            "campaign_count": 5
-        }
+            "campaign_count": 5,
+        },
     }
+
 
 @app.post(
     "/api/v1/marketing/campaign",
@@ -1017,21 +1083,19 @@ async def analyze_marketing(request: QueryRequest = Body(...)):
                             "conversion_rate": 0.038,
                             "roi": 2.8,
                             "cpa": 38.5,
-                            "campaign_count": 1
-                        }
+                            "campaign_count": 1,
+                        },
                     }
                 }
-            }
+            },
         },
-        422: {
-            "description": "Consulta inválida o incompleta"
-        }
-    }
+        422: {"description": "Consulta inválida o incompleta"},
+    },
 )
 async def plan_campaign(request: QueryRequest = Body(...)):
     """
     Planificar una campaña de marketing.
-    
+
     Genera recomendaciones para una nueva campaña de marketing
     basada en objetivos y datos históricos.
     """
@@ -1042,9 +1106,10 @@ async def plan_campaign(request: QueryRequest = Body(...)):
             "conversion_rate": 0.038,  # Proyectado
             "roi": 2.8,
             "cpa": 38.5,
-            "campaign_count": 1
-        }
+            "campaign_count": 1,
+        },
     }
+
 
 @app.post(
     "/api/v1/tools/{tool_name}",
@@ -1086,10 +1151,14 @@ async def plan_campaign(request: QueryRequest = Body(...)):
                 "application/json": {
                     "example": {
                         "result": "Resultado de la herramienta buscar_datos_financieros",
-                        "params_received": {"empresa": "MiEmpresa", "periodo": "2025", "tipo_datos": "ingresos"}
+                        "params_received": {
+                            "empresa": "MiEmpresa",
+                            "periodo": "2025",
+                            "tipo_datos": "ingresos",
+                        },
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Herramienta no encontrada",
@@ -1099,20 +1168,18 @@ async def plan_campaign(request: QueryRequest = Body(...)):
                         "detail": "Herramienta 'herramienta_inexistente' no encontrada"
                     }
                 }
-            }
+            },
         },
-        422: {
-            "description": "Parámetros inválidos para la herramienta"
-        }
-    }
+        422: {"description": "Parámetros inválidos para la herramienta"},
+    },
 )
 async def call_tool(tool_name: str, params: dict[str, Any] = Body(...)):
     """
     Llamar directamente a una herramienta MCP.
-    
+
     Permite acceder directamente a las herramientas expuestas por el
     servidor MCP sin pasar por los agentes.
-    
+
     Args:
         tool_name: Nombre de la herramienta a llamar
         params: Parámetros para la herramienta
@@ -1123,25 +1190,22 @@ async def call_tool(tool_name: str, params: dict[str, Any] = Body(...)):
         "analizar_rendimiento_campania",
         "recomendar_estrategia_marketing",
         "analizar_tendencia",
-        "predecir_valores"
+        "predecir_valores",
     ]
 
     if tool_name not in available_tools:
-        raise HTTPException(status_code=404, detail=f"Herramienta '{tool_name}' no encontrada")
+        raise HTTPException(
+            status_code=404, detail=f"Herramienta '{tool_name}' no encontrada"
+        )
 
     # Simulamos el resultado de la herramienta
     return {
         "result": f"Resultado de la herramienta {tool_name}",
-        "params_received": params
+        "params_received": params,
     }
+
 
 if __name__ == "__main__":
     # Ejecutar la aplicación con uvicorn
     logger.info("Iniciando servidor API")
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8008,
-        reload=True,
-        log_level="info"
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")

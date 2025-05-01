@@ -8,6 +8,7 @@
             "program": "${workspaceFolder}/api_server/main.py",
             "console": "integratedTerminal",
             "justMyCode": true,
+            "cwd": "${workspaceFolder}/api_server",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -19,6 +20,7 @@
             "program": "${workspaceFolder}/mcp_server/main.py",
             "console": "integratedTerminal",
             "justMyCode": true,
+            "cwd": "${workspaceFolder}/mcp_server",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -29,8 +31,29 @@
             "request": "launch",
             "module": "pytest",
             "cwd": "${workspaceFolder}/api_server",
-            "args": [],
-            "console": "integratedTerminal"
+            "args": [
+                "app/tests"
+            ],
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/api_server"
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "API Test Current File",
+            "type": "python",
+            "request": "launch",
+            "module": "pytest",
+            "cwd": "${workspaceFolder}/api_server",
+            "args": [
+                "${file}"
+            ],
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/api_server"
+            },
+            "justMyCode": false
         },
         {
             "name": "MCP Server Tests",
@@ -39,17 +62,26 @@
             "module": "pytest",
             "cwd": "${workspaceFolder}/mcp_server",
             "args": [],
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/mcp_server"
+            },
+            "justMyCode": false
         },
         {
-            "name": "Test File Actual",
+            "name": "MCP Test Current File",
             "type": "python",
             "request": "launch",
             "module": "pytest",
+            "cwd": "${workspaceFolder}/mcp_server",
             "args": [
                 "${file}"
             ],
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/mcp_server"
+            },
+            "justMyCode": false
         }
     ]
 }

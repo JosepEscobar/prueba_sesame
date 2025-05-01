@@ -106,18 +106,34 @@ Para configurar VS Code para el desarrollo del proyecto:
 
 ### Configuración de pruebas unitarias
 
-Para ejecutar pruebas unitarias desde VS Code:
+El proyecto está configurado para ejecutar pruebas unitarias directamente desde VS Code:
 
-1. Abre la vista de pruebas en la barra lateral (icono de matraz)
-2. VS Code detectará automáticamente las pruebas de pytest de ambos componentes
-3. Puedes ejecutar pruebas individuales o todas las pruebas desde esta vista
-4. Para depurar una prueba, haz clic derecho en ella y selecciona "Debug Test"
+1. **Panel de Test Explorer**:
+   - Abre VS Code y ve a la pestaña de pruebas (icono de matraz)
+   - Se mostrarán todos los tests descubiertos automáticamente
+   - Puedes ejecutar tests individuales o grupos completos de tests
 
-También puedes ejecutar pruebas desde la terminal:
-```bash
-cd api_server  # o mcp_server
-python -m pytest
-```
+2. **Desde la paleta de comandos**:
+   - Presiona `Ctrl+Shift+P` (o `Cmd+Shift+P` en macOS)
+   - Escribe "Python: Run All Tests"
+   - Selecciona la opción para ejecutar todos los tests
+
+3. **Configuraciones de ejecución predefinidas**:
+   - Ve a la pestaña "Run and Debug" (`Ctrl+Shift+D` o `Cmd+Shift+D`)
+   - En el selector superior, elige una de las siguientes configuraciones:
+     - "API Server Tests": Ejecuta todos los tests del servidor API
+     - "API Test Current File": Ejecuta los tests del archivo actual (API server)
+     - "MCP Server Tests": Ejecuta todos los tests del servidor MCP
+     - "MCP Test Current File": Ejecuta los tests del archivo actual (MCP server)
+
+4. **Debugging de tests**:
+   - Coloca un punto de interrupción (breakpoint) haciendo clic en el margen izquierdo
+   - Inicia el debugging con una de las configuraciones de test
+   - El código se detendrá en el punto de interrupción permitiéndote inspeccionar variables
+
+El proyecto usa pytest como framework de testing. Los tests están ubicados en:
+- API Server: `api_server/app/tests/`
+- MCP Server: `mcp_server/app/tests/`
 
 ### Configuración de Ruff para formateo y linting
 

@@ -1,8 +1,8 @@
 {
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
-        "source.fixAll.ruff": "always",
-        "source.organizeImports.ruff": "always"
+        "source.fixAll.ruff": true,
+        "source.organizeImports.ruff": true
     },
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff"
@@ -11,7 +11,7 @@
     "python.testing.unittestEnabled": false,
     "python.testing.nosetestsEnabled": false,
     "python.testing.pytestArgs": [
-        "api_server",
+        "api_server/app/tests",
         "mcp_server"
     ],
     "python.analysis.extraPaths": [
@@ -19,5 +19,8 @@
         "./mcp_server"
     ],
     "debug.inlineValues": "on",
-    "debug.showBreakpointsInOverviewRuler": true
+    "debug.showBreakpointsInOverviewRuler": true,
+    "python.terminal.activateEnvironment": true,
+    "python.testing.autoTestDiscoverOnSaveEnabled": true,
+    "python.linting.enabled": true
 }
