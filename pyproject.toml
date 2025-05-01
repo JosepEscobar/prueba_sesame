@@ -81,6 +81,7 @@ ignore = [
     "ANN003", # Permitir **kwargs sin anotación de tipo
     "S105",   # Permitir posibles contraseñas codificadas (para desarrollo)
     "W293",   # Permitir lineas en blanco
+    "S104",   # Permitir todas las interfaces 
 ]
 
 [tool.ruff.lint.isort]

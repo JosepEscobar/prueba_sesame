@@ -1,0 +1,83 @@
+groups:
+  - name: sesame_alerts
+    rules:
+      - alert: HighTokenUsage
+        expr: sum(rate(api_server_token_count_total[5m])) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alto consumo de tokens"
+          description: "El consumo de tokens ha superado 1000 tokens por minuto durante 5 minutos"
+
+      - alert: APIServerDown
+        expr: api_server_status == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API Server caído"
+          description: "El API Server ha estado inoperativo durante más de 1 minuto"
+
+      - alert: MCPServerDown
+        expr: mcp_server_status == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MCP Server caído"
+          description: "El MCP Server ha estado inoperativo durante más de 1 minuto"
+
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, sum(rate(api_server_request_latency_seconds_bucket[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alta latencia en la API"
+          description: "El percentil 95 de latencia en la API ha superado los 2 segundos durante 5 minutos"
+
+      - alert: HighErrorRate
+        expr: sum(rate(api_server_request_count_total{status=~"5.."}[5m])) / sum(rate(api_server_request_count_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alta tasa de errores en la API"
+          description: "Más del 5% de las peticiones a la API están resultando en errores durante 5 minutos"
+
+      - alert: HighMCPErrorRate
+        expr: sum(rate(mcp_error_count_total[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alta tasa de errores en MCP"
+          description: "Más de 5 errores por minuto en el servidor MCP durante 5 minutos"
+
+      - alert: HighDiskUsage
+        expr: 100 - ((node_filesystem_avail_bytes{mountpoint="/"} * 100) / node_filesystem_size_bytes{mountpoint="/"}) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alto uso de disco"
+          description: "El uso de disco ha superado el 85% durante 5 minutos"
+
+      - alert: HighMemoryUsage
+        expr: 100 - ((node_memory_MemAvailable_bytes * 100) / node_memory_MemTotal_bytes) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alto uso de memoria"
+          description: "El uso de memoria ha superado el 90% durante 5 minutos"
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alto uso de CPU"
+          description: "El uso de CPU ha superado el 90% durante 5 minutos" 

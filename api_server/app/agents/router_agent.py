@@ -1,4 +1,5 @@
 import os
+import re
 import time
 from typing import Any
 
@@ -198,11 +199,30 @@ class RouterAgent(BaseAgent):
                     "insights",
                     "métricas",
                     "indicadores",
-                    "histórico",
-                    "estadística",
-                    "correlación",
-                    "hallazgos",
-                    "síntesis",
+                ],
+            },
+            "system_info_agent": {
+                "description": "Especialista en proporcionar información sobre el sistema.",
+                "capabilities": [
+                    "información sobre capacidades del sistema",
+                    "estado de los servicios",
+                    "información sobre agentes disponibles",
+                    "documentación del sistema",
+                ],
+                "keywords": [
+                    "capacidades",
+                    "funcionalidades",
+                    "sistema",
+                    "api",
+                    "estado",
+                    "status",
+                    "servicio",
+                    "agentes",
+                    "asistentes",
+                    "especialistas",
+                    "documentación",
+                    "ayuda",
+                    "guía",
                 ],
             },
         }
@@ -221,8 +241,11 @@ class RouterAgent(BaseAgent):
 3. Agente de Análisis (analysis_agent) - Para análisis general, tendencias, datos, etc.
    Palabras clave: tendencia, análisis, predicción, datos, información, etc.
 
+4. Agente de Información del Sistema (system_info_agent) - Para consultas sobre capacidades del sistema, estado del servicio, etc.
+   Palabras clave: capacidades, funcionalidades, sistema, estado, agentes, servicio, etc.
+
 Analiza cuidadosamente la consulta del usuario y elige el agente más apropiado en función del contenido.
-Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketing_agent", o "analysis_agent". No incluyas explicaciones ni otros textos."""
+Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketing_agent", "analysis_agent", o "system_info_agent". No incluyas explicaciones ni otros textos."""
 
         if self.has_openai:
             logger.info("RouterAgent inicializado con OpenAI API")
@@ -328,8 +351,20 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                                 response_content = response.content.strip()
                                 logger.info(f"Respuesta de LangChain LLM: {response_content}")
 
+                                # Intentar extraer el JSON de la respuesta
+                                json_match = re.search(r"```json\s*(.*?)\s*```", response.content, re.DOTALL)
+                                if json_match:
+                                    json_str = json_match.group(1)
+                                else:
+                                    json_str = response.content
+
                                 # Validar que la respuesta sea uno de los agentes válidos
-                                valid_agents = ["finance_agent", "marketing_agent", "analysis_agent"]
+                                valid_agents = [
+                                    "finance_agent",
+                                    "marketing_agent",
+                                    "analysis_agent",
+                                    "system_info_agent",
+                                ]
                                 if response_content in valid_agents:
                                     agent_type = response_content
                                     confidence = 0.9  # Alta confianza para LLM
@@ -366,7 +401,12 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                                 response_content = response.choices[0].message.content.strip()
 
                                 # Validar que la respuesta sea uno de los agentes válidos
-                                valid_agents = ["finance_agent", "marketing_agent", "analysis_agent"]
+                                valid_agents = [
+                                    "finance_agent",
+                                    "marketing_agent",
+                                    "analysis_agent",
+                                    "system_info_agent",
+                                ]
                                 if response_content in valid_agents:
                                     agent_type = response_content
                                     confidence = 0.9  # Alta confianza para LLM
@@ -401,7 +441,7 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                         response_content = response.choices[0].message.content.strip()
 
                         # Normalizar la respuesta
-                        valid_agents = ["finance_agent", "marketing_agent", "analysis_agent"]
+                        valid_agents = ["finance_agent", "marketing_agent", "analysis_agent", "system_info_agent"]
                         if response_content in valid_agents:
                             agent_type = response_content
                             confidence = 0.9  # Alta confianza para LLM
@@ -488,7 +528,7 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
             try:
                 # Definir la estructura JSON esperada
                 json_schema = {
-                    "agent": "finance_agent | marketing_agent | analysis_agent",
+                    "agent": "finance_agent | marketing_agent | analysis_agent | system_info_agent",
                     "confidence": 0.7,
                     "reasoning": "breve explicación de la elección",
                 }
@@ -511,6 +551,7 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                     - finance_agent: Consultas sobre finanzas, inversiones, contabilidad, análisis financiero, presupuestos, etc.
                     - marketing_agent: Consultas sobre marketing, publicidad, campañas, estrategias de mercado, clientes, etc.
                     - analysis_agent: Consultas generales de análisis, tendencias, datos, información general, etc.
+                    - system_info_agent: Consultas sobre capacidades del sistema, estado del servicio, documentación, agentes disponibles, etc.
                     
                     El campo "confidence" debe ser un número entre 0 y 1 que representa tu nivel de confianza en esta elección.
                     """,
@@ -561,7 +602,7 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
             return "analysis_agent"  # Si ninguno tiene keywords, usar análisis
 
         # Si hay múltiples con la misma puntuación máxima, priorizar en este orden
-        priority = ["finance_agent", "marketing_agent", "analysis_agent"]
+        priority = ["finance_agent", "marketing_agent", "analysis_agent", "system_info_agent"]
         max_agents = [agent for agent, score in scores.items() if score == max_score]
 
         for p in priority:

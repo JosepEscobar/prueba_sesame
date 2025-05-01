@@ -134,6 +134,46 @@ class GuardrailAgent(BaseAgent):
         Returns:
             Resultado de la evaluación
         """
+        # Verificar si es una consulta sobre capacidades del sistema o estado del servicio
+        query_lower = query.lower()
+        system_info_keywords = [
+            "capacidades",
+            "funcionalidades",
+            "qué puede hacer",
+            "qué hace",
+            "estado",
+            "status",
+            "funcionando",
+            "operativo",
+            "agentes",
+            "asistentes",
+            "especialistas",
+        ]
+
+        system_info_phrases = [
+            "cuales son las capacidades",
+            "cuál es el estado",
+            "qué puede hacer",
+            "estado actual",
+            "capacidades del sistema",
+            "funcionalidades disponibles",
+        ]
+
+        # Verificar si la consulta está relacionada con información del sistema
+        is_system_info_query = any(keyword in query_lower for keyword in system_info_keywords) or any(
+            phrase in query_lower for phrase in system_info_phrases
+        )
+
+        if is_system_info_query:
+            logger.info(f"Detectada consulta sobre información del sistema: {query}")
+            return {
+                "in_scope": True,
+                "domain": "system_info",
+                "confidence": 0.95,
+                "reasoning": "Consulta relacionada con información del sistema o estado del servicio",
+                "explanation": "Esta consulta está relacionada con información sobre el sistema o su estado actual.",
+            }
+
         # Crear un esquema JSON para la respuesta esperada
         json_schema = {
             "in_scope": True,  # boolean

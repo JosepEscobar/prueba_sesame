@@ -10,6 +10,7 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
+
 class CustomJsonFormatter(jsonlogger.JsonFormatter):
     """Formateador personalizado para logs en formato JSON."""
 
@@ -35,6 +36,7 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
         if hasattr(record, "confidence"):
             log_record["confidence"] = record.confidence
 
+
 def setup_logging() -> None:
     """Configura el sistema de logging."""
     # Crear el logger principal
@@ -46,13 +48,9 @@ def setup_logging() -> None:
 
     # Configurar el formateador
     if settings.LOG_FORMAT == "json":
-        formatter = CustomJsonFormatter(
-            "%(asctime)s %(level)s %(name)s %(message)s"
-        )
+        formatter = CustomJsonFormatter("%(asctime)s %(level)s %(name)s %(message)s")
     else:
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # Crear directorio de logs si no existe
     logs_dir = os.path.join(os.getcwd(), "logs")
@@ -69,7 +67,7 @@ def setup_logging() -> None:
     file_handler = RotatingFileHandler(
         general_log_file,
         maxBytes=10 * 1024 * 1024,  # 10 MB
-        backupCount=5
+        backupCount=5,
     )
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
@@ -79,7 +77,7 @@ def setup_logging() -> None:
     error_file_handler = RotatingFileHandler(
         error_log_file,
         maxBytes=10 * 1024 * 1024,  # 10 MB
-        backupCount=5
+        backupCount=5,
     )
     error_file_handler.setLevel(logging.ERROR)
     error_file_handler.setFormatter(formatter)
@@ -90,7 +88,7 @@ def setup_logging() -> None:
     services_file_handler = RotatingFileHandler(
         services_log_file,
         maxBytes=10 * 1024 * 1024,  # 10 MB
-        backupCount=5
+        backupCount=5,
     )
     services_file_handler.setFormatter(formatter)
     services_logger = logging.getLogger("app.services")
@@ -102,6 +100,7 @@ def setup_logging() -> None:
     logging.getLogger("fastapi").setLevel(logging.INFO)
 
     return logger
+
 
 # Crear el logger principal
 logger = setup_logging()

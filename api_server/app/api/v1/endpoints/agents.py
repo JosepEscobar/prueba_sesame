@@ -11,11 +11,13 @@ from app.core.orchestrator import AgentOrchestrator
 router = APIRouter()
 orchestrator = AgentOrchestrator()
 
+
 class AgentRequest(BaseModel):
     query: str
     content: str | None = None
     action_request: str | None = None
     metadata: dict[str, Any] | None = None
+
 
 class AgentResponse(BaseModel):
     status: str
@@ -24,9 +26,11 @@ class AgentResponse(BaseModel):
     result: Any
     execution_time: float | None = None
 
+
 class AgentInfo(BaseModel):
     name: str
     description: str
+
 
 @router.post("/process", response_model=AgentResponse)
 async def process_request(request: AgentRequest):
@@ -40,10 +44,7 @@ async def process_request(request: AgentRequest):
         AgentResponse con el resultado del procesamiento
     """
     try:
-        logger.info(
-            "Nueva solicitud recibida",
-            extra={"request_data": request.dict()}
-        )
+        logger.info("Nueva solicitud recibida", extra={"request_data": request.dict()})
 
         # Convertir solicitud a diccionario para el orquestador
         input_data = request.dict(exclude_unset=True)
@@ -61,22 +62,17 @@ async def process_request(request: AgentRequest):
             extra={
                 "agent_used": result["agent_used"],
                 "confidence": result["confidence"],
-                "execution_time": execution_time
-            }
+                "execution_time": execution_time,
+            },
         )
 
         return AgentResponse(**result)
 
     except Exception as e:
-        logger.error(
-            f"Error al procesar la solicitud: {str(e)}",
-            extra={"request_data": request.dict()}
-        )
+        logger.error(f"Error al procesar la solicitud: {str(e)}", extra={"request_data": request.dict()})
         MetricsCollector.record_error("api", "request_processing_error")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al procesar la solicitud: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error al procesar la solicitud: {str(e)}")
+
 
 @router.get("/agents", response_model=list[AgentInfo])
 async def list_agents():
@@ -85,24 +81,15 @@ async def list_agents():
     """
     agents = [
         AgentInfo(
-            name="Router Agent",
-            description="Agente que decide qué agente especializado debe manejar la solicitud"
+            name="Router Agent", description="Agente que decide qué agente especializado debe manejar la solicitud"
         ),
-        AgentInfo(
-            name="Analysis Agent",
-            description="Agente especializado en análisis detallado de datos y textos"
-        ),
-        AgentInfo(
-            name="Action Agent",
-            description="Agente especializado en realizar acciones específicas"
-        ),
-        AgentInfo(
-            name="Summary Agent",
-            description="Agente especializado en crear resúmenes concisos"
-        )
+        AgentInfo(name="Analysis Agent", description="Agente especializado en análisis detallado de datos y textos"),
+        AgentInfo(name="Action Agent", description="Agente especializado en realizar acciones específicas"),
+        AgentInfo(name="Summary Agent", description="Agente especializado en crear resúmenes concisos"),
     ]
 
     return agents
+
 
 @router.get("/health")
 async def agent_health():
@@ -117,16 +104,13 @@ async def agent_health():
                 "router": orchestrator.router_agent is not None,
                 "analysis": orchestrator.analysis_agent is not None,
                 "action": orchestrator.action_agent is not None,
-                "summary": orchestrator.summary_agent is not None
+                "summary": orchestrator.summary_agent is not None,
             },
-            "workflow": orchestrator.workflow is not None
+            "workflow": orchestrator.workflow is not None,
         }
 
         return health_status
 
     except Exception as e:
         logger.error(f"Error en verificación de salud: {str(e)}")
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        }
+        return {"status": "unhealthy", "error": str(e)}

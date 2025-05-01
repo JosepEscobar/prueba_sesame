@@ -62,11 +62,11 @@ class Settings(BaseSettings):
 
     # Configuración del servidor MCP
     MCP_ENABLED: bool = True
-    MCP_HOST: str = "localhost"
+    MCP_HOST: str = "mcp_server"
     MCP_PORT: int = 4000
 
     # Configuración del cliente MCP
-    MCP_CLIENT_URL: str = "http://localhost:4000/sse"
+    MCP_CLIENT_URL: str = "http://mcp_server:4000/sse"
     MCP_CLIENT_TIMEOUT: int = 30
 
     # Compatibilidad con nombres antiguos de variables
@@ -78,9 +78,7 @@ class Settings(BaseSettings):
     ORCHESTRATOR_CONFIDENCE_THRESHOLD: float = ORCHESTRATOR_CONFIDENCE_THRESHOLD
     ANTHROPIC_API_KEY: str | None = None
 
-    model_config = SettingsConfigDict(
-        env_file=".env", case_sensitive=True, env_file_encoding="utf-8", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, env_file_encoding="utf-8", extra="ignore")
 
     @field_validator("API_PREFIX")
     def validate_api_prefix(cls, v: str) -> str:
@@ -90,11 +88,7 @@ class Settings(BaseSettings):
 
     def is_openai_api_key_valid(self) -> bool:
         """Verifica si la clave API de OpenAI es válida para su uso."""
-        return (
-            bool(self.OPENAI_API_KEY)
-            and self.OPENAI_API_KEY != "sk-your-key-here"
-            and self.OPENAI_API_KEY != ""
-        )
+        return bool(self.OPENAI_API_KEY) and self.OPENAI_API_KEY != "sk-your-key-here" and self.OPENAI_API_KEY != ""
 
 
 @lru_cache

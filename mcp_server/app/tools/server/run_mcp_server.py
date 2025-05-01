@@ -1,4 +1,3 @@
-
 import asyncio
 import signal
 import sys
@@ -12,14 +11,17 @@ from app.tools.server.server_init import init_mcp_server, run_server
 # Configurar logging
 setup_logging()
 
+
 # Manejador de señales para cerrar limpiamente
 def handle_signal(signum, frame):
     logger.info(f"Recibida señal {signum}, cerrando servidor MCP...")
     sys.exit(0)
 
+
 # Registrar manejadores de señales
 signal.signal(signal.SIGTERM, handle_signal)
 signal.signal(signal.SIGINT, handle_signal)
+
 
 async def main():
     try:
@@ -32,6 +34,7 @@ async def main():
     except Exception as e:
         logger.error(f"Error al ejecutar servidor MCP: {str(e)}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     try:

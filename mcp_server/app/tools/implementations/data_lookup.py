@@ -20,6 +20,7 @@ from app.core.metrics import MetricsCollector
 
 settings = get_settings()
 
+
 class DataLookupImplementation:
     """
     Implementación de la herramienta para buscar información en diferentes fuentes externas.
@@ -74,16 +75,10 @@ class DataLookupImplementation:
                         if results:
                             execution_time = time.time() - start_time
                             self.metrics.record_lookup_execution(
-                                lookup_type="market_data",
-                                execution_time=execution_time,
-                                status="success"
+                                lookup_type="market_data", execution_time=execution_time, status="success"
                             )
 
-                            return {
-                                "data": results,
-                                "source": "Alpha Vantage API",
-                                "timestamp": time.time()
-                            }
+                            return {"data": results, "source": "Alpha Vantage API", "timestamp": time.time()}
 
                 except Exception as e:
                     logger.warning(f"Error al obtener datos de Alpha Vantage: {str(e)}")
@@ -94,10 +89,7 @@ class DataLookupImplementation:
 
             execution_time = time.time() - start_time
             self.metrics.record_lookup_execution(
-                lookup_type="market_data",
-                execution_time=execution_time,
-                status="success",
-                is_mock=True
+                lookup_type="market_data", execution_time=execution_time, status="success", is_mock=True
             )
 
             return mock_data
@@ -107,17 +99,10 @@ class DataLookupImplementation:
             logger.error(f"Error al buscar datos de mercado: {str(e)}")
 
             self.metrics.record_lookup_execution(
-                lookup_type="market_data",
-                execution_time=execution_time,
-                status="error",
-                error=str(e)
+                lookup_type="market_data", execution_time=execution_time, status="error", error=str(e)
             )
 
-            return {
-                "error": f"Error al buscar datos de mercado: {str(e)}",
-                "source": "Error",
-                "timestamp": time.time()
-            }
+            return {"error": f"Error al buscar datos de mercado: {str(e)}", "source": "Error", "timestamp": time.time()}
 
     def search_news(self, query: str) -> dict[str, Any]:
         """
@@ -143,7 +128,7 @@ class DataLookupImplementation:
                         "language": "es",
                         "sortBy": "relevancy",
                         "pageSize": 5,
-                        "apiKey": self.api_keys["news_api"]
+                        "apiKey": self.api_keys["news_api"],
                     }
 
                     url = f"https://newsapi.org/v2/everything?{urlencode(params)}"
@@ -154,16 +139,14 @@ class DataLookupImplementation:
                         if "articles" in data and data["articles"]:
                             execution_time = time.time() - start_time
                             self.metrics.record_lookup_execution(
-                                lookup_type="news",
-                                execution_time=execution_time,
-                                status="success"
+                                lookup_type="news", execution_time=execution_time, status="success"
                             )
 
                             return {
                                 "articles": data["articles"],
                                 "total_results": data.get("totalResults", len(data["articles"])),
                                 "source": "News API",
-                                "timestamp": time.time()
+                                "timestamp": time.time(),
                             }
 
                 except Exception as e:
@@ -175,10 +158,7 @@ class DataLookupImplementation:
 
             execution_time = time.time() - start_time
             self.metrics.record_lookup_execution(
-                lookup_type="news",
-                execution_time=execution_time,
-                status="success",
-                is_mock=True
+                lookup_type="news", execution_time=execution_time, status="success", is_mock=True
             )
 
             return mock_news
@@ -188,17 +168,10 @@ class DataLookupImplementation:
             logger.error(f"Error al buscar noticias: {str(e)}")
 
             self.metrics.record_lookup_execution(
-                lookup_type="news",
-                execution_time=execution_time,
-                status="error",
-                error=str(e)
+                lookup_type="news", execution_time=execution_time, status="error", error=str(e)
             )
 
-            return {
-                "error": f"Error al buscar noticias: {str(e)}",
-                "source": "Error",
-                "timestamp": time.time()
-            }
+            return {"error": f"Error al buscar noticias: {str(e)}", "source": "Error", "timestamp": time.time()}
 
     def search_industry_reports(self, industry: str) -> dict[str, Any]:
         """
@@ -220,10 +193,7 @@ class DataLookupImplementation:
 
             execution_time = time.time() - start_time
             self.metrics.record_lookup_execution(
-                lookup_type="industry",
-                execution_time=execution_time,
-                status="success",
-                is_mock=True
+                lookup_type="industry", execution_time=execution_time, status="success", is_mock=True
             )
 
             return mock_reports
@@ -233,16 +203,13 @@ class DataLookupImplementation:
             logger.error(f"Error al buscar informes de industria: {str(e)}")
 
             self.metrics.record_lookup_execution(
-                lookup_type="industry",
-                execution_time=execution_time,
-                status="error",
-                error=str(e)
+                lookup_type="industry", execution_time=execution_time, status="error", error=str(e)
             )
 
             return {
                 "error": f"Error al buscar informes de industria: {str(e)}",
                 "source": "Error",
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
 
     def search_web(self, query: str) -> dict[str, Any]:
@@ -264,16 +231,9 @@ class DataLookupImplementation:
             if self.api_keys.get("bing_search"):
                 try:
                     # Preparar parámetros para Bing Search
-                    headers = {
-                        "Ocp-Apim-Subscription-Key": self.api_keys["bing_search"]
-                    }
+                    headers = {"Ocp-Apim-Subscription-Key": self.api_keys["bing_search"]}
 
-                    params = {
-                        "q": query,
-                        "count": 5,
-                        "offset": 0,
-                        "mkt": "es-ES"
-                    }
+                    params = {"q": query, "count": 5, "offset": 0, "mkt": "es-ES"}
 
                     url = f"https://api.bing.microsoft.com/v7.0/search?{urlencode(params)}"
                     response = requests.get(url, headers=headers, timeout=10)
@@ -283,16 +243,14 @@ class DataLookupImplementation:
                         if "webPages" in data and "value" in data["webPages"]:
                             execution_time = time.time() - start_time
                             self.metrics.record_lookup_execution(
-                                lookup_type="web",
-                                execution_time=execution_time,
-                                status="success"
+                                lookup_type="web", execution_time=execution_time, status="success"
                             )
 
                             return {
                                 "results": data["webPages"]["value"],
                                 "total_results": data["webPages"].get("totalEstimatedMatches", 0),
                                 "source": "Bing Search API",
-                                "timestamp": time.time()
+                                "timestamp": time.time(),
                             }
 
                 except Exception as e:
@@ -304,10 +262,7 @@ class DataLookupImplementation:
 
             execution_time = time.time() - start_time
             self.metrics.record_lookup_execution(
-                lookup_type="web",
-                execution_time=execution_time,
-                status="success",
-                is_mock=True
+                lookup_type="web", execution_time=execution_time, status="success", is_mock=True
             )
 
             return mock_web
@@ -317,17 +272,10 @@ class DataLookupImplementation:
             logger.error(f"Error al buscar información web: {str(e)}")
 
             self.metrics.record_lookup_execution(
-                lookup_type="web",
-                execution_time=execution_time,
-                status="error",
-                error=str(e)
+                lookup_type="web", execution_time=execution_time, status="error", error=str(e)
             )
 
-            return {
-                "error": f"Error al buscar información web: {str(e)}",
-                "source": "Error",
-                "timestamp": time.time()
-            }
+            return {"error": f"Error al buscar información web: {str(e)}", "source": "Error", "timestamp": time.time()}
 
     def lookup_company_data(self, company: str) -> dict[str, Any]:
         """
@@ -349,10 +297,7 @@ class DataLookupImplementation:
 
             execution_time = time.time() - start_time
             self.metrics.record_lookup_execution(
-                lookup_type="company",
-                execution_time=execution_time,
-                status="success",
-                is_mock=True
+                lookup_type="company", execution_time=execution_time, status="success", is_mock=True
             )
 
             return mock_company
@@ -362,16 +307,13 @@ class DataLookupImplementation:
             logger.error(f"Error al buscar información de empresa: {str(e)}")
 
             self.metrics.record_lookup_execution(
-                lookup_type="company",
-                execution_time=execution_time,
-                status="error",
-                error=str(e)
+                lookup_type="company", execution_time=execution_time, status="error", error=str(e)
             )
 
             return {
                 "error": f"Error al buscar información de empresa: {str(e)}",
                 "source": "Error",
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
 
     def execute(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -419,16 +361,11 @@ class DataLookupImplementation:
             if "error" not in web_data:
                 results["web"] = web_data
 
-            return {
-                "results": results,
-                "lookup_type": "general",
-                "query": query,
-                "timestamp": time.time()
-            }
+            return {"results": results, "lookup_type": "general", "query": query, "timestamp": time.time()}
         else:
             return {
                 "error": f"Tipo de búsqueda no válido: {lookup_type}",
-                "valid_types": ["market_data", "news", "industry", "web", "company", "general"]
+                "valid_types": ["market_data", "news", "industry", "web", "company", "general"],
             }
 
     # Métodos auxiliares para extracción y generación de datos simulados
@@ -462,14 +399,10 @@ class DataLookupImplementation:
                 "07. latest trading day": "2024-01-15",
                 "08. previous close": str(round(price - change, 2)),
                 "09. change": str(change),
-                "10. change percent": f"{percent_change}%"
+                "10. change percent": f"{percent_change}%",
             }
 
-        return {
-            "data": results,
-            "source": "Datos simulados",
-            "timestamp": time.time()
-        }
+        return {"data": results, "source": "Datos simulados", "timestamp": time.time()}
 
     def _generate_mock_news(self, query: str) -> dict[str, Any]:
         """Genera noticias simuladas basadas en la consulta."""
@@ -480,48 +413,42 @@ class DataLookupImplementation:
             title_words = random.sample(words, min(len(words), 3))
             title = "Noticia importante sobre " + " ".join(title_words)
 
-            articles.append({
-                "source": {"id": f"source-{i}", "name": f"Fuente {i+1}"},
-                "author": f"Autor {i+1}",
-                "title": title,
-                "description": f"Descripción detallada sobre {' '.join(random.sample(words, min(len(words), 4)))}.",
-                "url": f"https://example.com/news/{i}",
-                "urlToImage": f"https://example.com/images/news{i}.jpg",
-                "publishedAt": "2024-01-15T12:00:00Z",
-                "content": f"Contenido completo del artículo relacionado con {query}..."
-            })
+            articles.append(
+                {
+                    "source": {"id": f"source-{i}", "name": f"Fuente {i + 1}"},
+                    "author": f"Autor {i + 1}",
+                    "title": title,
+                    "description": f"Descripción detallada sobre {' '.join(random.sample(words, min(len(words), 4)))}.",
+                    "url": f"https://example.com/news/{i}",
+                    "urlToImage": f"https://example.com/images/news{i}.jpg",
+                    "publishedAt": "2024-01-15T12:00:00Z",
+                    "content": f"Contenido completo del artículo relacionado con {query}...",
+                }
+            )
 
-        return {
-            "articles": articles,
-            "total_results": 5,
-            "source": "Noticias simuladas",
-            "timestamp": time.time()
-        }
+        return {"articles": articles, "total_results": 5, "source": "Noticias simuladas", "timestamp": time.time()}
 
     def _generate_mock_industry_reports(self, industry: str) -> dict[str, Any]:
         """Genera informes de industria simulados."""
         reports = []
 
         for i in range(3):
-            reports.append({
-                "title": f"Informe {i+1} sobre {industry}",
-                "author": f"Consultora {i+1}",
-                "date": "2024-01-15",
-                "summary": f"Resumen del informe {i+1} sobre tendencias en {industry}.",
-                "url": f"https://example.com/reports/{industry}/{i}",
-                "key_findings": [
-                    f"Hallazgo importante 1 sobre {industry}",
-                    f"Hallazgo importante 2 sobre {industry}",
-                    f"Hallazgo importante 3 sobre {industry}"
-                ]
-            })
+            reports.append(
+                {
+                    "title": f"Informe {i + 1} sobre {industry}",
+                    "author": f"Consultora {i + 1}",
+                    "date": "2024-01-15",
+                    "summary": f"Resumen del informe {i + 1} sobre tendencias en {industry}.",
+                    "url": f"https://example.com/reports/{industry}/{i}",
+                    "key_findings": [
+                        f"Hallazgo importante 1 sobre {industry}",
+                        f"Hallazgo importante 2 sobre {industry}",
+                        f"Hallazgo importante 3 sobre {industry}",
+                    ],
+                }
+            )
 
-        return {
-            "reports": reports,
-            "industry": industry,
-            "source": "Informes simulados",
-            "timestamp": time.time()
-        }
+        return {"reports": reports, "industry": industry, "source": "Informes simulados", "timestamp": time.time()}
 
     def _generate_mock_web_results(self, query: str) -> dict[str, Any]:
         """Genera resultados web simulados basados en la consulta."""
@@ -532,26 +459,28 @@ class DataLookupImplementation:
             title_words = random.sample(words, min(len(words), 3))
             title = "Página web sobre " + " ".join(title_words)
 
-            results.append({
-                "id": f"result-{i}",
-                "name": title,
-                "url": f"https://example.com/result/{i}",
-                "snippet": f"Fragmento de texto que menciona {' '.join(random.sample(words, min(len(words), 4)))}...",
-                "dateLastCrawled": "2024-01-15T12:00:00Z"
-            })
+            results.append(
+                {
+                    "id": f"result-{i}",
+                    "name": title,
+                    "url": f"https://example.com/result/{i}",
+                    "snippet": f"Fragmento de texto que menciona {' '.join(random.sample(words, min(len(words), 4)))}...",
+                    "dateLastCrawled": "2024-01-15T12:00:00Z",
+                }
+            )
 
         return {
             "results": results,
             "total_results": 100,
             "source": "Resultados web simulados",
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
 
     def _generate_mock_company_data(self, company: str) -> dict[str, Any]:
         """Genera datos de empresa simulados."""
         return {
             "name": company,
-            "symbol": ''.join([c[0] for c in company.split() if c]),
+            "symbol": "".join([c[0] for c in company.split() if c]),
             "description": f"Descripción de {company}, empresa líder en su sector.",
             "industry": random.choice(["Tecnología", "Finanzas", "Salud", "Retail", "Manufactura"]),
             "founded": str(random.randint(1950, 2020)),
@@ -561,8 +490,9 @@ class DataLookupImplementation:
             "revenue": f"${random.randint(1, 100)} mil millones",
             "website": f"https://www.{company.lower().replace(' ', '')}.com",
             "source": "Datos de empresa simulados",
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
+
 
 async def buscar_datos_financieros(empresa: str, periodo: str | None = None) -> dict[str, Any]:
     """
@@ -579,7 +509,7 @@ async def buscar_datos_financieros(empresa: str, periodo: str | None = None) -> 
     # Para demostración, generamos datos de ejemplo
 
     hoy = datetime.now()
-    periodo_actual = periodo or f"Q{(hoy.month-1)//3 + 1} {hoy.year}"
+    periodo_actual = periodo or f"Q{(hoy.month - 1) // 3 + 1} {hoy.year}"
 
     # Empresas comunes con datos preestablecidos para demostración
     empresas_conocidas = {
@@ -676,8 +606,9 @@ async def buscar_datos_financieros(empresa: str, periodo: str | None = None) -> 
             "ROI": round(empresa_data["ROI"] * variacion, 3),
         },
         "fuente": "Base de datos financiera Sesame (demo)",
-        "actualizado": (hoy - timedelta(days=random.randint(1, 30))).strftime("%Y-%m-%d")
+        "actualizado": (hoy - timedelta(days=random.randint(1, 30))).strftime("%Y-%m-%d"),
     }
+
 
 async def data_lookup(lookup_type: str, query: str, filters: dict[str, Any] | None = None) -> dict[str, Any]:
     """
@@ -698,7 +629,7 @@ async def data_lookup(lookup_type: str, query: str, filters: dict[str, Any] | No
         "fecha_consulta": datetime.now().strftime("%Y-%m-%d"),
         "resultados": [],
         "fuente": "Servicio de datos Sesame (demo)",
-        "success": True
+        "success": True,
     }
 
     # Aplicar filtros si existen
@@ -723,6 +654,7 @@ async def data_lookup(lookup_type: str, query: str, filters: dict[str, Any] | No
 
     return result
 
+
 def generar_datos_mercado(query: str) -> list[dict[str, Any]]:
     """Genera datos de mercado de ejemplo para una consulta."""
     hoy = datetime.now()
@@ -732,16 +664,19 @@ def generar_datos_mercado(query: str) -> list[dict[str, Any]]:
     for i in range(5):
         fecha = hoy - timedelta(days=i)
         variacion = random.uniform(-2.0, 2.0)
-        datos.append({
-            "fecha": fecha.strftime("%Y-%m-%d"),
-            "indice_principal": round(3500 + random.uniform(-100, 100), 2),
-            "volumen_mercado": random.randint(1000000, 5000000),
-            "variacion": round(variacion, 2),
-            "tendencia": "alza" if variacion > 0 else "baja",
-            "volatilidad": round(random.uniform(10, 30), 2)
-        })
+        datos.append(
+            {
+                "fecha": fecha.strftime("%Y-%m-%d"),
+                "indice_principal": round(3500 + random.uniform(-100, 100), 2),
+                "volumen_mercado": random.randint(1000000, 5000000),
+                "variacion": round(variacion, 2),
+                "tendencia": "alza" if variacion > 0 else "baja",
+                "volatilidad": round(random.uniform(10, 30), 2),
+            }
+        )
 
     return datos
+
 
 def generar_noticias(query: str) -> list[dict[str, Any]]:
     """Genera noticias de ejemplo relacionadas con una consulta."""
@@ -753,22 +688,25 @@ def generar_noticias(query: str) -> list[dict[str, Any]]:
         f"Nuevas tendencias afectan al sector de {query}",
         f"Expertos analizan el futuro de {query} en el mercado global",
         f"Regulaciones podrían impactar la industria de {query}",
-        f"Innovación: {query} lidera transformación digital"
+        f"Innovación: {query} lidera transformación digital",
     ]
 
     noticias = []
     for i, titular in enumerate(titulares):
         fecha = hoy - timedelta(days=i)
-        noticias.append({
-            "titulo": titular,
-            "fecha": fecha.strftime("%Y-%m-%d"),
-            "fuente": random.choice(["Financial Times", "Bloomberg", "CNBC", "Reuters", "The Wall Street Journal"]),
-            "resumen": f"Breve resumen de la noticia sobre {query} y su impacto en el mercado financiero.",
-            "relevancia": round(random.uniform(0.5, 1.0), 2),
-            "sentiment": random.choice(["positivo", "neutral", "negativo"])
-        })
+        noticias.append(
+            {
+                "titulo": titular,
+                "fecha": fecha.strftime("%Y-%m-%d"),
+                "fuente": random.choice(["Financial Times", "Bloomberg", "CNBC", "Reuters", "The Wall Street Journal"]),
+                "resumen": f"Breve resumen de la noticia sobre {query} y su impacto en el mercado financiero.",
+                "relevancia": round(random.uniform(0.5, 1.0), 2),
+                "sentiment": random.choice(["positivo", "neutral", "negativo"]),
+            }
+        )
 
     return noticias
+
 
 def generar_datos_empresa(query: str) -> dict[str, Any]:
     """Genera información detallada de una empresa de ejemplo."""
@@ -781,8 +719,8 @@ def generar_datos_empresa(query: str) -> dict[str, Any]:
         "empleados": random.randint(1000, 100000),
         "revenue_anual": f"${random.randint(100, 1000)} millones",
         "cotizacion": random.choice([True, False]),
-        "productos_principales": [f"Producto {i+1}" for i in range(3)],
+        "productos_principales": [f"Producto {i + 1}" for i in range(3)],
         "ultimo_precio_accion": round(random.uniform(10, 500), 2),
         "variacion_precio": round(random.uniform(-5, 5), 2),
-        "capitalizacion": f"${random.randint(1, 100)} mil millones"
+        "capitalizacion": f"${random.randint(1, 100)} mil millones",
     }
