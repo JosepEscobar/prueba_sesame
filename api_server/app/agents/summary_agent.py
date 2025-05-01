@@ -56,11 +56,11 @@ class SummaryAgent(BaseAgent):
     def _execute_impl(self, input_data: dict[Any, Any]) -> dict[Any, Any]:
         """
         Ejecuta la operación de resumen basada en los datos de entrada.
-        
+
         Args:
             input_data: Diccionario que contiene la consulta y cualquier contexto adicional.
                 Debe incluir 'query' y opcionalmente 'context'.
-                
+
         Returns:
             Dict con los resultados del resumen, la consulta original y un nivel de confianza.
         """
@@ -149,12 +149,12 @@ class SummaryAgent(BaseAgent):
             prompt = f"""
             Eres un experto en crear resúmenes claros, concisos y estructurados. Tu tarea es generar un resumen
             completo de la siguiente información, preservando todos los detalles importantes.
-            
+
             CONSULTA ORIGINAL: {query}
-            
+
             RESULTADO COMPLETO DEL ANÁLISIS:
             {context_text}
-            
+
             Instrucciones para el resumen:
             1. Mantén todas las ideas principales y conclusiones clave.
             2. Organiza la información en una estructura lógica con secciones claras.
@@ -163,7 +163,7 @@ class SummaryAgent(BaseAgent):
             5. Usa lenguaje claro y profesional.
             6. Debes mantener todo el valor informativo del texto original.
             7. El resumen debe ser tan completo que pueda sustituir al original.
-            
+
             Tu respuesta debe estar bien estructurada, con títulos de sección, párrafos coherentes
             y formato que facilite la lectura y comprensión.
             """
@@ -200,12 +200,12 @@ class SummaryAgent(BaseAgent):
                 # Intentar nuevamente con un prompt más específico
                 retry_prompt = f"""
                 IMPORTANTE: Necesito un resumen COMPLETO y DETALLADO. El resumen anterior era demasiado breve.
-                
+
                 CONSULTA ORIGINAL: {query}
-                
+
                 CONTENIDO COMPLETO A RESUMIR:
                 {context_text}
-                
+
                 Por favor, genera un resumen extenso y completo que conserve TODOS los detalles importantes,
                 cifras, recomendaciones y estructura. El resumen debe tener suficiente detalle para reemplazar 
                 al texto original.

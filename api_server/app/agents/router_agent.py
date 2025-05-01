@@ -12,7 +12,7 @@ from app.core.logging import logger
 def load_api_credentials():
     """
     Carga las credenciales de API desde la configuración y maneja posibles errores.
-    
+
     Returns:
         tuple: (openai_key, has_valid_key)
     """
@@ -69,7 +69,7 @@ except Exception as e:
 class RouterAgent(BaseAgent):
     """
     Agente Router que determina qué agente especializado debe manejar una consulta.
-    
+
     El Router analiza la consulta entrante y la dirige al agente más adecuado
     basándose en su contenido, contexto y requerimientos específicos.
     """
@@ -191,10 +191,10 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
     def _execute_impl(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """
         Implementación específica de ejecución del agente de enrutamiento.
-        
+
         Args:
             input_data: Datos de entrada con la consulta y contexto
-            
+
         Returns:
             Decisión sobre qué agente debe procesar la consulta
         """
@@ -420,10 +420,10 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
     def _classify_query_by_keywords(self, query: str) -> str:
         """
         Clasifica una consulta usando LLM o, como fallback, por palabras clave.
-        
+
         Args:
             query: La consulta a clasificar
-        
+
         Returns:
             El tipo de agente más adecuado
         """
@@ -432,21 +432,21 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
             try:
                 categorization_prompt = f"""
                 Analiza la siguiente consulta y determina qué agente especializado debería manejarla.
-                
+
                 Consulta: "{query}"
-                
+
                 Devuelve SOLAMENTE un objeto JSON con esta estructura:
                 {{
                     "agent": "finance_agent" | "marketing_agent" | "analysis_agent",
                     "confidence": float entre 0 y 1,
                     "reasoning": "breve explicación de la elección"
                 }}
-                
+
                 Criterios para cada agente:
                 - finance_agent: Consultas sobre finanzas, inversiones, contabilidad, análisis financiero, presupuestos, etc.
                 - marketing_agent: Consultas sobre marketing, publicidad, campañas, estrategias de mercado, clientes, etc.
                 - analysis_agent: Consultas generales de análisis, tendencias, datos, información general, etc.
-                
+
                 No incluyas texto adicional en tu respuesta, solo el JSON.
                 """
 

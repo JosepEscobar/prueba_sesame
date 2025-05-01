@@ -23,10 +23,10 @@ from app.tools.mcp_client import MCPClient
 async def list_tools(client: MCPClient) -> list[dict[str, Any]]:
     """
     Lista las herramientas disponibles en el servidor MCP.
-    
+
     Args:
         client: Cliente MCP inicializado
-        
+
     Returns:
         Lista de herramientas disponibles
     """
@@ -35,12 +35,12 @@ async def list_tools(client: MCPClient) -> list[dict[str, Any]]:
 async def call_tool(client: MCPClient, tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
     """
     Llama a una herramienta específica en el servidor MCP.
-    
+
     Args:
         client: Cliente MCP inicializado
         tool_name: Nombre de la herramienta a llamar
         params: Parámetros para la herramienta
-        
+
     Returns:
         Resultado de la llamada a la herramienta
     """

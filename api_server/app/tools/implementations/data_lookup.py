@@ -36,11 +36,11 @@ class DataLookupImplementation:
     def search_market_data(self, term=None, **kwargs):
         """
         Busca datos de mercado relacionados con el término de búsqueda.
-        
+
         Args:
             term: Término de búsqueda
             kwargs: Argumentos adicionales para la búsqueda
-            
+
         Returns:
             Datos de mercado encontrados
         """
@@ -121,11 +121,11 @@ class DataLookupImplementation:
     def search_news(self, term=None, **kwargs):
         """
         Busca noticias relacionadas con el término de búsqueda.
-        
+
         Args:
             term: Término de búsqueda
             kwargs: Argumentos adicionales para la búsqueda
-            
+
         Returns:
             Noticias encontradas
         """
@@ -206,10 +206,10 @@ class DataLookupImplementation:
     def search_industry_reports(self, industry: str) -> dict[str, Any]:
         """
         Busca informes de industria.
-        
+
         Args:
             industry: Nombre de la industria
-            
+
         Returns:
             Informes de la industria
         """
@@ -251,11 +251,11 @@ class DataLookupImplementation:
     def search_web(self, term=None, **kwargs):
         """
         Busca información en la web relacionada con el término de búsqueda.
-        
+
         Args:
             term: Término de búsqueda
             kwargs: Argumentos adicionales para la búsqueda
-            
+
         Returns:
             Información web encontrada
         """
@@ -339,10 +339,10 @@ class DataLookupImplementation:
     def lookup_company_data(self, company: str) -> dict[str, Any]:
         """
         Busca información sobre una empresa.
-        
+
         Args:
             company: Nombre de la empresa
-            
+
         Returns:
             Datos de la empresa
         """
@@ -385,10 +385,10 @@ class DataLookupImplementation:
         """
         Ejecuta la búsqueda según los parámetros proporcionados.
         Método principal para compatibilidad con el servidor MCP.
-        
+
         Args:
             params: Parámetros para la búsqueda
-            
+
         Returns:
             Resultados de la búsqueda
         """

@@ -143,14 +143,14 @@ async def process_query(
     summary="Obtener lista de agentes disponibles",
     description="""
     Devuelve información sobre todos los agentes disponibles en el sistema multi-agente.
-    
+
     Para cada agente, se incluye:
     - Identificador único
     - Nombre descriptivo
     - Tipo de agente
     - Descripción de capacidades
     - Métricas de rendimiento (tasa de éxito, tiempo promedio de respuesta)
-    
+
     Esta información es útil para entender las capacidades del sistema y para decidir
     qué agente especificar en las solicitudes de consulta si se desea uno en particular.
     """,
@@ -179,14 +179,14 @@ async def get_available_agents():
     summary="Obtener información detallada de un agente específico",
     description="""
     Devuelve información detallada sobre un agente específico identificado por su ID.
-    
+
     La respuesta incluye:
     - Información básica (nombre, tipo, descripción)
     - Capacidades detalladas del agente
     - Métricas de rendimiento (tasa de éxito, tiempo promedio, precisión)
     - Estadísticas de uso (número de consultas procesadas, tendencias)
     - Configuración técnica (modelo utilizado, parámetros)
-    
+
     Esta información es útil para comprender en profundidad las capacidades
     y el rendimiento de un agente específico antes de utilizarlo.
     """,
@@ -218,7 +218,7 @@ async def get_agent_info(agent_id: str):
     summary="Obtener estadísticas del sistema multi-agente",
     description="""
     Devuelve estadísticas detalladas sobre el rendimiento y uso del sistema multi-agente.
-    
+
     Las estadísticas incluyen:
     - Métricas de rendimiento global (tasa de éxito, tiempo promedio de respuesta)
     - Distribución de consultas por tipo de agente
@@ -226,7 +226,7 @@ async def get_agent_info(agent_id: str):
     - Tendencias de uso a lo largo del tiempo
     - Estadísticas de errores y excepciones
     - Métricas de recursos (uso de CPU, memoria, tokens)
-    
+
     Esta información es valiosa para monitorear la salud y rendimiento del sistema,
     identificar áreas de mejora, y entender patrones de uso.
     """,
@@ -261,17 +261,17 @@ async def get_system_stats():
     summary="Buscar información en fuentes de datos externas",
     description="""
     Realiza búsquedas de información en diversas fuentes de datos externas.
-    
+
     Tipos de búsqueda disponibles:
     - **market**: Datos de mercado y análisis económicos
     - **news**: Noticias recientes y artículos
     - **industry**: Informes y estadísticas de industrias específicas
     - **web**: Búsqueda general en internet
     - **company**: Información detallada sobre empresas específicas
-    
+
     La solicitud debe especificar el tipo de búsqueda y los parámetros de consulta
     relevantes, como términos de búsqueda, filtros y límites.
-    
+
     Los resultados incluirán la información obtenida, metadatos sobre la búsqueda
     y detalles sobre las fuentes utilizadas.
     """,

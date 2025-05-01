@@ -13,7 +13,7 @@ settings = get_settings()
 class FinanceAgent(BaseAgent):
     """
     Agente especializado en finanzas, inversiones y análisis financiero.
-    
+
     Este agente proporciona recomendaciones y análisis sobre:
     - Análisis financiero de empresas
     - Modelos y proyecciones financieras
@@ -105,10 +105,10 @@ class FinanceAgent(BaseAgent):
     def _execute_impl(self, input_data: dict[Any, Any]) -> dict[Any, Any]:
         """
         Ejecuta el análisis financiero.
-        
+
         Args:
             input_data: Datos de entrada con la consulta y contexto
-            
+
         Returns:
             Resultado del análisis financiero
         """
@@ -209,10 +209,10 @@ class FinanceAgent(BaseAgent):
     def _format_finance_prompt(self, input_data: dict[str, Any]) -> str:
         """
         Formatea el prompt para el modelo de lenguaje.
-        
+
         Args:
             input_data: Datos preparados para el prompt
-            
+
         Returns:
             Prompt formateado
         """
@@ -224,16 +224,16 @@ class FinanceAgent(BaseAgent):
         Eres un experto financiero actuando como parte de un sistema de asistencia 
         empresarial. Debes proporcionar un análisis financiero detallado y 
         recomendaciones prácticas basadas en la siguiente consulta y datos disponibles.
-        
+
         ## Consulta del cliente:
         {query}
-        
+
         ## Contexto adicional:
         {context}
-        
+
         ## Datos financieros disponibles:
         {financial_data}
-        
+
         ## Tus áreas de especialización:
         - Análisis financiero sectorial
         - Valoración de empresas y proyectos
@@ -241,7 +241,7 @@ class FinanceAgent(BaseAgent):
         - Métricas financieras clave (KPIs)
         - Modelos financieros para distintas industrias
         - Estrategias de inversión y financiamiento
-        
+
         ## Instrucciones:
         1. Proporciona un análisis financiero detallado y estructurado
         2. Incluye métricas relevantes y proyecciones numéricas cuando sea posible
@@ -249,7 +249,7 @@ class FinanceAgent(BaseAgent):
         4. Considera el contexto específico de la industria mencionada
         5. Organiza tu respuesta en secciones claras con títulos
         6. Incluye elementos visuales como tablas cuando sea útil
-        
+
         ## Formato de respuesta:
         Tu análisis debe estar bien estructurado con:
         - Introducción al contexto financiero
@@ -258,7 +258,7 @@ class FinanceAgent(BaseAgent):
         - Recomendaciones concretas
         - Consideración de riesgos
         - Conclusiones
-        
+
         Proporciona un análisis completo y útil que permita tomar decisiones informadas.
         """
 
@@ -268,10 +268,10 @@ class FinanceAgent(BaseAgent):
         """
         Extrae la industria mencionada en la consulta.
         Método simplificado para propósitos de ejemplo.
-        
+
         Args:
             query: Consulta del usuario
-            
+
         Returns:
             Nombre de la industria o None si no se identifica
         """
@@ -296,10 +296,10 @@ class FinanceAgent(BaseAgent):
     def _summarize_financial_data(self, financial_data: dict[str, Any]) -> dict[str, Any]:
         """
         Genera un resumen de los datos financieros obtenidos para incluir en la respuesta.
-        
+
         Args:
             financial_data: Datos financieros completos
-            
+
         Returns:
             Resumen de los datos financieros
         """
@@ -326,10 +326,10 @@ class FinanceAgent(BaseAgent):
     def _extract_company(self, query: str) -> str:
         """
         Extrae el nombre de la empresa mencionada en la consulta.
-        
+
         Args:
             query: Consulta del usuario
-            
+
         Returns:
             Nombre de la empresa o cadena vacía si no se encuentra
         """

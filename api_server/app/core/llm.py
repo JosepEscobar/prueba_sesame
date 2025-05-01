@@ -16,7 +16,7 @@ settings = get_settings()
 class LLMClient:
     """
     Cliente para interactuar con modelos de lenguaje.
-    
+
     Proporciona métodos para generar texto y analizar información usando
     diferentes proveedores de modelos de lenguaje.
     """
@@ -55,11 +55,11 @@ class LLMClient:
     def generate_text(self, prompt: str, max_tokens: int = 1000) -> str:
         """
         Genera texto utilizando el modelo configurado.
-        
+
         Args:
             prompt: El texto para generar la respuesta
             max_tokens: Número máximo de tokens a generar
-            
+
         Returns:
             Texto generado
         """
@@ -108,7 +108,7 @@ _llm_client = None
 def get_llm_client() -> LLMClient:
     """
     Obtiene la instancia del cliente LLM.
-    
+
     Returns:
         Cliente LLM
     """

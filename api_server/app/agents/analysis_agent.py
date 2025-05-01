@@ -73,13 +73,13 @@ class AnalysisAgent(BaseAgent):
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """Eres un agente especializado en análisis detallado de datos y textos.
             Tu objetivo es proporcionar análisis profundos, identificar patrones, y extraer insights valiosos.
-            
+
             Debes:
             1. Analizar el contenido en detalle
             2. Identificar patrones y tendencias
             3. Extraer conclusiones relevantes
             4. Proporcionar recomendaciones basadas en el análisis
-            
+
             Formatea tu respuesta de manera clara y estructurada."""),
             ("human", "{input}")
         ])
@@ -120,9 +120,9 @@ class AnalysisAgent(BaseAgent):
             if self.llm:
                 categorization_prompt = f"""
                 Analiza la siguiente consulta y determina qué tipo de análisis se necesita realizar.
-                
+
                 Consulta: "{query}"
-                
+
                 Devuelve SOLAMENTE un objeto JSON con esta estructura:
                 {{
                     "analysis_type": "trend_analysis" | "article_search" | "general",
@@ -130,14 +130,14 @@ class AnalysisAgent(BaseAgent):
                         // Parámetros específicos según el tipo de análisis
                     }}
                 }}
-                
+
                 Si es un análisis de tendencia (trend_analysis), incluye:
                 - has_numerical_data: true/false
                 - data_source: dónde se encuentran los datos numéricos
-                
+
                 Si es una búsqueda de artículos (article_search), incluye:
                 - search_query: la consulta de búsqueda refinada
-                
+
                 No incluyas texto adicional en tu respuesta, solo el JSON.
                 """
 
@@ -218,13 +218,13 @@ class AnalysisAgent(BaseAgent):
         # Preparar el contenido del prompt
         system_content = """Eres un agente especializado en análisis detallado de datos y textos.
         Tu objetivo es proporcionar análisis profundos, identificar patrones, y extraer insights valiosos.
-        
+
         Debes:
         1. Analizar el contenido en detalle
         2. Identificar patrones y tendencias
         3. Extraer conclusiones relevantes
         4. Proporcionar recomendaciones basadas en el análisis
-        
+
         Formatea tu respuesta de manera clara y estructurada."""
 
         # Preparar el mensaje de usuario con contexto adicional
@@ -292,11 +292,11 @@ class AnalysisAgent(BaseAgent):
     def _legacy_get_mcp_data(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
         """
         Método legacy para obtener datos de MCP sin usar LLM para categorización.
-        
+
         Args:
             query: La consulta del usuario
             context: El contexto adicional
-            
+
         Returns:
             Diccionario con los datos obtenidos de MCP
         """

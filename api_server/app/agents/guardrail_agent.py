@@ -15,7 +15,7 @@ class GuardrailAgent(BaseAgent):
     """
     Agente guardrail que actúa como filtro inicial para determinar si una consulta
     está dentro del ámbito de servicios ofrecidos por el sistema.
-    
+
     Utiliza un modelo LLM para analizar inteligentemente si la consulta está dentro
     del ámbito, en lugar de usar un sistema rígido de palabras clave.
     """
@@ -41,7 +41,7 @@ class GuardrailAgent(BaseAgent):
         # Definición del ámbito de la aplicación
         self.scope_definition = """
         La aplicación Sesame proporciona asistencia empresarial en estos dominios:
-        
+
         1. Finanzas y análisis financiero:
            - Análisis de estados financieros (balance, P&G, flujo de caja)
            - Cálculo y análisis de ratios financieros
@@ -49,7 +49,7 @@ class GuardrailAgent(BaseAgent):
            - Proyecciones financieras
            - Análisis de rentabilidad
            - Gestión de costos y presupuestos
-        
+
         2. Marketing y estrategias de mercado:
            - Análisis de campañas de marketing
            - Evaluación de estrategias de marketing digital
@@ -57,14 +57,14 @@ class GuardrailAgent(BaseAgent):
            - Evaluación de rendimiento publicitario
            - Planificación de campañas
            - Análisis de conversión y engagement
-        
+
         3. Análisis de datos empresariales:
            - Análisis de tendencias en datos de negocio
            - Identificación de patrones en datos empresariales
            - Preparación de informes y dashboards
            - Benchmarking y comparativas sectoriales
            - Análisis predictivos básicos
-        
+
         4. Estrategia y gestión empresarial:
            - Planificación estratégica
            - Optimización de procesos de negocio
@@ -95,10 +95,10 @@ class GuardrailAgent(BaseAgent):
     def _check_explicitly_excluded(self, query: str) -> str | None:
         """
         Verifica si la consulta contiene temas explícitamente excluidos.
-        
+
         Args:
             query: La consulta a verificar
-            
+
         Returns:
             Mensaje de exclusión si contiene un tema excluido, None en caso contrario
         """
@@ -111,27 +111,27 @@ class GuardrailAgent(BaseAgent):
     def _evaluate_with_llm(self, query: str) -> dict[str, Any]:
         """
         Evalúa la consulta utilizando un modelo LLM para determinar si está dentro del ámbito.
-        
+
         Args:
             query: La consulta a evaluar
-            
+
         Returns:
             Resultado de la evaluación
         """
         prompt = f"""
         # Tarea: Evaluación de consulta para determinar si está dentro del ámbito de servicios
-        
+
         ## Ámbito del sistema
         {self.scope_definition}
-        
+
         ## Consulta a evaluar
         "{query}"
-        
+
         ## Instrucciones
         1. Determina si la consulta está relacionada con alguno de los dominios de la aplicación.
         2. Si está en el ámbito, identifica el dominio más relevante y explica por qué.
         3. Si no está en el ámbito, explica claramente por qué y sugiere cómo reformular la consulta para que esté dentro del ámbito.
-        
+
         ## Formato de respuesta
         Proporciona tu respuesta en formato JSON con los siguientes campos:
         - "in_scope": boolean (true/false)
@@ -187,10 +187,10 @@ class GuardrailAgent(BaseAgent):
         """
         Implementa la lógica del guardrail para determinar si la consulta está dentro del ámbito.
         Utiliza un LLM para evaluación inteligente en lugar de palabras clave.
-        
+
         Args:
             input_data: Datos de entrada con la consulta y contexto
-            
+
         Returns:
             Resultado indicando si la consulta está dentro del ámbito
         """
@@ -255,11 +255,11 @@ class GuardrailAgent(BaseAgent):
     def _create_out_of_scope_response(self, specific_message: str | None = None, reasoning: str = "") -> dict[str, Any]:
         """
         Crea una respuesta para consultas fuera del ámbito.
-        
+
         Args:
             specific_message: Mensaje específico para situaciones particulares
             reasoning: Razonamiento detallado sobre por qué está fuera del ámbito
-            
+
         Returns:
             Respuesta estructurada para consultas fuera del ámbito
         """

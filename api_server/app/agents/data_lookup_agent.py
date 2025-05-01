@@ -17,7 +17,7 @@ settings = get_settings()
 class DataLookupAgent(BaseAgent):
     """
     Agente especializado en búsqueda y recuperación de datos.
-    
+
     Este agente se encarga de:
     - Buscar información relevante en fuentes de datos
     - Interpretar consultas y convertirlas en consultas estructuradas
@@ -60,10 +60,10 @@ class DataLookupAgent(BaseAgent):
     def _execute_impl(self, input_data: dict[Any, Any]) -> dict[Any, Any]:
         """
         Implementa la lógica de ejecución del agente de búsqueda de datos.
-        
+
         Args:
             input_data: Datos de entrada que contienen la consulta y el contexto
-            
+
         Returns:
             Diccionario con los datos encontrados, input original y nivel de confianza
         """
@@ -90,9 +90,9 @@ class DataLookupAgent(BaseAgent):
                 if self.llm:
                     categorization_prompt = f"""
                     Analiza la siguiente consulta y categoriza el tipo de búsqueda que se necesita realizar.
-                    
+
                     Consulta: "{query}"
-                    
+
                     Devuelve una respuesta en formato JSON con esta estructura:
                     {{
                         "lookup_category": "financial" | "marketing" | "trends" | "general",
@@ -104,7 +104,7 @@ class DataLookupAgent(BaseAgent):
                             // Para general: solo tema principal
                         }}
                     }}
-                    
+
                     Devuelve SOLAMENTE el JSON, sin texto adicional.
                     """
 
@@ -217,12 +217,12 @@ class DataLookupAgent(BaseAgent):
     def _generate_data_summary(self, query: str, data: dict[str, Any], lookup_type: str) -> str:
         """
         Genera un resumen de los datos encontrados.
-        
+
         Args:
             query: Consulta original
             data: Datos encontrados
             lookup_type: Tipo de búsqueda
-            
+
         Returns:
             Resumen de los datos
         """
@@ -235,13 +235,13 @@ class DataLookupAgent(BaseAgent):
 
         prompt = f"""
         Genera un resumen conciso de los siguientes datos encontrados para la consulta:
-        
+
         Consulta: {query}
         Tipo de búsqueda: {lookup_type}
-        
+
         Datos:
         {formatted_data}
-        
+
         Proporciona solo los puntos más importantes y relevantes para la consulta.
         """
 
@@ -252,11 +252,11 @@ class DataLookupAgent(BaseAgent):
     def _extract_entity(self, query: str, entity_type: str) -> str:
         """
         Extrae entidades de la consulta del usuario.
-        
+
         Args:
             query: Consulta del usuario
             entity_type: Tipo de entidad a extraer (company, campaign, etc.)
-            
+
         Returns:
             Entidad extraída o cadena vacía si no se encuentra
         """
@@ -284,11 +284,11 @@ class DataLookupAgent(BaseAgent):
         """
         Método legacy para procesar consultas sin usar LLM para categorización.
         Este método se usa como fallback cuando el LLM no está disponible o falla.
-        
+
         Args:
             query: La consulta del usuario
             context: El contexto adicional
-            
+
         Returns:
             Diccionario con los datos obtenidos de las herramientas
         """

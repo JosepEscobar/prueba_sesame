@@ -36,13 +36,13 @@ class ActionAgent(BaseAgent):
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """Eres un agente especializado en realizar acciones específicas.
             Tu objetivo es ejecutar tareas concretas y proporcionar resultados tangibles.
-            
+
             Debes:
             1. Identificar la acción requerida
             2. Planificar los pasos necesarios
             3. Ejecutar la acción de manera eficiente
             4. Proporcionar un reporte detallado del resultado
-            
+
             Formatea tu respuesta incluyendo:
             - Acción realizada
             - Pasos ejecutados

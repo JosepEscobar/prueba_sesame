@@ -15,7 +15,7 @@ _mcp_client = None
 def get_mcp_tools_sync() -> list[dict[str, Any]]:
     """
     Versión sincrónica para obtener herramientas MCP disponibles.
-    
+
     Returns:
         Lista de herramientas MCP adaptadas para uso con LangChain
     """
@@ -82,7 +82,7 @@ def get_mcp_tools_sync() -> list[dict[str, Any]]:
 async def get_mcp_tools() -> list[dict[str, Any]]:
     """
     Obtiene herramientas MCP disponibles y las convierte a formato para LangChain.
-    
+
     Returns:
         Lista de herramientas MCP adaptadas para uso con LangChain
     """
@@ -91,7 +91,7 @@ async def get_mcp_tools() -> list[dict[str, Any]]:
 def configure_agent_with_mcp(agent, tools):
     """
     Configura un agente con herramientas MCP.
-    
+
     Args:
         agent: El agente a configurar
         tools: Lista de herramientas a añadir

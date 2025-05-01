@@ -23,7 +23,7 @@ settings = get_settings()
 def load_tools_from_schemas():
     """
     Carga herramientas desde esquemas JSON locales y las registra en el sistema.
-    
+
     Esta función puede ser utilizada durante la inicialización para asegurar
     que todas las herramientas estén disponibles para los agentes.
     """
@@ -59,7 +59,7 @@ def load_tools_from_schemas():
 def _register_schema_tool(name: str, description: str, schema: dict[str, Any], category: str):
     """
     Registra una herramienta basada en un schema JSON.
-    
+
     Args:
         name: Nombre de la herramienta
         description: Descripción de la herramienta
@@ -168,7 +168,7 @@ def _register_schema_tool(name: str, description: str, schema: dict[str, Any], c
 def register_all_tools():
     """
     Registra todas las implementaciones de herramientas disponibles en el sistema.
-    
+
     Esta función debe ser llamada durante la inicialización de la aplicación
     para asegurar que todas las herramientas estén disponibles para los agentes.
     """
@@ -222,7 +222,7 @@ def register_all_tools():
 async def _register_mcp_tools():
     """
     Registra herramientas disponibles a través del cliente MCP.
-    
+
     Esta función asíncrona se ejecuta en segundo plano para no bloquear
     la inicialización de la aplicación.
     """

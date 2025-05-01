@@ -8,7 +8,7 @@ from app.core.logging import logger
 class OperationsAgent(BaseAgent):
     """
     Agente especializado en operaciones y gestión operativa.
-    
+
     Este agente proporciona recomendaciones y análisis sobre:
     - Optimización de procesos empresariales
     - Gestión de la cadena de suministro
@@ -31,10 +31,10 @@ class OperationsAgent(BaseAgent):
     def _execute_impl(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """
         Implementación de la ejecución del agente de operaciones.
-        
+
         Args:
             input_data: Diccionario con los datos de entrada, incluyendo 'query' y opcionalmente 'content'
-            
+
         Returns:
             Diccionario con el resultado del procesamiento
         """
@@ -51,11 +51,11 @@ class OperationsAgent(BaseAgent):
         # Preparar el sistema de prompt para obtener una respuesta estructurada
         prompt = f"""
         Como especialista en operaciones y gestión operativa, analiza la siguiente consulta y proporciona recomendaciones estratégicas:
-        
+
         CONSULTA: {query}
-        
+
         CONTEXTO ADICIONAL: {content}
-        
+
         Considera los siguientes aspectos en tu análisis:
         1. Estado actual de los procesos operativos
         2. Cuellos de botella y áreas de ineficiencia
@@ -64,7 +64,7 @@ class OperationsAgent(BaseAgent):
         5. Integración de tecnología en operaciones
         6. Métricas operativas clave a monitorear
         7. Impacto ambiental y sostenibilidad operativa
-        
+
         Tu respuesta debe ser práctica y orientada a resultados, incluyendo:
         - Análisis detallado de la situación operativa actual
         - Identificación de problemas operativos específicos
@@ -73,7 +73,7 @@ class OperationsAgent(BaseAgent):
         - Plan de implementación con fases claras
         - Métricas de éxito y KPIs operativos
         - Consideraciones sobre gestión del cambio
-        
+
         Utiliza terminología precisa de gestión de operaciones, referencias a mejores prácticas y metodologías estándar del sector.
         """
 
