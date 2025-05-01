@@ -7,7 +7,6 @@ from langchain_core.runnables import RunnableConfig
 from app.core.graph import AgentGraph
 from app.core.logging import logger
 from app.core.metrics import MetricsCollector
-from app.services.data_lookup import DataLookupService
 
 
 class Orchestrator:
@@ -22,9 +21,6 @@ class Orchestrator:
     def __init__(self):
         """Inicializa el orquestador con todos los agentes necesarios."""
         self.request_id = None
-
-        # Inicializar servicio de búsqueda de datos
-        self.data_lookup_service = DataLookupService()
 
         # Inicializar el grafo de agentes
         self.agent_graph = AgentGraph()
@@ -91,7 +87,7 @@ class Orchestrator:
             config = RunnableConfig(metadata={"request_id": self.request_id, "timestamp": time.time()})
 
             # Ejecutar el flujo completo usando el grafo de agentes
-            graph_result = self.agent_graph.run(query=query, context=request.get("context", {}))
+            graph_result = self.agent_graph.run({"query": query, "context": request.get("context", {})})
 
             # Añadir metadatos al resultado
             processing_time = time.time() - start_time

@@ -31,6 +31,9 @@ from prometheus_client import (
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
+# Importar el controlador de health directamente al inicio
+from app.api.endpoints.health import health_controller
+
 # Añadir el directorio raíz al path para poder importar módulos
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -356,22 +359,6 @@ app = FastAPI(
                 "url": "https://sesame.example.com/docs/mcp",
             },
         },
-        {
-            "name": "Finanzas",
-            "description": "Análisis de datos financieros y pronósticos económicos",
-            "externalDocs": {
-                "description": "Documentación sobre análisis financiero",
-                "url": "https://sesame.example.com/docs/finance",
-            },
-        },
-        {
-            "name": "Marketing",
-            "description": "Análisis de campañas y planificación de estrategias de marketing",
-            "externalDocs": {
-                "description": "Guía de marketing",
-                "url": "https://sesame.example.com/docs/marketing",
-            },
-        },
     ],
     docs_url="/docs",
     redoc_url="/redoc",
@@ -495,7 +482,16 @@ async def health_check() -> HealthResponse:
     Retorna el estado de salud del servicio, incluyendo información sobre la
     conexión con el servidor MCP.
     """
-    return {"status": "healthy", "version": "0.1.0", "mcp_status": "connected"}
+
+    # Obtener estado completo del sistema
+    health_status = health_controller.check_system_health()
+
+    # Devolver solo la información requerida por el modelo HealthResponse
+    return {
+        "status": health_status["status"],
+        "version": health_status["version"],
+        "mcp_status": health_status["mcp_status"],
+    }
 
 
 @app.get(
@@ -599,62 +595,27 @@ async def process_query(request: Request, query_data: QueryRequest) -> dict[str,
     context = query_data.context or {}
 
     try:
-        # Importar el orquestador, que maneja el flujo completo (incluyendo clasificación vía LLM)
-        try:
-            from app.core.orchestrator import Orchestrator
+        # Usar el Orchestrator para procesar la consulta con el LLM
+        from app.core.orchestrator import Orchestrator
 
-            orchestrator = Orchestrator()
+        orchestrator = Orchestrator()
 
-            # Procesar la consulta utilizando el orquestador completo
-            # El orquestrador internamente utilizará el agente router para la clasificación con LLM
-            orchestrator_result = orchestrator.process_query(
-                query=query_data.query, context=context, agent_preference=context.get("agent_preference")
-            )
+        # El orquestrador se encargará de clasificar la consulta mediante el LLM
+        result = orchestrator.process_query(query=query_data.query, context=context)
 
-            # Registrar el tiempo de procesamiento
-            processing_time = time.time() - start_time
+        # Registrar el tiempo de procesamiento
+        processing_time = time.time() - start_time
 
-            # Crear la respuesta basada en el resultado del orquestador
-            response = {
-                "result": orchestrator_result.get("result", "No se obtuvo un resultado claro."),
-                "agent": orchestrator_result.get("agent", "unknown_agent"),
-                "confidence": orchestrator_result.get("confidence", 0.0),
-                "processing_time": round(processing_time, 2),
-                "request_id": request_id,
-            }
+        # Crear la respuesta
+        response = {
+            "result": result.get("result", "No se obtuvo un resultado claro."),
+            "agent": result.get("agent", "unknown_agent"),
+            "confidence": result.get("confidence", 0.0),
+            "processing_time": round(processing_time, 2),
+            "request_id": request_id,
+        }
 
-            logger.info(f"[{request_id}] Orquestador completó el procesamiento con agente: {response['agent']}")
-
-        except ImportError as e:
-            # Si el orquestador no está disponible, usamos AgentGraph directamente como fallback
-            logger.warning(f"Orquestador no disponible: {str(e)}. Usando AgentGraph directamente.")
-
-            # Inicializar el grafo de agentes
-            agent_graph = AgentGraph()
-
-            # Preparar datos para el router
-            router_input = {
-                "query": query_data.query,
-                "context": context,
-            }
-
-            # Ejecutar la consulta a través del grafo de agentes
-            logger.info(f"[{request_id}] Ejecutando consulta a través del grafo de agentes")
-            result = agent_graph.run(router_input)
-
-            # Registrar el tiempo de procesamiento
-            processing_time = time.time() - start_time
-
-            # Crear la respuesta
-            response = {
-                "result": result.get("result", "No se obtuvo un resultado claro."),
-                "agent": result.get("agent", "analysis_agent"),
-                "confidence": result.get("confidence", 0.0),
-                "processing_time": round(processing_time, 2),
-                "request_id": request_id,
-            }
-
-        # Simular conteo de tokens para monitoreo (independiente de qué método usemos)
+        # Simular conteo de tokens para monitoreo
         # En producción, obtendrías esto del LLM real
         input_tokens = len(query_data.query.split()) * 1.3
 
@@ -709,390 +670,6 @@ def simulate_agent_response(agent_name: str, query: str) -> str:
             "Este es un resultado simulado para el agente "
             "de análisis en modo desarrollo."
         )
-
-
-@app.post(
-    "/api/v1/finance/analyze",
-    summary="Analizar datos financieros",
-    description="""
-    Realiza un análisis financiero detallado basado en la consulta proporcionada.
-
-    Este endpoint está especializado en el procesamiento de consultas relacionadas
-    con finanzas empresariales. Utiliza el agente financiero (finance_agent) para
-    procesar la consulta y generar análisis basados en:
-
-    * Estados financieros
-    * Indicadores de rendimiento (KPIs)
-    * Tendencias históricas
-    * Comparativas sectoriales
-
-    ### Ejemplos de consultas:
-
-    * "Calcula los ratios financieros basados en el balance"
-    * "¿Cuál ha sido la evolución de nuestro ROI en los últimos 4 trimestres?"
-    * "Compara nuestro margen de beneficio con el del sector"
-
-    ### Métricas proporcionadas:
-
-    * Ingresos (revenue)
-    * Beneficio (profit)
-    * Crecimiento (growth)
-    * Margen (margin)
-    * Retorno de inversión (roi)
-
-    > Nota: Este endpoint es específico para análisis financiero. Para consultas
-    > generales, utiliza el endpoint `/api/v1/query`.
-    """,
-    response_model=FinanceResponse,
-    response_description="Resultado del análisis financiero con métricas claves",
-    tags=["Finanzas"],
-    responses={
-        200: {
-            "description": "Detalle del análisis financiero",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "result": "Análisis financiero para: Calcula...",
-                        "metrics": {
-                            "revenue": 1250000,
-                            "profit": 450000,
-                            "growth": "15%",
-                            "margin": 0.36,
-                            "roi": 2.1,
-                        },
-                    }
-                }
-            },
-        },
-        422: {"description": "Consulta inválida o incompleta"},
-    },
-)
-async def analyze_finance(request: QueryRequest) -> dict[str, Any]:
-    """
-    Analizar datos financieros.
-
-    Procesa una consulta relacionada con finanzas utilizando el agente
-    especializado en análisis financiero.
-    """
-    return {
-        "result": f"Análisis financiero para: {request.query[:30]}...",
-        "metrics": {
-            "revenue": 1250000,
-            "profit": 450000,
-            "growth": "15%",
-            "margin": 0.36,
-            "roi": 2.1,
-        },
-    }
-
-
-@app.post(
-    "/api/v1/finance/forecast",
-    summary="Generar pronósticos financieros",
-    description="""
-    Proyecta tendencias financieras futuras utilizando modelos predictivos.
-
-    Este endpoint aplica técnicas avanzadas de modelado estadístico y aprendizaje
-    automático para generar pronósticos financieros basados en:
-
-    * Datos históricos de la empresa
-    * Tendencias del mercado
-    * Variables macroeconómicas
-    * Estacionalidad y eventos especiales
-
-    ### Ejemplos de consultas:
-
-    * "Proyecta los ingresos para el próximo trimestre"
-    * "¿Cómo evolucionará nuestro margen en los próximos 6 meses?"
-    * "Estima el ROI de nuestra nueva línea de productos"
-
-    ### Casos de uso:
-
-    * Planificación presupuestaria
-    * Toma de decisiones estratégicas
-    * Evaluación de nuevas inversiones
-    * Gestión de riesgos financieros
-
-    > Advertencia: Los pronósticos son estimaciones basadas en datos históricos
-    > y modelos estadísticos. Los resultados reales pueden variar.
-    """,
-    response_model=FinanceResponse,
-    response_description="Pronóstico de métricas financieras",
-    tags=["Finanzas"],
-    responses={
-        200: {
-            "description": "Pronóstico financiero simulado",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "result": "Pronóstico financiero para: Proyecta...",
-                        "metrics": {
-                            "revenue": 1425000,
-                            "profit": 520000,
-                            "growth": "18%",
-                            "margin": 0.365,
-                            "roi": 2.3,
-                        },
-                    }
-                }
-            },
-        },
-        422: {"description": "Consulta inválida o incompleta"},
-    },
-)
-async def financial_forecast(request: QueryRequest) -> dict[str, Any]:
-    """
-    Generar pronósticos financieros.
-
-    Procesa una consulta para proyectar tendencias financieras futuras
-    basándose en datos históricos.
-    """
-    return {
-        "result": f"Pronóstico financiero para: {request.query[:30]}...",
-        "metrics": {
-            "revenue": 1425000,  # Proyección
-            "profit": 520000,  # Proyección
-            "growth": "18%",
-            "margin": 0.365,
-            "roi": 2.3,
-        },
-    }
-
-
-@app.post(
-    "/api/v1/marketing/analyze",
-    summary="Analizar marketing",
-    description="""
-    Evalúa el rendimiento de estrategias y campañas de marketing.
-
-    Este endpoint proporciona análisis detallados sobre el desempeño de las
-    actividades de marketing, incluyendo:
-
-    * Rendimiento de campañas digitales
-    * Efectividad de canales de adquisición
-    * Análisis de conversión
-    * Retorno de inversión en marketing
-
-    ### Ejemplos de consultas:
-
-    * "Analiza el rendimiento de nuestra campaña digital"
-    * "¿Qué canales de marketing están generando mayor ROI?"
-    * "Evalúa la efectividad de nuestras campañas de email marketing"
-
-    ### Métricas proporcionadas:
-
-    * CTR (Click-Through Rate)
-    * Tasa de conversión (Conversion Rate)
-    * ROI de marketing
-    * Coste por adquisición (CPA)
-    * Número de campañas analizadas
-    """,
-    response_model=MarketingResponse,
-    response_description="Métricas detalladas del análisis de marketing",
-    tags=["Marketing"],
-    responses={
-        200: {
-            "description": "Resultado del análisis de marketing",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "result": "Análisis de marketing para: Analiza...",
-                        "metrics": {
-                            "ctr": 0.025,
-                            "conversion_rate": 0.032,
-                            "roi": 2.4,
-                            "cpa": 45.0,
-                            "campaign_count": 5,
-                        },
-                    }
-                }
-            },
-        },
-        422: {"description": "Consulta inválida o incompleta"},
-    },
-)
-async def analyze_marketing(request: QueryRequest) -> dict[str, Any]:
-    """
-    Analizar estrategias y resultados de marketing.
-
-    Procesa una consulta relacionada con marketing utilizando el agente
-    especializado en análisis de marketing.
-    """
-    return {
-        "result": f"Análisis de marketing para: {request.query[:30]}...",
-        "metrics": {
-            "ctr": 0.025,
-            "conversion_rate": 0.032,
-            "roi": 2.4,
-            "cpa": 45.0,
-            "campaign_count": 5,
-        },
-    }
-
-
-@app.post(
-    "/api/v1/marketing/campaign",
-    summary="Planificar campaña de marketing",
-    description="""
-    Genera recomendaciones para el diseño de nuevas campañas de marketing.
-
-    Este endpoint utiliza modelos avanzados para crear planes de campaña
-    optimizados según los objetivos establecidos. Considera factores como:
-
-    * Público objetivo
-    * Canales disponibles
-    * Presupuesto asignado
-    * Objetivos de conversión
-    * Estacionalidad
-
-    ### Ejemplos de consultas:
-
-    * "Diseña una campaña para el lanzamiento del producto"
-    * "¿Qué estrategia de marketing debemos usar para aumentar conversiones?"
-    * "Crea un plan para mejorar nuestra presencia en redes sociales"
-
-    ### Contexto relevante:
-
-    Es recomendable proporcionar información adicional en el campo `context` como:
-    * Producto o servicio objetivo
-    * Presupuesto disponible
-    * Duración prevista
-    * Canales preferidos
-
-    ### Métricas proyectadas:
-
-    El resultado incluye proyecciones de métricas clave como CTR, tasa de
-    conversión y ROI esperado basadas en campañas similares anteriores.
-    """,
-    response_model=MarketingResponse,
-    response_description="Plan de campaña y métricas estimadas",
-    tags=["Marketing"],
-    responses={
-        200: {
-            "description": "Plan de campaña generado",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "result": "Plan de campaña para: Diseña...",
-                        "metrics": {
-                            "ctr": 0.032,
-                            "conversion_rate": 0.038,
-                            "roi": 2.8,
-                            "cpa": 38.5,
-                            "campaign_count": 1,
-                        },
-                    }
-                }
-            },
-        },
-        422: {"description": "Consulta inválida o incompleta"},
-    },
-)
-async def plan_campaign(request: QueryRequest) -> dict[str, Any]:
-    """
-    Planificar una campaña de marketing.
-
-    Genera recomendaciones para una nueva campaña de marketing
-    basada en objetivos y datos históricos.
-    """
-    return {
-        "result": f"Plan de campaña para: {request.query[:30]}...",
-        "metrics": {
-            "ctr": 0.032,  # Proyectado
-            "conversion_rate": 0.038,  # Proyectado
-            "roi": 2.8,
-            "cpa": 38.5,
-            "campaign_count": 1,
-        },
-    }
-
-
-@app.post(
-    "/api/v1/tools/{tool_name}",
-    summary="Invocar herramienta MCP",
-    description="""
-    Acceso directo a las herramientas del servidor MCP.
-
-    Este endpoint permite llamar directamente a cualquiera de las herramientas
-    disponibles en el servidor MCP sin pasar por los agentes intermediarios.
-    Es útil para operaciones específicas donde se conoce exactamente qué
-    herramienta se necesita.
-
-    ### Herramientas disponibles:
-
-    * `buscar_datos_financieros`: Búsqueda de datos financieros específicos
-    * `calcular_ratios_financieros`: Cálculo de ratios a partir de datos
-    * `analizar_rendimiento_campania`: Análisis detallado de una campaña
-    * `recomendar_estrategia_marketing`: Recomendaciones de estrategia
-    * `analizar_tendencia`: Análisis de tendencias en series temporales
-    * `predecir_valores`: Predicción de valores futuros
-
-    ### Parámetros:
-
-    Los parámetros requeridos dependen de cada herramienta específica.
-    Consulta la documentación detallada de cada herramienta para conocer
-    los parámetros aceptados.
-
-    ### Seguridad:
-
-    Este endpoint requiere conocimiento específico de la herramienta a utilizar.
-    Asegúrate de validar los parámetros antes de realizar la llamada.
-    """,
-    response_description="Resultado de la herramienta junto con los parámetros recibidos",
-    tags=["MCP"],
-    responses={
-        200: {
-            "description": "Respuesta de la herramienta MCP",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "result": "Resultado de la herramienta buscar_datos_financieros",
-                        "params_received": {
-                            "empresa": "MiEmpresa",
-                            "periodo": "2025",
-                            "tipo_datos": "ingresos",
-                        },
-                    }
-                }
-            },
-        },
-        404: {
-            "description": "Herramienta no encontrada",
-            "content": {
-                "application/json": {"example": {"detail": "Herramienta 'herramienta_inexistente' no encontrada"}}
-            },
-        },
-        422: {"description": "Parámetros inválidos para la herramienta"},
-    },
-)
-async def call_tool(tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
-    """
-    Llamar directamente a una herramienta MCP.
-
-    Permite acceder directamente a las herramientas expuestas por el
-    servidor MCP sin pasar por los agentes.
-
-    Args:
-        tool_name: Nombre de la herramienta a llamar
-        params: Parámetros para la herramienta
-    """
-    available_tools = [
-        "buscar_datos_financieros",
-        "calcular_ratios_financieros",
-        "analizar_rendimiento_campania",
-        "recomendar_estrategia_marketing",
-        "analizar_tendencia",
-        "predecir_valores",
-    ]
-
-    if tool_name not in available_tools:
-        raise HTTPException(status_code=404, detail=f"Herramienta '{tool_name}' no encontrada")
-
-    # Simulamos el resultado de la herramienta
-    return {
-        "result": f"Resultado de la herramienta {tool_name}",
-        "params_received": params,
-    }
 
 
 # Punto de entrada de la aplicación
