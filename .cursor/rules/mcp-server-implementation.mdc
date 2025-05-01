@@ -1,0 +1,165 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Perfecto, con base en la documentación oficial de MCP (Model Context Protocol), Langchain, LangGraph y los repositorios proporcionados, te explico cómo usar **MCP Server** y **MCP Client** con agentes de **Langchain** y **LangGraph**, para que tus agentes puedan **acceder y utilizar herramientas o recursos** expuestos por un servidor MCP.
+
+---
+
+## 🧠 ¿Qué es MCP?
+
+**MCP (Model Context Protocol)** es un protocolo que permite a los agentes de IA (como los de Langchain o LangGraph) acceder a **herramientas externas** (por ejemplo, un sistema de archivos, base de datos, API, etc.) de forma estructurada.
+
+MCP define:
+- Un **servidor** que expone herramientas.
+- Un **cliente** que permite a agentes acceder a esas herramientas vía LLMs (con contexto estructurado).
+
+---
+
+## 🔧 MCP Server – ¿Qué es y cómo usarlo?
+
+### ¿Qué es?
+El **MCP Server** es un contenedor de herramientas. Tú lo ejecutas y este expone herramientas específicas, como:
+- `filesystem` – leer y escribir archivos.
+- `postgres` – consultar una base de datos PostgreSQL.
+- Puedes crear tus propias herramientas también.
+
+### ¿Cómo usarlo?
+
+1. **Clona el repo**:
+   ```bash
+   git clone https://github.com/modelcontextprotocol/servers.git
+   cd servers
+   ```
+
+2. **Instala dependencias y ejecuta un servidor MCP con herramientas**. Ejemplo con `filesystem`:
+   ```bash
+   cd src/filesystem
+   pip install -e .
+   mcp-server --tool mcp_tools.filesystem:FilesystemTool
+   ```
+
+   Esto lanza un MCP Server con la herramienta `FilesystemTool`.
+
+3. También puedes usar `src/postgres`:
+   ```bash
+   cd src/postgres
+   pip install -e .
+   mcp-server --tool mcp_tools.postgres:PostgresTool --tool_args '{"connection_string": "postgresql://user:password@localhost/db"}'
+   ```
+
+---
+
+## 🤖 MCP Client – ¿Qué es y cómo usarlo?
+
+### ¿Qué es?
+El **cliente MCP** se conecta a un servidor MCP y permite a los agentes (de Langchain o LangGraph) usar esas herramientas como si fueran funciones externas.
+
+### ¿Cómo usarlo?
+
+1. Instala el cliente MCP:
+   ```bash
+   pip install mcp-client
+   ```
+
+2. Crea una instancia en tu código:
+   ```python
+   from mcp_client.client import MCPClient
+
+   mcp = MCPClient("http://localhost:3333")  # La URL de tu MCP Server
+   ```
+
+3. Puedes listar y usar herramientas disponibles:
+   ```python
+   print(mcp.tools)  # Lista las herramientas disponibles
+
+   result = mcp.tools["read_file"](path="test.txt")
+   print(result)
+   ```
+
+---
+
+## 🧩 Integración con Langchain y LangGraph
+
+Langchain y LangGraph han lanzado **adaptadores MCP** para que los agentes puedan utilizar herramientas expuestas por MCP Server.
+
+---
+
+### ✅ Con Langchain
+
+#### 1. Instala los MCP adapters:
+```bash
+pip install langchain langchain-community mcp-client
+```
+
+#### 2. Usa `MCPToolkit` como herramienta de agente:
+```python
+from langchain.agents import initialize_agent
+from langchain.agents.agent_toolkits.mcp.base import create_mcp_toolkit
+from langchain.chat_models import ChatOpenAI
+
+llm = ChatOpenAI(model="gpt-4", temperature=0)
+
+toolkit = create_mcp_toolkit(mcp_url="http://localhost:3333")  # Apunta al MCP Server
+
+agent = initialize_agent(
+    tools=toolkit.get_tools(),
+    llm=llm,
+    agent_type="openai-tools",
+    verbose=True,
+)
+```
+
+> El agente ahora puede interactuar con herramientas expuestas por tu MCP Server como si fueran funciones nativas.
+
+---
+
+### ✅ Con LangGraph
+
+LangGraph permite definir grafos de decisión más complejos entre agentes.
+
+#### 1. Usa el nodo `MCPToolNode`:
+
+```python
+from langgraph.graph import StateGraph
+from langchain.chat_models import ChatOpenAI
+from langgraph.prebuilt import ToolExecutor, ToolNode
+from langchain.agents.agent_toolkits.mcp.base import create_mcp_toolkit
+
+llm = ChatOpenAI(model="gpt-4")
+toolkit = create_mcp_toolkit(mcp_url="http://localhost:3333")
+tools = toolkit.get_tools()
+
+executor = ToolExecutor(tools)
+
+# Crea el grafo
+graph = StateGraph()
+graph.add_node("tools", ToolNode(tools=tools))
+graph.set_entry_point("tools")
+
+app = graph.compile()
+result = app.invoke({"input": "Read the file called report.md"})
+print(result)
+```
+
+---
+
+## 🚀 Flujo completo
+
+```plaintext
+MCP Server   <-----   MCP Client Adapter   <-----> Langchain Agent / LangGraph
+ (exponer            (convierte herramientas         (agente que pregunta al
+ herramientas)        en funciones Langchain)         LLM qué herramienta usar)
+```
+
+---
+
+## ✅ Recomendaciones
+
+- Puedes lanzar múltiples servidores MCP para diferentes dominios (archivos, API, DB, etc.).
+- Personaliza tus propias herramientas MCP creando funciones Python que expongan un `.invoke()` y `.describe()`.
+- Usa `mcp-client` también para testing o debug sin necesidad del agente.
+- Ideal para proyectos como el tuyo donde el agente es la única interfaz, ya que centraliza las herramientas externas accesibles por el agente.
+
+---

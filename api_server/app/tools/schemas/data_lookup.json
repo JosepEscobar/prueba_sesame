@@ -1,0 +1,76 @@
+{
+  "name": "data_lookup",
+  "description": "Busca información en diferentes fuentes externas como datos de mercado, noticias, informes de industria, información web y datos de empresas.",
+  "inputs": {
+    "type": "object",
+    "properties": {
+      "lookup_type": {
+        "type": "string",
+        "description": "Tipo de búsqueda a realizar",
+        "enum": ["market_data", "news", "industry", "web", "company", "general"],
+        "default": "general"
+      },
+      "query": {
+        "type": "string",
+        "description": "Consulta o términos de búsqueda",
+        "minLength": 3
+      },
+      "industry": {
+        "type": "string",
+        "description": "Nombre de la industria para búsquedas de tipo 'industry'",
+        "default": ""
+      },
+      "company": {
+        "type": "string",
+        "description": "Nombre de la empresa para búsquedas de tipo 'company'",
+        "default": ""
+      },
+      "max_results": {
+        "type": "integer",
+        "description": "Número máximo de resultados a devolver",
+        "default": 5,
+        "minimum": 1,
+        "maximum": 20
+      }
+    },
+    "required": ["query"]
+  },
+  "outputs": {
+    "type": "object",
+    "properties": {
+      "results": {
+        "type": "object",
+        "description": "Resultados de la búsqueda según el tipo solicitado"
+      },
+      "lookup_type": {
+        "type": "string",
+        "description": "Tipo de búsqueda realizada"
+      },
+      "data_sources": {
+        "type": "array",
+        "description": "Fuentes de datos consultadas",
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Tipo de fuente de datos"
+            },
+            "source": {
+              "type": "string",
+              "description": "Nombre de la fuente"
+            }
+          }
+        }
+      },
+      "timestamp": {
+        "type": "number",
+        "description": "Marca de tiempo de la búsqueda"
+      },
+      "error": {
+        "type": "string",
+        "description": "Mensaje de error si la búsqueda falló"
+      }
+    }
+  }
+} 

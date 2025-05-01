@@ -1,0 +1,41 @@
+{
+    "name": "query_kb",
+    "description": "Consulta la base de conocimiento interna para obtener información relevante.",
+    "inputs": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Términos de búsqueda"},
+            "kb_name": {"type": "string", "description": "Nombre de la base de conocimiento", "default": "general"},
+            "max_results": {"type": "integer", "description": "Número máximo de resultados", "default": 5},
+            "min_relevance": {"type": "number", "description": "Relevancia mínima (0.0-1.0)", "default": 0.7}
+        },
+        "required": ["query"]
+    },
+    "outputs": {
+        "type": "object",
+        "properties": {
+            "results": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Título del documento"},
+                        "content": {"type": "string", "description": "Contenido relevante del documento"},
+                        "relevance": {"type": "number", "description": "Puntuación de relevancia (0.0-1.0)"},
+                        "last_updated": {"type": "string", "description": "Fecha de última actualización"},
+                        "metadata": {"type": "object", "description": "Metadatos adicionales del documento"}
+                    }
+                }
+            },
+            "total_results": {"type": "integer", "description": "Número total de resultados encontrados"},
+            "kb_info": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Nombre de la base de conocimiento"},
+                    "description": {"type": "string", "description": "Descripción de la base de conocimiento"},
+                    "last_updated": {"type": "string", "description": "Fecha de última actualización de la base de conocimiento"}
+                }
+            }
+        }
+    }
+} 
