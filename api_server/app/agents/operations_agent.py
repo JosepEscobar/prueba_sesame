@@ -41,8 +41,8 @@ class OperationsAgent(BaseAgent):
         start_time = time.time()
 
         # Preparar entrada para el prompt
-        query = input_data.get('query', '')
-        content = input_data.get('content', '')
+        query = input_data.get("query", "")
+        content = input_data.get("content", "")
 
         # Loguear la consulta con un límite seguro
         query_preview = query[:100] + "..." if len(query) > 100 else query
@@ -88,16 +88,12 @@ class OperationsAgent(BaseAgent):
             # Establecer un nivel de confianza (puede ser ajustado según criterios específicos)
             confidence = 0.89  # Nivel de confianza para respuestas operativas
 
-            return {
-                "result": response,
-                "query": query,
-                "confidence": confidence
-            }
+            return {"result": response, "query": query, "confidence": confidence}
 
         except Exception as e:
             logger.error(f"Error al procesar consulta de operaciones: {str(e)}")
             return {
                 "result": f"Error al procesar la consulta de operaciones: {str(e)}",
                 "query": query,
-                "confidence": 0.0
+                "confidence": 0.0,
             }

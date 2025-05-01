@@ -15,6 +15,7 @@ from app.tools.mcp_client import MCPClient
 # Obtener la configuración
 settings = get_settings()
 
+
 # Función para crear un LLM que puede ser reemplazado en los tests
 def create_llm():
     if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "sk-your-key-here":
@@ -26,14 +27,15 @@ def create_llm():
     logger.warning("No hay clave API de OpenAI válida configurada.")
     return None
 
+
 # LLM global que puede ser sustituido desde los tests
 llm = create_llm()
+
 
 class AnalysisAgent(BaseAgent):
     def __init__(self, model=None):
         super().__init__(
-            name="analysis_agent",
-            description="Agente especializado en análisis detallado de datos y textos"
+            name="analysis_agent", description="Agente especializado en análisis detallado de datos y textos"
         )
         # Asignar el LLM importado a la propiedad de la instancia
         self.llm = llm
@@ -42,11 +44,7 @@ class AnalysisAgent(BaseAgent):
         try:
             # Deducir la ruta del servidor MCP
             mcp_path = str(Path(os.path.abspath(__file__)).parents[3] / "mcp_server" / "main.py")
-            self.mcp_client = MCPClient(
-                base_url=settings.MCP_CLIENT_URL,
-                use_stdio=True,
-                mcp_server_path=mcp_path
-            )
+            self.mcp_client = MCPClient(base_url=settings.MCP_CLIENT_URL, use_stdio=True, mcp_server_path=mcp_path)
 
             # Volver a intentar obtener el cliente global después de inicializar
             from app.agents.mcp_integration import _mcp_client, get_mcp_tools_sync
@@ -60,7 +58,9 @@ class AnalysisAgent(BaseAgent):
 
                 # Actualizar lista de herramientas disponibles
                 self.available_mcp_tools = [tool["name"] for tool in tools_list]
-                logger.info(f"Cliente MCP inicializado. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
+                logger.info(
+                    f"Cliente MCP inicializado. Herramientas disponibles: {', '.join(self.available_mcp_tools)}"
+                )
             else:
                 logger.warning("No se pudo inicializar el cliente MCP")
                 self.mcp_initialized = False
@@ -70,8 +70,11 @@ class AnalysisAgent(BaseAgent):
             self.mcp_client = None
             self.mcp_initialized = False
             self.available_mcp_tools = []
-        self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """Eres un agente especializado en análisis detallado de datos y textos.
+        self.prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """Eres un agente especializado en análisis detallado de datos y textos.
             Tu objetivo es proporcionar análisis profundos, identificar patrones, y extraer insights valiosos.
 
             Debes:
@@ -80,9 +83,11 @@ class AnalysisAgent(BaseAgent):
             3. Extraer conclusiones relevantes
             4. Proporcionar recomendaciones basadas en el análisis
 
-            Formatea tu respuesta de manera clara y estructurada."""),
-            ("human", "{input}")
-        ])
+            Formatea tu respuesta de manera clara y estructurada.""",
+                ),
+                ("human", "{input}"),
+            ]
+        )
 
     def _execute_impl(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """Ejecuta el análisis del contenido proporcionado."""
@@ -106,14 +111,14 @@ class AnalysisAgent(BaseAgent):
                 "confidence": 0.0,
                 "processing_time": processing_time,
                 "success": False,
-                "error": "No se ha configurado una clave API de OpenAI válida. Para utilizar este agente, configure la clave en el archivo .env"
+                "error": "No se ha configurado una clave API de OpenAI válida. Para utilizar este agente, configure la clave en el archivo .env",
             }
 
         # Obtener datos adicionales mediante MCP si está disponible
         mcp_data = {}
         try:
             # Inicializar MCP si es necesario
-            if hasattr(self, 'mcp_client') and self.mcp_client is not None:
+            if hasattr(self, "mcp_client") and self.mcp_client is not None:
                 self.mcp_client.initialize_sync()
 
             # Usar LLM para categorizar el tipo de análisis necesario
@@ -157,24 +162,25 @@ class AnalysisAgent(BaseAgent):
                         # Si hay datos numéricos, realizar análisis de tendencia
                         if numerical_data and isinstance(numerical_data, list):
                             # Verificar que existe el cliente MCP
-                            if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                            if not hasattr(self, "mcp_client") or self.mcp_client is None:
                                 # Intenta usar el cliente global como fallback
                                 from app.agents.mcp_integration import _mcp_client
-                                if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+
+                                if _mcp_client and hasattr(_mcp_client, "call_tool_sync"):
                                     logger.info("Usando cliente MCP global como fallback")
-                                    trend_result = _mcp_client.call_tool_sync("analizar_tendencia", {
-                                        "datos": numerical_data,
-                                        "etiquetas": context.get("etiquetas", [])
-                                    })
+                                    trend_result = _mcp_client.call_tool_sync(
+                                        "analizar_tendencia",
+                                        {"datos": numerical_data, "etiquetas": context.get("etiquetas", [])},
+                                    )
                                 else:
                                     logger.error("No hay cliente MCP disponible para ejecutar 'analizar_tendencia'")
                                     trend_result = None
                             else:
                                 # Usar el cliente propio del agente
-                                trend_result = self.mcp_client.call_tool_sync("analizar_tendencia", {
-                                    "datos": numerical_data,
-                                    "etiquetas": context.get("etiquetas", [])
-                                })
+                                trend_result = self.mcp_client.call_tool_sync(
+                                    "analizar_tendencia",
+                                    {"datos": numerical_data, "etiquetas": context.get("etiquetas", [])},
+                                )
 
                             if trend_result and "error" not in trend_result:
                                 mcp_data["tendencia"] = trend_result.get("result", {})
@@ -184,10 +190,11 @@ class AnalysisAgent(BaseAgent):
                     search_query = parameters.get("search_query", query)
 
                     # Verificar que existe el cliente MCP
-                    if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                    if not hasattr(self, "mcp_client") or self.mcp_client is None:
                         # Intenta usar el cliente global como fallback
                         from app.agents.mcp_integration import _mcp_client
-                        if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+
+                        if _mcp_client and hasattr(_mcp_client, "call_tool_sync"):
                             logger.info("Usando cliente MCP global como fallback")
                             search_result = _mcp_client.call_tool_sync("search_articles", {"query": search_query})
                         else:
@@ -248,16 +255,13 @@ class AnalysisAgent(BaseAgent):
                         user_content += f"   Resumen: {article.get('summary', 'No disponible')[:100]}...\n"
 
         # Crear los mensajes para el LLM
-        messages = [
-            SystemMessage(content=system_content),
-            HumanMessage(content=user_content)
-        ]
+        messages = [SystemMessage(content=system_content), HumanMessage(content=user_content)]
 
         try:
             # Invocar el LLM usando el método con logging
             response = self.invoke_llm(messages, prompt_type="langchain")
 
-            if not response or not hasattr(response, 'content'):
+            if not response or not hasattr(response, "content"):
                 raise ValueError("El LLM no generó una respuesta válida")
 
             result = response.content
@@ -273,7 +277,7 @@ class AnalysisAgent(BaseAgent):
                 "mcp_data": mcp_data,
                 "confidence": confidence,
                 "processing_time": processing_time,
-                "success": True
+                "success": True,
             }
 
         except Exception as e:
@@ -286,7 +290,7 @@ class AnalysisAgent(BaseAgent):
                 "confidence": 0.0,
                 "processing_time": processing_time,
                 "success": False,
-                "error": str(e)
+                "error": str(e),
             }
 
     def _legacy_get_mcp_data(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
@@ -305,24 +309,23 @@ class AnalysisAgent(BaseAgent):
             # Invocar la herramienta MCP 'analizar_tendencia' si es relevante
             if "datos" in context and isinstance(context["datos"], list):
                 # Verificar que existe el cliente MCP
-                if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+                if not hasattr(self, "mcp_client") or self.mcp_client is None:
                     # Intenta usar el cliente global como fallback
                     from app.agents.mcp_integration import _mcp_client
-                    if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+
+                    if _mcp_client and hasattr(_mcp_client, "call_tool_sync"):
                         logger.info("Usando cliente MCP global como fallback")
-                        trend_result = _mcp_client.call_tool_sync("analizar_tendencia", {
-                            "datos": context["datos"],
-                            "etiquetas": context.get("etiquetas", [])
-                        })
+                        trend_result = _mcp_client.call_tool_sync(
+                            "analizar_tendencia", {"datos": context["datos"], "etiquetas": context.get("etiquetas", [])}
+                        )
                     else:
                         logger.error("No hay cliente MCP disponible para ejecutar 'analizar_tendencia'")
                         trend_result = None
                 else:
                     # Usar el cliente propio del agente
-                    trend_result = self.mcp_client.call_tool_sync("analizar_tendencia", {
-                        "datos": context["datos"],
-                        "etiquetas": context.get("etiquetas", [])
-                    })
+                    trend_result = self.mcp_client.call_tool_sync(
+                        "analizar_tendencia", {"datos": context["datos"], "etiquetas": context.get("etiquetas", [])}
+                    )
 
                 if trend_result and "error" not in trend_result:
                     mcp_data["tendencia"] = trend_result.get("result", {})
@@ -330,10 +333,11 @@ class AnalysisAgent(BaseAgent):
 
             # Invocar la herramienta MCP 'search_articles' si es una consulta de búsqueda
             # Verificar que existe el cliente MCP
-            if not hasattr(self, 'mcp_client') or self.mcp_client is None:
+            if not hasattr(self, "mcp_client") or self.mcp_client is None:
                 # Intenta usar el cliente global como fallback
                 from app.agents.mcp_integration import _mcp_client
-                if _mcp_client and hasattr(_mcp_client, 'call_tool_sync'):
+
+                if _mcp_client and hasattr(_mcp_client, "call_tool_sync"):
                     logger.info("Usando cliente MCP global como fallback")
                     search_result = _mcp_client.call_tool_sync("search_articles", {"query": query})
                 else:

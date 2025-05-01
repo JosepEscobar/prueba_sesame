@@ -18,6 +18,7 @@ from app.tools.mcp_client import MCPClient
 # Obtener la configuración
 settings = get_settings()
 
+
 # Función para crear un LLM que puede ser reemplazado en los tests
 def create_llm():
     return ChatOpenAI(
@@ -26,8 +27,10 @@ def create_llm():
         api_key=settings.OPENAI_API_KEY,
     )
 
+
 # LLM global que puede ser sustituido desde los tests
 llm = create_llm()
+
 
 class SummaryAgent(BaseAgent):
     """
@@ -38,19 +41,12 @@ class SummaryAgent(BaseAgent):
 
     def __init__(self, model=None):
         """Inicializa el SummaryAgent"""
-        super().__init__(
-            name="summary_agent",
-            description="Especialista en síntesis de información."
-        )
+        super().__init__(name="summary_agent", description="Especialista en síntesis de información.")
         # Asignar el LLM importado a la propiedad de la instancia
         self.llm = llm
         # Inicializar cliente MCP
         mcp_path = str(Path(os.path.abspath(__file__)).parents[3] / "mcp_server" / "main.py")
-        self.mcp_client = MCPClient(
-            base_url=get_settings().MCP_CLIENT_URL,
-            use_stdio=True,
-            mcp_server_path=mcp_path
-        )
+        self.mcp_client = MCPClient(base_url=get_settings().MCP_CLIENT_URL, use_stdio=True, mcp_server_path=mcp_path)
         logger.info("SummaryAgent inicializado")
 
     def _execute_impl(self, input_data: dict[Any, Any]) -> dict[Any, Any]:
@@ -92,7 +88,7 @@ class SummaryAgent(BaseAgent):
                 elif "raw_response" in context and context["raw_response"]:
                     # Manejar caso donde raw_response es un objeto AIMessage
                     raw_response = context["raw_response"]
-                    if hasattr(raw_response, 'content'):  # Es un objeto tipo AIMessage
+                    if hasattr(raw_response, "content"):  # Es un objeto tipo AIMessage
                         context_text = raw_response.content
                     else:
                         context_text = str(raw_response)
@@ -101,7 +97,7 @@ class SummaryAgent(BaseAgent):
                     context_text = json.dumps(context, indent=2, ensure_ascii=False)
             elif isinstance(context, str):
                 context_text = context
-            elif hasattr(context, 'content'):  # Manejo directo de AIMessage u objetos similares
+            elif hasattr(context, "content"):  # Manejo directo de AIMessage u objetos similares
                 context_text = context.content
             else:
                 context_text = str(context)
@@ -130,10 +126,7 @@ class SummaryAgent(BaseAgent):
 
                 try:
                     # Intentar obtener artículos relacionados mediante el cliente MCP
-                    articles_data = self.mcp_client.call_tool_sync(
-                        "search_articles",
-                        {"query": query}
-                    )
+                    articles_data = self.mcp_client.call_tool_sync("search_articles", {"query": query})
 
                     if articles_data and "result" in articles_data:
                         articles = articles_data["result"]
@@ -176,11 +169,11 @@ class SummaryAgent(BaseAgent):
                     "result": {
                         "content": "No se pudo generar un resumen detallado. Por favor, revise el resultado completo.",
                         "source": "summary_agent",
-                        "success": False
+                        "success": False,
                     },
                     "input": input_data,
                     "confidence": 0.5,
-                    "processing_time": processing_time
+                    "processing_time": processing_time,
                 }
 
             # Generar el resumen usando el LLM
@@ -188,7 +181,7 @@ class SummaryAgent(BaseAgent):
 
             messages = [
                 SystemMessage(content="Eres un especialista en generar resúmenes concisos, claros y completos."),
-                HumanMessage(content=prompt)
+                HumanMessage(content=prompt),
             ]
 
             response = self.invoke_llm(messages, prompt_type="langchain")
@@ -196,7 +189,9 @@ class SummaryAgent(BaseAgent):
 
             # Verificar que el resumen no sea demasiado breve (lo que podría indicar un problema)
             if len(summary_content) < 100 and len(context_text) > 500:
-                logger.warning(f"Resumen generado demasiado breve ({len(summary_content)} caracteres) para un contexto de {len(context_text)} caracteres")
+                logger.warning(
+                    f"Resumen generado demasiado breve ({len(summary_content)} caracteres) para un contexto de {len(context_text)} caracteres"
+                )
                 # Intentar nuevamente con un prompt más específico
                 retry_prompt = f"""
                 IMPORTANTE: Necesito un resumen COMPLETO y DETALLADO. El resumen anterior era demasiado breve.
@@ -212,8 +207,10 @@ class SummaryAgent(BaseAgent):
                 """
 
                 retry_messages = [
-                    SystemMessage(content="Eres un especialista en generar resúmenes DETALLADOS y COMPLETOS que preservan toda la información importante."),
-                    HumanMessage(content=retry_prompt)
+                    SystemMessage(
+                        content="Eres un especialista en generar resúmenes DETALLADOS y COMPLETOS que preservan toda la información importante."
+                    ),
+                    HumanMessage(content=retry_prompt),
                 ]
 
                 retry_response = self.invoke_llm(retry_messages, prompt_type="langchain")
@@ -254,17 +251,12 @@ class SummaryAgent(BaseAgent):
                     "source": source,
                     "summarized_by": "summary_agent",
                     "processing_time": processing_time,
-                    "query": query
+                    "query": query,
                 },
                 "confidence": 0.9,
-                "processing_time": processing_time
+                "processing_time": processing_time,
             }
 
         except Exception as e:
             logger.error(f"Error en SummaryAgent: {str(e)}")
-            return {
-                "error": str(e),
-                "input": input_data,
-                "confidence": 0.0,
-                "processing_time": 0.0
-            }
+            return {"error": str(e), "input": input_data, "confidence": 0.0, "processing_time": 0.0}

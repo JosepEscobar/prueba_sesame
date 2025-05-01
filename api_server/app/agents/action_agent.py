@@ -14,6 +14,7 @@ from app.tools.mcp_client import MCPClient
 # Obtener la configuración
 settings = get_settings()
 
+
 # Función para crear un LLM que puede ser reemplazado en los tests
 def create_llm():
     return ChatOpenAI(
@@ -22,19 +23,21 @@ def create_llm():
         api_key=settings.OPENAI_API_KEY,
     )
 
+
 # LLM global que puede ser sustituido desde los tests
 llm = create_llm()
 
+
 class ActionAgent(BaseAgent):
     def __init__(self, model=None):
-        super().__init__(
-            name="action_agent",
-            description="Agente especializado en realizar acciones específicas"
-        )
+        super().__init__(name="action_agent", description="Agente especializado en realizar acciones específicas")
         # Asignar el LLM importado a la propiedad de la instancia
         self.llm = llm
-        self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """Eres un agente especializado en realizar acciones específicas.
+        self.prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """Eres un agente especializado en realizar acciones específicas.
             Tu objetivo es ejecutar tareas concretas y proporcionar resultados tangibles.
 
             Debes:
@@ -47,16 +50,14 @@ class ActionAgent(BaseAgent):
             - Acción realizada
             - Pasos ejecutados
             - Resultado obtenido
-            - Recomendaciones posteriores"""),
-            ("human", "{input}")
-        ])
+            - Recomendaciones posteriores""",
+                ),
+                ("human", "{input}"),
+            ]
+        )
         # Inicializar cliente MCP
         mcp_path = str(Path(os.path.abspath(__file__)).parents[3] / "mcp_server" / "main.py")
-        self.mcp_client = MCPClient(
-            base_url=settings.MCP_CLIENT_URL,
-            use_stdio=True,
-            mcp_server_path=mcp_path
-        )
+        self.mcp_client = MCPClient(base_url=settings.MCP_CLIENT_URL, use_stdio=True, mcp_server_path=mcp_path)
 
     def _execute_impl(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """Ejecuta la acción solicitada."""
@@ -79,5 +80,5 @@ class ActionAgent(BaseAgent):
             "action_result": mcp_result.get("result", ""),
             "input": input_data,
             "confidence": mcp_result.get("confidence", 0.0),
-            "processing_time": processing_time
+            "processing_time": processing_time,
         }

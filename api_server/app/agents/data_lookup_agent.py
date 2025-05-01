@@ -14,6 +14,7 @@ from app.tools.mcp_client import MCPClient
 # Obtener configuración
 settings = get_settings()
 
+
 class DataLookupAgent(BaseAgent):
     """
     Agente especializado en búsqueda y recuperación de datos.
@@ -29,7 +30,7 @@ class DataLookupAgent(BaseAgent):
         """Inicializa el agente de búsqueda de datos."""
         super().__init__(
             name="data_lookup_agent",
-            description="Especialista en búsqueda y recuperación de datos de múltiples fuentes."
+            description="Especialista en búsqueda y recuperación de datos de múltiples fuentes.",
         )
 
         # Comprobar si hay una clave API válida
@@ -45,7 +46,7 @@ class DataLookupAgent(BaseAgent):
         self.mcp_client = MCPClient(
             base_url=settings.MCP_CLIENT_URL,
             use_stdio=True,  # Activar StdioTransport
-            mcp_server_path=mcp_server_path
+            mcp_server_path=mcp_server_path,
         )
 
         self.services = [
@@ -53,7 +54,7 @@ class DataLookupAgent(BaseAgent):
             "Búsqueda de noticias",
             "Búsqueda de tendencias",
             "Datos de mercado",
-            "Información de empresas"
+            "Información de empresas",
         ]
         logger.info(f"Agente {self.name} inicializado con {len(self.services)} servicios usando StdioTransport")
 
@@ -122,9 +123,11 @@ class DataLookupAgent(BaseAgent):
                             if company:
                                 financial_params = {
                                     "empresa": company,
-                                    "periodo": parameters.get("periodo", context.get("period", "actual"))
+                                    "periodo": parameters.get("periodo", context.get("period", "actual")),
                                 }
-                                financial_data = self.mcp_client.call_tool_sync("buscar_datos_financieros", financial_params)
+                                financial_data = self.mcp_client.call_tool_sync(
+                                    "buscar_datos_financieros", financial_params
+                                )
                                 lookup_data["financial_data"] = financial_data
                                 logger.info(f"Datos financieros obtenidos para: {company}")
 
@@ -138,17 +141,16 @@ class DataLookupAgent(BaseAgent):
                                     "impresiones": metrics.get("impressions", 1000),
                                     "clics": metrics.get("clicks", 50),
                                     "conversiones": metrics.get("conversions", 10),
-                                    "coste": metrics.get("cost", 500)
+                                    "coste": metrics.get("cost", 500),
                                 }
-                                marketing_data = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", marketing_params)
+                                marketing_data = self.mcp_client.call_tool_sync(
+                                    "analizar_rendimiento_campania", marketing_params
+                                )
                                 lookup_data["marketing_data"] = marketing_data
                                 logger.info(f"Datos de marketing obtenidos para: {campaign}")
 
                         # Siempre realizar una búsqueda general de datos
-                        general_params = {
-                            "lookup_type": lookup_category,
-                            "query": query
-                        }
+                        general_params = {"lookup_type": lookup_category, "query": query}
                         general_data = self.mcp_client.call_tool_sync("data_lookup", general_params)
                         lookup_data["general_data"] = general_data
                         logger.info(f"Búsqueda general completada para tipo: {lookup_category}")
@@ -160,7 +162,7 @@ class DataLookupAgent(BaseAgent):
                             if numerical_data:
                                 trends_params = {
                                     "datos": numerical_data,
-                                    "etiquetas": parameters.get("labels", context.get("labels", None))
+                                    "etiquetas": parameters.get("labels", context.get("labels", None)),
                                 }
                                 trends_data = self.mcp_client.call_tool_sync("analizar_tendencia", trends_params)
                                 lookup_data["trends_data"] = trends_data
@@ -170,7 +172,9 @@ class DataLookupAgent(BaseAgent):
                                 if parameters.get("predict", context.get("predict", False)):
                                     predict_params = {
                                         "datos": numerical_data,
-                                        "periodos_futuros": parameters.get("future_periods", context.get("future_periods", 3))
+                                        "periodos_futuros": parameters.get(
+                                            "future_periods", context.get("future_periods", 3)
+                                        ),
                                     }
                                     prediction_data = self.mcp_client.call_tool_sync("predecir_valores", predict_params)
                                     lookup_data["prediction_data"] = prediction_data
@@ -198,16 +202,12 @@ class DataLookupAgent(BaseAgent):
         processing_time = time.time() - start_time
 
         result = {
-            "result": {
-                "content": result_summary,
-                "lookup_data": lookup_data,
-                "lookup_type": lookup_type
-            },
+            "result": {"content": result_summary, "lookup_data": lookup_data, "lookup_type": lookup_type},
             "agent": "data_lookup",
             "input": input_data.get("query", ""),
             "confidence": 0.85,  # Nivel de confianza para búsquedas de datos
             "processing_time": processing_time,
-            "model": "gpt-4.1-mini" if self.llm else "direct_lookup"
+            "model": "gpt-4.1-mini" if self.llm else "direct_lookup",
         }
 
         logger.info(f"Búsqueda de datos completada en {processing_time:.2f} segundos")
@@ -302,10 +302,7 @@ class DataLookupAgent(BaseAgent):
                 company = context.get("company", self._extract_entity(query, "company"))
 
                 if company:
-                    financial_params = {
-                        "empresa": company,
-                        "periodo": context.get("period", "actual")
-                    }
+                    financial_params = {"empresa": company, "periodo": context.get("period", "actual")}
                     financial_data = self.mcp_client.call_tool_sync("buscar_datos_financieros", financial_params)
                     lookup_data["financial_data"] = financial_data
                     logger.info(f"Datos financieros obtenidos para: {company}")
@@ -321,27 +318,21 @@ class DataLookupAgent(BaseAgent):
                         "impresiones": metrics.get("impressions", 1000),
                         "clics": metrics.get("clicks", 50),
                         "conversiones": metrics.get("conversions", 10),
-                        "coste": metrics.get("cost", 500)
+                        "coste": metrics.get("cost", 500),
                     }
                     marketing_data = self.mcp_client.call_tool_sync("analizar_rendimiento_campania", marketing_params)
                     lookup_data["marketing_data"] = marketing_data
                     logger.info(f"Datos de marketing obtenidos para: {campaign}")
 
             # Siempre realizar una búsqueda general de datos
-            general_params = {
-                "lookup_type": lookup_type,
-                "query": query
-            }
+            general_params = {"lookup_type": lookup_type, "query": query}
             general_data = self.mcp_client.call_tool_sync("data_lookup", general_params)
             lookup_data["general_data"] = general_data
             logger.info(f"Búsqueda general completada para tipo: {lookup_type}")
 
             # Si se solicitan tendencias y tenemos datos numéricos
             if lookup_type == "trends" and "numerical_data" in context:
-                trends_params = {
-                    "datos": context["numerical_data"],
-                    "etiquetas": context.get("labels", None)
-                }
+                trends_params = {"datos": context["numerical_data"], "etiquetas": context.get("labels", None)}
                 trends_data = self.mcp_client.call_tool_sync("analizar_tendencia", trends_params)
                 lookup_data["trends_data"] = trends_data
                 logger.info("Análisis de tendencias completado")
@@ -350,7 +341,7 @@ class DataLookupAgent(BaseAgent):
                 if context.get("predict", False):
                     predict_params = {
                         "datos": context["numerical_data"],
-                        "periodos_futuros": context.get("future_periods", 3)
+                        "periodos_futuros": context.get("future_periods", 3),
                     }
                     prediction_data = self.mcp_client.call_tool_sync("predecir_valores", predict_params)
                     lookup_data["prediction_data"] = prediction_data

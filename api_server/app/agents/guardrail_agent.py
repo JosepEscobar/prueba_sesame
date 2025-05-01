@@ -11,6 +11,7 @@ from app.core.metrics import MetricsCollector
 
 settings = get_settings()
 
+
 class GuardrailAgent(BaseAgent):
     """
     Agente guardrail que actúa como filtro inicial para determinar si una consulta
@@ -24,7 +25,7 @@ class GuardrailAgent(BaseAgent):
         """Inicializa el agente guardrail."""
         super().__init__(
             name="guardrail_agent",
-            description="Agente que determina si una consulta está dentro del ámbito de servicios ofrecidos utilizando LLM."
+            description="Agente que determina si una consulta está dentro del ámbito de servicios ofrecidos utilizando LLM.",
         )
 
         # Obtener el cliente LLM
@@ -35,7 +36,7 @@ class GuardrailAgent(BaseAgent):
             "finanzas y análisis financiero",
             "marketing y estrategias de mercado",
             "análisis de datos empresariales",
-            "estrategia y gestión empresarial"
+            "estrategia y gestión empresarial",
         ]
 
         # Definición del ámbito de la aplicación
@@ -81,15 +82,29 @@ class GuardrailAgent(BaseAgent):
             "Optimización de operaciones y procesos de negocio",
             "Valoración de empresas y activos financieros",
             "Estudios de mercado y análisis competitivo",
-            "Planificación estratégica de negocios"
+            "Planificación estratégica de negocios",
         ]
 
         # Temas explícitamente excluidos
         self.explicitly_excluded_topics = [
-            "política", "religión", "contenido para adultos", "armas", "drogas ilegales",
-            "juegos de azar", "medicina", "diagnóstico médico", "psicología", "terapia",
-            "asesoramiento legal", "hacking", "actividades ilegales", "contenido ofensivo",
-            "violencia", "discriminación", "creación de contenido ilegal", "acoso"
+            "política",
+            "religión",
+            "contenido para adultos",
+            "armas",
+            "drogas ilegales",
+            "juegos de azar",
+            "medicina",
+            "diagnóstico médico",
+            "psicología",
+            "terapia",
+            "asesoramiento legal",
+            "hacking",
+            "actividades ilegales",
+            "contenido ofensivo",
+            "violencia",
+            "discriminación",
+            "creación de contenido ilegal",
+            "acoso",
         ]
 
     def _check_explicitly_excluded(self, query: str) -> str | None:
@@ -145,12 +160,12 @@ class GuardrailAgent(BaseAgent):
             response = self.llm_client.generate_text(prompt)
 
             # Intentar extraer el JSON de la respuesta
-            json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
+            json_match = re.search(r"```json\s*(.*?)\s*```", response, re.DOTALL)
             if json_match:
                 json_str = json_match.group(1)
             else:
                 # Buscar cualquier estructura que parezca JSON
-                json_str = re.search(r'(\{.*\})', response, re.DOTALL)
+                json_str = re.search(r"(\{.*\})", response, re.DOTALL)
                 if json_str:
                     json_str = json_str.group(1)
                 else:
@@ -169,7 +184,7 @@ class GuardrailAgent(BaseAgent):
                     "domain": "general business" if any_domain_match else None,
                     "confidence": 0.6,
                     "reasoning": "Fallback debido a error en respuesta LLM",
-                    "explanation": "No se pudo determinar con precisión si la consulta está en el ámbito."
+                    "explanation": "No se pudo determinar con precisión si la consulta está en el ámbito.",
                 }
 
         except Exception as e:
@@ -180,7 +195,7 @@ class GuardrailAgent(BaseAgent):
                 "domain": "general business",
                 "confidence": 0.5,
                 "reasoning": f"Error al consultar LLM: {str(e)}",
-                "explanation": "Debido a un error técnico, procesaremos tu consulta igualmente."
+                "explanation": "Debido a un error técnico, procesaremos tu consulta igualmente.",
             }
 
     def _execute_impl(self, input_data: dict[str, Any]) -> dict[str, Any]:
@@ -224,17 +239,14 @@ class GuardrailAgent(BaseAgent):
         # Registrar métricas
         execution_time = time.time() - start_time
         MetricsCollector.record_agent_execution(
-            agent_name="guardrail_agent",
-            status=True,
-            execution_time=execution_time
+            agent_name="guardrail_agent", status=True, execution_time=execution_time
         )
 
         # Preparar respuesta según la evaluación
         if not evaluation.get("in_scope", False):
             logger.info(f"Consulta fuera del ámbito según LLM: {query}")
             return self._create_out_of_scope_response(
-                specific_message=evaluation.get("explanation", None),
-                reasoning=evaluation.get("reasoning", "")
+                specific_message=evaluation.get("explanation", None), reasoning=evaluation.get("reasoning", "")
             )
 
         # La consulta está dentro del ámbito
@@ -249,7 +261,7 @@ class GuardrailAgent(BaseAgent):
             "query": query,
             "context": context,
             "confidence": confidence,
-            "reasoning": evaluation.get("reasoning", "")
+            "reasoning": evaluation.get("reasoning", ""),
         }
 
     def _create_out_of_scope_response(self, specific_message: str | None = None, reasoning: str = "") -> dict[str, Any]:
@@ -284,11 +296,6 @@ class GuardrailAgent(BaseAgent):
 
         return {
             "in_scope": False,
-            "result": {
-                "content": message,
-                "source": "guardrail_agent",
-                "type": "out_of_scope",
-                "reasoning": reasoning
-            },
-            "confidence": 1.0
+            "result": {"content": message, "source": "guardrail_agent", "type": "out_of_scope", "reasoning": reasoning},
+            "confidence": 1.0,
         }

@@ -10,6 +10,7 @@ from app.core.logging import logger
 # Obtener la configuración
 settings = get_settings()
 
+
 class FinanceAgent(BaseAgent):
     """
     Agente especializado en finanzas, inversiones y análisis financiero.
@@ -31,8 +32,7 @@ class FinanceAgent(BaseAgent):
         Inicializa el agente de finanzas.
         """
         super().__init__(
-            name="finance_agent",
-            description="Especialista en finanzas, análisis financiero y estrategias de inversión"
+            name="finance_agent", description="Especialista en finanzas, análisis financiero y estrategias de inversión"
         )
 
         # Servicios que puede ofrecer el agente de finanzas
@@ -45,7 +45,7 @@ class FinanceAgent(BaseAgent):
             "Valoración de activos",
             "Presupuestos",
             "Análisis de costos",
-            "Proyecciones financieras"
+            "Proyecciones financieras",
         ]
 
         # Configurar el cliente MCP (Model Context Protocol)
@@ -56,6 +56,7 @@ class FinanceAgent(BaseAgent):
             if _mcp_client is None:
                 # Si no existe un cliente global, deducir la ruta del servidor MCP
                 from pathlib import Path
+
                 current_dir = os.path.dirname(os.path.abspath(__file__))
                 project_root = Path(current_dir).parent.parent.parent.parent
                 mcp_server_path = os.path.join(project_root, "mcp_server", "main.py")
@@ -65,11 +66,14 @@ class FinanceAgent(BaseAgent):
                 if tools:
                     # Volver a intentar obtener el cliente global después de inicializar
                     from app.agents.mcp_integration import _mcp_client
+
                     self.mcp_client = _mcp_client  # Asignar el cliente global a self.mcp_client
 
                     if self.mcp_client is not None:
                         self.available_mcp_tools = [tool["name"] for tool in tools]
-                        logger.info(f"Cliente MCP inicializado. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
+                        logger.info(
+                            f"Cliente MCP inicializado. Herramientas disponibles: {', '.join(self.available_mcp_tools)}"
+                        )
                         self.mcp_initialized = True
                     else:
                         logger.warning("Cliente MCP global es None después de inicialización")
@@ -85,7 +89,9 @@ class FinanceAgent(BaseAgent):
                 self.mcp_initialized = True
                 tools = _mcp_client.list_tools_sync()
                 self.available_mcp_tools = [tool["name"] for tool in tools]
-                logger.info(f"Usando cliente MCP existente. Herramientas disponibles: {', '.join(self.available_mcp_tools)}")
+                logger.info(
+                    f"Usando cliente MCP existente. Herramientas disponibles: {', '.join(self.available_mcp_tools)}"
+                )
         except Exception as e:
             logger.error(f"Error al configurar cliente MCP: {str(e)}")
             self.mcp_client = None
@@ -137,8 +143,7 @@ class FinanceAgent(BaseAgent):
                     # Primero intentar con la herramienta MCP
                     if self.mcp_client:
                         tool_response = self.mcp_client.call_tool_sync(
-                            "buscar_datos_financieros",
-                            {"empresa": company_name}
+                            "buscar_datos_financieros", {"empresa": company_name}
                         )
                         if tool_response and isinstance(tool_response, dict) and "result" in tool_response:
                             company_data = tool_response["result"]
@@ -153,11 +158,7 @@ class FinanceAgent(BaseAgent):
                 raise Exception("LLM no disponible para generar análisis financiero")
 
             # Construir el prompt para el modelo
-            prompt_data = {
-                "query": query,
-                "context": context,
-                "financial_data": financial_data
-            }
+            prompt_data = {"query": query, "context": context, "financial_data": financial_data}
 
             prompt = self._format_finance_prompt(prompt_data)
 
@@ -165,8 +166,10 @@ class FinanceAgent(BaseAgent):
             from langchain_core.messages import HumanMessage, SystemMessage
 
             messages = [
-                SystemMessage(content="Eres un analista financiero experto. Tu tarea es proporcionar análisis financieros precisos y recomendaciones basadas en datos."),
-                HumanMessage(content=prompt)
+                SystemMessage(
+                    content="Eres un analista financiero experto. Tu tarea es proporcionar análisis financieros precisos y recomendaciones basadas en datos."
+                ),
+                HumanMessage(content=prompt),
             ]
 
             # Invocar el LLM
@@ -181,11 +184,11 @@ class FinanceAgent(BaseAgent):
                     "source": "finance_agent",
                     "model_type": "openai",
                     "analysis_complete": True,
-                    "industry": industry
+                    "industry": industry,
                 },
                 "confidence": 0.9,
                 "processing_time": processing_time,
-                "reasoning": "Generado con OpenAI API"
+                "reasoning": "Generado con OpenAI API",
             }
 
         except Exception as e:
@@ -199,11 +202,11 @@ class FinanceAgent(BaseAgent):
                     "content": f"Error al generar análisis financiero: {str(e)}",
                     "source": "finance_agent",
                     "model_type": "error",
-                    "error": str(e)
+                    "error": str(e),
                 },
                 "confidence": 0.0,
                 "processing_time": processing_time,
-                "reasoning": f"Error durante el procesamiento: {str(e)}"
+                "reasoning": f"Error durante el procesamiento: {str(e)}",
             }
 
     def _format_finance_prompt(self, input_data: dict[str, Any]) -> str:
@@ -281,7 +284,7 @@ class FinanceAgent(BaseAgent):
             "salud": ["salud", "farmacéutica", "hospital", "médico", "sanitario"],
             "comercio": ["retail", "comercio", "tienda", "ecommerce", "minorista"],
             "manufactura": ["manufactura", "fabricación", "industrial", "fábrica"],
-            "energía": ["energía", "petróleo", "gas", "renovable", "electricidad"]
+            "energía": ["energía", "petróleo", "gas", "renovable", "electricidad"],
         }
 
         query_lower = query.lower()
@@ -312,7 +315,10 @@ class FinanceAgent(BaseAgent):
 
         if "financial_models" in financial_data:
             summary["models_available"] = True
-            if isinstance(financial_data["financial_models"], dict) and "model_type" in financial_data["financial_models"]:
+            if (
+                isinstance(financial_data["financial_models"], dict)
+                and "model_type" in financial_data["financial_models"]
+            ):
                 summary["model_type"] = financial_data["financial_models"]["model_type"]
 
         if "financial_news" in financial_data:
