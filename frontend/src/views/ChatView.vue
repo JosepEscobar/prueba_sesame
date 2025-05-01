@@ -1,30 +1,34 @@
 <template>
   <div class="h-full flex flex-col">
     <div class="flex-1 overflow-y-auto p-4" ref="chatContainer">
-      <div v-if="messages.length === 0" class="h-full flex flex-col items-center justify-center">
-        <div class="text-center mb-10">
-          <h2 class="text-3xl font-semibold mb-3">Bienvenido a Sesame Chat</h2>
-          <p class="text-gray-600 dark:text-gray-400 text-lg">¿Qué te gustaría hacer hoy?</p>
+      <div class="max-w-4xl mx-auto">
+        <div v-if="messages.length === 0" class="h-full flex flex-col items-center justify-center">
+          <div class="text-center mb-10">
+            <h2 class="text-3xl font-semibold mb-3">Bienvenido a Sesame Chat</h2>
+            <p class="text-gray-600 dark:text-gray-400 text-lg">¿Qué te gustaría hacer hoy?</p>
+          </div>
+          <div class="w-full px-4">
+            <SuggestionBubbles @select="sendSuggestion" />
+          </div>
         </div>
-        <div class="w-full px-4">
-          <SuggestionBubbles @select="sendSuggestion" />
+        <div v-else class="space-y-4 pb-4">
+          <MessageBubble
+            v-for="(message, index) in messages"
+            :key="index"
+            :message="message"
+            :is-user="message.isUser"
+          />
         </div>
-      </div>
-      <div v-else class="space-y-4 pb-4">
-        <MessageBubble
-          v-for="(message, index) in messages"
-          :key="index"
-          :message="message"
-          :is-user="message.isUser"
-        />
       </div>
     </div>
     <div class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
-      <ChatInput 
-        v-model="userInput" 
-        @send="sendMessage" 
-        @clear="clearChat" 
-      />
+      <div class="max-w-4xl mx-auto">
+        <ChatInput 
+          v-model="userInput" 
+          @send="sendMessage" 
+          @clear="clearChat" 
+        />
+      </div>
     </div>
   </div>
 </template>

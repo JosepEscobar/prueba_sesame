@@ -83,9 +83,9 @@
                 :key="tool"
                 class="flex items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
               >
-                <Wrench class="w-4 h-4 text-primary-600 mr-2" />
-                <div>
-                  <div class="font-medium">{{ tool }}</div>
+                <Wrench class="w-4 h-4 text-primary-600 mr-2 flex-shrink-0" />
+                <div class="min-w-0">
+                  <div class="font-medium text-sm truncate">{{ tool }}</div>
                 </div>
               </div>
             </div>
