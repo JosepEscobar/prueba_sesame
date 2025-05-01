@@ -30,6 +30,7 @@ services:
       - PORT=8000
       - DEBUG=False
       - MCP_CLIENT_URL=http://mcp_server:4000
+      - MCP_SERVER_URL=http://mcp_server:4000
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL}
       - TEMPERATURE=${TEMPERATURE}

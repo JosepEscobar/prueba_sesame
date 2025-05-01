@@ -37,7 +37,7 @@ def get_mcp_tools_sync() -> list[dict[str, Any]]:
         if _mcp_client is None:
             logger.info("Creando nuevo cliente MCP global")
             _mcp_client = MCPClient(
-                base_url="http://localhost:4000",
+                base_url="http://mcp_server:4000",
                 use_stdio=False,  # No usar stdio para evitar problemas con loop de eventos
                 mcp_server_path=mcp_server_path,
             )
@@ -153,3 +153,20 @@ def configure_agent_with_mcp(agent, tools):
 
     except Exception as e:
         logger.error(f"Error al configurar agente con herramientas MCP: {str(e)}")
+
+
+def get_mcp_client() -> MCPClient:
+    """
+    Obtiene un cliente MCP configurado para uso en el sistema de agentes.
+
+    Returns:
+        MCPClient: Cliente MCP configurado
+    """
+    # Para pruebas o desarrollo, puede usarse cualquiera de estos métodos
+    # En producción, probablemente se configurará mediante variables de entorno
+
+    # Opción 1: Usar la conexión HTTP con un servidor MCP ejecutándose localmente
+    return MCPClient(
+        base_url="http://mcp_server:4000",
+        use_stdio=False,
+    )

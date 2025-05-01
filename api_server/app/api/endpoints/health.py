@@ -13,7 +13,7 @@ from app.core.logging import logger
 from app.tools.mcp_client import MCPClient
 
 # Obtener la URL del servidor MCP de las variables de entorno
-mcp_url = os.environ.get("MCP_SERVER_URL", "http://localhost:4000")
+mcp_url = os.environ.get("MCP_CLIENT_URL", "http://mcp_server:4000")
 
 
 class HealthController:

@@ -27,7 +27,7 @@ class MCPClient:
     """
 
     def __init__(
-        self, base_url: str = "http://localhost:4000", use_stdio: bool = False, mcp_server_path: str | None = None
+        self, base_url: str = "http://mcp_server:4000", use_stdio: bool = False, mcp_server_path: str | None = None
     ):
         """
         Inicializa el cliente MCP.
@@ -54,6 +54,15 @@ class MCPClient:
             bool: True si se inicializó con éxito, False en caso contrario
         """
         try:
+            # Imprimir la URL base para debug
+            logger.info(f"Intentando conectar con MCP en URL: {self.base_url}")
+
+            # Forzar el uso de la URL correcta
+            if "localhost" in self.base_url:
+                corrected_url = self.base_url.replace("localhost", "mcp_server")
+                logger.warning(f"Corrigiendo URL de localhost a mcp_server: {corrected_url}")
+                self.base_url = corrected_url
+
             # Verificar que el servidor MCP está disponible mediante una llamada HTTP síncrona
             response = requests.get(f"{self.base_url}/status", timeout=5)
             if response.status_code != 200:

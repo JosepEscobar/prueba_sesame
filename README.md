@@ -37,7 +37,7 @@ Asegúrate de configurar las siguientes variables:
 Para ejecutar todo el sistema con Docker Compose:
 
 ```bash
-docker compose up -d
+docker-compose up -d
 ```
 
 Los servicios estarán disponibles en:
