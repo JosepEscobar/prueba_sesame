@@ -24,11 +24,11 @@
         
         <div v-if="healthDetails" class="text-sm text-gray-600 dark:text-gray-400 mt-2">
           <div><span class="font-medium">Última actualización:</span> {{ formatTime(lastUpdate) }}</div>
-          <div v-if="healthDetails.uptime">
-            <span class="font-medium">Tiempo activo:</span> {{ formatUptime(healthDetails.uptime) }}
-          </div>
           <div v-if="healthDetails.version">
             <span class="font-medium">Versión:</span> {{ healthDetails.version }}
+          </div>
+          <div v-if="healthDetails.mcp_status">
+            <span class="font-medium">Estado MCP:</span> {{ healthDetails.mcp_status }}
           </div>
         </div>
       </div>
@@ -60,35 +60,32 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
               <div class="text-sm font-medium mb-1">URL</div>
-              <div class="text-gray-800 dark:text-gray-200">{{ mcpStatus.url || 'No disponible' }}</div>
+              <div class="text-gray-800 dark:text-gray-200">{{ mcpStatus.mcp_url || 'No disponible' }}</div>
             </div>
             
             <div class="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
               <div class="text-sm font-medium mb-1">Estado</div>
               <div class="flex items-center">
                 <div 
-                  :class="mcpStatus.connected ? 'bg-green-500' : 'bg-red-500'" 
+                  :class="mcpStatus.status === 'connected' ? 'bg-green-500' : 'bg-red-500'" 
                   class="w-3 h-3 rounded-full mr-2"
                 ></div>
-                <span>{{ mcpStatus.connected ? 'Conectado' : 'Desconectado' }}</span>
+                <span>{{ mcpStatus.status === 'connected' ? 'Conectado' : 'Desconectado' }}</span>
               </div>
             </div>
           </div>
           
           <div v-if="mcpStatus.tools && mcpStatus.tools.length" class="mt-4">
-            <h4 class="font-medium mb-2">Herramientas Disponibles</h4>
+            <h4 class="font-medium mb-2">Herramientas Disponibles ({{ mcpStatus.tools_available }})</h4>
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
               <div 
                 v-for="tool in mcpStatus.tools" 
-                :key="tool.name"
+                :key="tool"
                 class="flex items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
               >
                 <Wrench class="w-4 h-4 text-primary-600 mr-2" />
                 <div>
-                  <div class="font-medium">{{ tool.name }}</div>
-                  <div v-if="tool.description" class="text-xs text-gray-500 dark:text-gray-400">
-                    {{ tool.description }}
-                  </div>
+                  <div class="font-medium">{{ tool }}</div>
                 </div>
               </div>
             </div>

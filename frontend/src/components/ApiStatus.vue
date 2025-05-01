@@ -10,16 +10,16 @@
     <div v-if="mcpStatus" class="mt-3 border-t border-gray-200 dark:border-gray-700 pt-2">
       <h4 class="text-xs font-medium mb-1">MCP</h4>
       <div class="text-xs text-gray-600 dark:text-gray-400">
-        <div>URL: {{ mcpStatus.url || 'No disponible' }}</div>
+        <div>URL: {{ mcpStatus.mcp_url || 'No disponible' }}</div>
         <div v-if="mcpStatus.tools && mcpStatus.tools.length" class="mt-1">
-          <div class="mb-1">Herramientas:</div>
+          <div class="mb-1">Herramientas: {{ mcpStatus.tools_available }}</div>
           <div class="flex flex-wrap gap-1">
             <span 
               v-for="tool in mcpStatus.tools" 
-              :key="tool.name"
+              :key="tool"
               class="inline-block px-2 py-0.5 bg-secondary-100 dark:bg-secondary-800 rounded text-xs"
             >
-              {{ tool.name }}
+              {{ tool }}
             </span>
           </div>
         </div>
