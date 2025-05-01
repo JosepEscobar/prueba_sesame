@@ -5,6 +5,7 @@ from app.agents.analysis_agent import AnalysisAgent
 from app.agents.finance_agent import FinanceAgent
 from app.agents.marketing_agent import MarketingAgent
 from app.agents.summary_agent import SummaryAgent
+from app.agents.guardrail_agent import GuardrailAgent
 from app.core.logging import logger
 
 class AgentState(TypedDict):
@@ -13,29 +14,42 @@ class AgentState(TypedDict):
     agent_output: Dict[str, Any]
     current_agent: str
     raw_response: str  # Añadimos un campo para la respuesta sin procesar
+    in_scope: bool  # Añadimos campo para marcar si está dentro del ámbito
 
 class AgentGraph:
     def __init__(self):
+        self.guardrail = GuardrailAgent()  # Añadimos el guardrail agent
         self.router = RouterAgent()
         self.finance = FinanceAgent()
         self.marketing = MarketingAgent()
         self.analysis = AnalysisAgent()
         self.summary = SummaryAgent()
         self.graph = self._build_graph()
-        logger.info("AgentGraph inicializado con 5 agentes incluyendo SummaryAgent")
+        logger.info("AgentGraph inicializado con 6 agentes incluyendo GuardrailAgent y SummaryAgent")
         
     def _build_graph(self) -> Graph:
         """Construye el grafo de agentes."""
         workflow = StateGraph(AgentState)
         
         # Añadir nodos
+        workflow.add_node("guardrail", self._check_guardrail)  # Primero el guardrail
         workflow.add_node("router", self._route)
         workflow.add_node("finance", self._process_finance)
         workflow.add_node("marketing", self._process_marketing)
         workflow.add_node("analysis", self._process_analysis)
         workflow.add_node("summary", self._process_summary)  # Nodo para el SummaryAgent
         
-        # Definir transiciones
+        # Definir transiciones desde guardrail
+        workflow.add_conditional_edges(
+            "guardrail",
+            self._decide_after_guardrail,
+            {
+                "router": "router",  # Si está en ámbito, ir al router
+                END: END  # Si está fuera de ámbito, terminar
+            }
+        )
+        
+        # Definir transiciones desde router
         workflow.add_conditional_edges(
             "router",
             self._decide_agent,
@@ -55,15 +69,54 @@ class AgentGraph:
         # Solo el summary termina el flujo
         workflow.add_edge("summary", END)
         
-        # Establecer nodo de entrada
-        workflow.set_entry_point("router")
+        # Establecer nodo de entrada (ahora es guardrail)
+        workflow.set_entry_point("guardrail")
         
-        logger.info("Grafo de agentes construido con flujo obligatorio por SummaryAgent")
+        logger.info("Grafo de agentes construido con GuardrailAgent como primer paso")
         
         # Compilar el grafo
         compiled_graph = workflow.compile()
         logger.info("Grafo compilado exitosamente")
         return compiled_graph
+    
+    def _check_guardrail(self, state: AgentState) -> AgentState:
+        """
+        Verifica si la consulta está dentro del ámbito de servicios.
+        """
+        query = state["query"]
+        context = state.get("context", {})
+        
+        logger.info(f"GuardrailAgent verificando consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}...")
+        guardrail_result = self.guardrail.execute({"query": query, "context": context})
+        
+        # Por defecto, asumimos que está en ámbito
+        state["in_scope"] = guardrail_result.get("in_scope", True)
+        
+        # Si está fuera del ámbito, configurar los datos de respuesta
+        if not state["in_scope"]:
+            logger.info(f"Consulta fuera del ámbito según GuardrailAgent: {query[:50]}...")
+            # Usamos el resultado del guardrail como respuesta final
+            state["agent_output"] = guardrail_result.get("result", {})
+            state["current_agent"] = "guardrail_agent"
+        else:
+            # Si hay un dominio asignado, lo añadimos al contexto
+            if "domain" in guardrail_result:
+                if "context" not in state:
+                    state["context"] = {}
+                state["context"]["domain"] = guardrail_result["domain"]
+                logger.info(f"Guardrail asignó dominio: {guardrail_result['domain']}")
+        
+        return state
+    
+    def _decide_after_guardrail(self, state: AgentState) -> str:
+        """
+        Decide qué hacer después del guardrail.
+        """
+        # Si está en ámbito, ir al router
+        if state.get("in_scope", True):
+            return "router"
+        # Si está fuera de ámbito, terminar el flujo
+        return END
         
     def _route(self, state: AgentState) -> AgentState:
         """
@@ -203,10 +256,10 @@ class AgentGraph:
             logger.error(f"Error al procesar resumen: {str(e)}")
             # Proporcionar un resultado alternativo en caso de error
             state["agent_output"] = {
-                "content": "",
+                "content": raw_response,  # Usar la respuesta original
                 "source": state["current_agent"],
-                "summarized": True,
-                "original_response": raw_response
+                "summarized": False,
+                "error": str(e)
             }
         
         return state
@@ -229,7 +282,8 @@ class AgentGraph:
             "context": context,
             "agent_output": {},
             "current_agent": "",
-            "raw_response": ""
+            "raw_response": "",
+            "in_scope": True  # Por defecto asumimos que está en ámbito
         }
         
         logger.info(f"Iniciando flujo de procesamiento para consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}...")
@@ -241,7 +295,7 @@ class AgentGraph:
         result = {
             "result": final_state["agent_output"],
             "agent": final_state["current_agent"],
-            "processed_by": "summary_agent",
+            "processed_by": "summary_agent" if final_state.get("in_scope", True) else "guardrail_agent",
             "confidence": 0.9
         }
         
