@@ -29,10 +29,10 @@ class TestGuardrailAgent:
         # Configurar el mock para devolver una respuesta de consulta en ámbito
         guardrail_agent.llm_client.generate_text.return_value = json.dumps({
             "in_scope": True,
-            "domain": "Finanzas y análisis financiero",
+            "domain": "system_info",
             "confidence": 0.95,
-            "reasoning": "La consulta es sobre análisis financiero legítimo",
-            "explanation": "La consulta está dentro del ámbito de análisis financiero"
+            "reasoning": "La consulta es sobre información del sistema",
+            "explanation": "La consulta está dentro del ámbito de información del sistema"
         })
         
         # Datos de entrada para prueba
@@ -49,7 +49,7 @@ class TestGuardrailAgent:
         assert result["in_scope"] is True
         assert "confidence" in result
         assert "domain" in result
-        assert result["domain"] == "Finanzas y análisis financiero"
+        assert result["domain"] == "system_info"
 
     def test_execute_impl_unsafe_query(self, guardrail_agent):
         """Prueba que el agente bloquea consultas fuera del ámbito."""
