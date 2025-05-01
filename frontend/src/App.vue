@@ -17,15 +17,13 @@
           {{ item.name }}
         </RouterLink>
       </nav>
-      <div class="p-4 border-t border-gray-200 dark:border-gray-700">
-        <ApiStatus />
-      </div>
     </div>
 
     <!-- Main content -->
     <div class="flex-1 flex flex-col overflow-hidden">
-      <header class="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-6">
+      <header class="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6">
         <h2 class="text-lg font-medium">{{ currentRoute }}</h2>
+        <ApiStatus class="w-auto" />
       </header>
       <main class="flex-1 overflow-hidden bg-gray-50 dark:bg-gray-900">
         <RouterView />

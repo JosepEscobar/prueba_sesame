@@ -1,28 +1,18 @@
 <template>
-  <div class="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-medium mb-2">Estado del Sistema</h3>
-    
-    <div class="flex items-center mb-2">
-      <div :class="statusColorClass" class="w-3 h-3 rounded-full mr-2"></div>
-      <span class="text-sm">API: {{ healthText }}</span>
+  <div class="flex items-center text-sm">
+    <div class="flex items-center mr-3">
+      <div :class="statusColorClass" class="w-2 h-2 rounded-full mr-2"></div>
+      <span>API</span>
     </div>
     
-    <div v-if="mcpStatus" class="mt-3 border-t border-gray-200 dark:border-gray-700 pt-2">
-      <h4 class="text-xs font-medium mb-1">MCP</h4>
-      <div class="text-xs text-gray-600 dark:text-gray-400">
-        <div>URL: {{ mcpStatus.mcp_url || 'No disponible' }}</div>
-        <div v-if="mcpStatus.tools && mcpStatus.tools.length" class="mt-1">
-          <div class="mb-1">Herramientas: {{ mcpStatus.tools_available }}</div>
-          <div class="flex flex-wrap gap-1">
-            <span 
-              v-for="tool in mcpStatus.tools" 
-              :key="tool"
-              class="inline-block px-2 py-0.5 bg-secondary-100 dark:bg-secondary-800 rounded text-xs"
-            >
-              {{ tool }}
-            </span>
-          </div>
-        </div>
+    <div v-if="mcpStatus" class="flex items-center">
+      <div class="mx-2 text-gray-300 dark:text-gray-600">|</div>
+      <div class="flex items-center">
+        <div 
+          :class="mcpStatus.status === 'connected' ? 'bg-green-500' : 'bg-red-500'" 
+          class="w-2 h-2 rounded-full mr-2"
+        ></div>
+        <span>MCP</span>
       </div>
     </div>
   </div>

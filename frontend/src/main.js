@@ -7,7 +7,7 @@ import './assets/main.css';
 
 // Configuración global de axios
 axios.defaults.baseURL = 'http://localhost:8000';
-axios.defaults.timeout = 10000; // 10 segundos
+axios.defaults.timeout = 120000; // 2 minutos
 axios.interceptors.response.use(
     response => response,
     error => {

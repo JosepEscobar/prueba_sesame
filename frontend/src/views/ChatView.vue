@@ -77,6 +77,14 @@ const sendMessage = async () => {
     };
     messages.value.push(loadingMessage);
     
+    // Mensaje de espera prolongada después de 15 segundos
+    const timeoutWarning = setTimeout(() => {
+      const loadingIndex = messages.value.findIndex(msg => msg.isLoading);
+      if (loadingIndex !== -1) {
+        messages.value[loadingIndex].content = 'Procesando respuesta... (esto puede tardar hasta 2 minutos para consultas complejas)';
+      }
+    }, 15000);
+    
     // Llamar a la API
     const response = await axios.post('/api/v1/query', {
       query: tempInput,
@@ -89,6 +97,9 @@ const sendMessage = async () => {
           }))
       }
     });
+    
+    // Limpiar el timeout warning
+    clearTimeout(timeoutWarning);
     
     // Reemplazar mensaje de carga con respuesta
     const apiResponseIndex = messages.value.findIndex(msg => msg.isLoading);
@@ -104,6 +115,9 @@ const sendMessage = async () => {
       };
     }
   } catch (error) {
+    // Limpiar el timeout warning
+    clearTimeout(timeoutWarning);
+    
     // Mostrar error
     const errorIndex = messages.value.findIndex(msg => msg.isLoading);
     if (errorIndex !== -1) {
@@ -123,7 +137,11 @@ const sendMessage = async () => {
         }
       } else if (error.request) {
         // La solicitud se realizó pero no se recibió respuesta
-        errorMessage = 'No se recibió respuesta del servidor. Verifique que el backend esté funcionando en localhost:8000.';
+        if (error.code === 'ECONNABORTED') {
+          errorMessage = 'La solicitud ha excedido el tiempo máximo de espera (2 minutos). La consulta podría ser demasiado compleja.';
+        } else {
+          errorMessage = 'No se recibió respuesta del servidor. Verifique que el backend esté funcionando en localhost:8000.';
+        }
       } else {
         // Error al configurar la solicitud
         errorMessage = `Error al configurar la solicitud: ${error.message}`;
