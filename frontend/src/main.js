@@ -6,7 +6,7 @@ import router from './router';
 import './assets/main.css';
 
 // Configuración global de axios
-axios.defaults.baseURL = import.meta.env.PROD ? '/' : '/';
+axios.defaults.baseURL = 'http://localhost:8000';
 axios.defaults.timeout = 10000; // 10 segundos
 axios.interceptors.response.use(
     response => response,

@@ -30,7 +30,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue';
+import { ref, watch, nextTick, onMounted } from 'vue';
 import axios from 'axios';
 import MessageBubble from '../components/MessageBubble.vue';
 import ChatInput from '../components/ChatInput.vue';
@@ -39,6 +39,11 @@ import SuggestionBubbles from '../components/SuggestionBubbles.vue';
 const messages = ref([]);
 const userInput = ref('');
 const chatContainer = ref(null);
+
+// NO cargar mensaje de bienvenida automáticamente para permitir que se muestren las tarjetas
+// onMounted(() => {
+//   fetchWelcomeMessage();
+// });
 
 const sendMessage = async () => {
   if (!userInput.value.trim()) return;
@@ -87,7 +92,7 @@ const sendMessage = async () => {
     const errorIndex = messages.value.findIndex(msg => msg.isLoading);
     if (errorIndex !== -1) {
       messages.value[errorIndex] = {
-        content: `Error: ${error.response?.data?.message || 'No se pudo obtener una respuesta'}`,
+        content: `Error: ${error.response?.data?.message || 'No se pudo conectar con el backend en localhost:8000'}`,
         isUser: false,
         isError: true,
         timestamp: new Date()
@@ -124,7 +129,9 @@ watch(() => messages.value.length, () => {
 // Obtener mensaje de bienvenida al cargar
 const fetchWelcomeMessage = async () => {
   try {
+    console.log("Obteniendo mensaje de bienvenida desde: http://localhost:8000/");
     const response = await axios.get('/');
+    console.log("Respuesta recibida:", response.data);
     if (response.data) {
       messages.value.push({
         content: response.data,
@@ -134,9 +141,12 @@ const fetchWelcomeMessage = async () => {
     }
   } catch (error) {
     console.error('Error al cargar mensaje de bienvenida:', error);
+    messages.value.push({
+      content: "Bienvenido a Sesame Chat. Asegúrate de que el backend esté funcionando en localhost:8000.",
+      isUser: false,
+      isError: true,
+      timestamp: new Date()
+    });
   }
 };
-
-// Si quieres mostrar mensaje de bienvenida automáticamente, descomenta esta línea:
-// fetchWelcomeMessage();
 </script> 

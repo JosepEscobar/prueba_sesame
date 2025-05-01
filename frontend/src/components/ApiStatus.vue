@@ -53,6 +53,7 @@ onMounted(async () => {
 
 const fetchHealthStatus = async () => {
   try {
+    console.log('Consultando estado de salud en http://localhost:8000/health');
     const response = await axios.get('/health');
     health.value = response.data.status || 'unhealthy';
   } catch (error) {
@@ -63,6 +64,7 @@ const fetchHealthStatus = async () => {
 
 const fetchMcpStatus = async () => {
   try {
+    console.log('Consultando estado MCP en http://localhost:8000/mcp/status');
     const response = await axios.get('/mcp/status');
     mcpStatus.value = response.data;
   } catch (error) {

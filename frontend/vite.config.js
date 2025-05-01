@@ -11,26 +11,8 @@ export default defineConfig({
         },
     },
     server: {
-        proxy: {
-            // Redirigir todas las rutas API
-            '/api': {
-                target: 'http://localhost:8000',
-                changeOrigin: true,
-            },
-            // Redirigir rutas de estado y otras rutas
-            '/health': {
-                target: 'http://localhost:8000',
-                changeOrigin: true,
-            },
-            '/mcp': {
-                target: 'http://localhost:8000',
-                changeOrigin: true,
-            },
-            // Ruta raíz para mensaje de bienvenida
-            '^/$': {
-                target: 'http://localhost:8000',
-                changeOrigin: true,
-            }
-        },
+        port: 5173,
+        strictPort: false,
+        open: true,
     },
 }) 
