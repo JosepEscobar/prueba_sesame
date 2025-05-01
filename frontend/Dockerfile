@@ -9,8 +9,11 @@ COPY package*.json ./
 # Instalar dependencias
 RUN npm ci
 
-# Copiar el código fuente
+# Copiar el código fuente y los archivos estáticos
 COPY . .
+
+# Verificar que existe la carpeta public
+RUN mkdir -p public
 
 # Construir la aplicación
 RUN npm run build
@@ -23,6 +26,9 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 # Copiar la configuración de nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Verificar los archivos estáticos en el contenedor
+RUN ls -la /usr/share/nginx/html
 
 EXPOSE 80
 
