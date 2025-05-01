@@ -55,9 +55,7 @@ api_router.include_router(tools.router, prefix="/tools", tags=["tools"])
     así como una preferencia de agente específico para el procesamiento.
     """,
 )
-async def process_query(
-    request: dict[str, Any], background_tasks: BackgroundTasks, req: Request
-):
+async def process_query(request: dict[str, Any], background_tasks: BackgroundTasks, req: Request):
     """
     Procesa una consulta utilizando el sistema multi-agente.
 
@@ -294,9 +292,7 @@ async def lookup_data(request: dict[str, Any], background_tasks: BackgroundTasks
     lookup_type = request.get("type", "")
     query = request.get("query", "")
 
-    logger.info(
-        f"Realizando búsqueda de tipo '{lookup_type}': '{query}' (request_id: {request_id})"
-    )
+    logger.info(f"Realizando búsqueda de tipo '{lookup_type}': '{query}' (request_id: {request_id})")
 
     start_time = time.time()
 
@@ -320,9 +316,7 @@ async def lookup_data(request: dict[str, Any], background_tasks: BackgroundTasks
             company = request.get("company", "")
             result = data_lookup.lookup_company_data(company)
         else:
-            raise HTTPException(
-                status_code=400, detail=f"Tipo de búsqueda no válido: {lookup_type}"
-            )
+            raise HTTPException(status_code=400, detail=f"Tipo de búsqueda no válido: {lookup_type}")
 
         # Calcular tiempo de procesamiento
         processing_time = time.time() - start_time
@@ -335,9 +329,7 @@ async def lookup_data(request: dict[str, Any], background_tasks: BackgroundTasks
             execution_time=processing_time,
         )
 
-        logger.info(
-            f"Búsqueda '{lookup_type}' completada en {processing_time:.4f}s (request_id: {request_id})"
-        )
+        logger.info(f"Búsqueda '{lookup_type}' completada en {processing_time:.4f}s (request_id: {request_id})")
 
         # Formatear la respuesta según el modelo DataLookupResponse
         response = {
@@ -367,9 +359,7 @@ async def lookup_data(request: dict[str, Any], background_tasks: BackgroundTasks
             error=str(e),
         )
 
-        logger.error(
-            f"Error en búsqueda '{lookup_type}': {str(e)} (request_id: {request_id})"
-        )
+        logger.error(f"Error en búsqueda '{lookup_type}': {str(e)} (request_id: {request_id})")
 
         return {
             "success": False,

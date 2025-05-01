@@ -12,10 +12,7 @@ from typing import Any
 
 
 async def calcular_ratios_financieros(
-    ingresos: float,
-    beneficio_neto: float,
-    activos_totales: float,
-    pasivos_totales: float
+    ingresos: float, beneficio_neto: float, activos_totales: float, pasivos_totales: float
 ) -> dict[str, float]:
     """
     Calcula ratios financieros a partir de datos básicos.
@@ -58,7 +55,7 @@ async def calcular_ratios_financieros(
         "ROE": round(roe, 4),
         "ratio_endeudamiento": round(ratio_endeudamiento, 4),
         "ratio_liquidez": round(activos_totales / (pasivos_totales if pasivos_totales > 0 else 1), 4),
-        "patrimonio_neto": patrimonio_neto
+        "patrimonio_neto": patrimonio_neto,
     }
 
     # Añadir interpretaciones
@@ -67,15 +64,16 @@ async def calcular_ratios_financieros(
         "ROA": interpretar_roa(roa),
         "ROE": interpretar_roe(roe),
         "ratio_endeudamiento": interpretar_endeudamiento(ratio_endeudamiento),
-        "ratio_liquidez": interpretar_liquidez(ratios["ratio_liquidez"])
+        "ratio_liquidez": interpretar_liquidez(ratios["ratio_liquidez"]),
     }
 
     return {
         "ratios": ratios,
         "interpretaciones": interpretaciones,
         "recomendaciones": generar_recomendaciones_ratios(ratios),
-        "fecha_calculo": datetime.now().strftime("%Y-%m-%d")
+        "fecha_calculo": datetime.now().strftime("%Y-%m-%d"),
     }
+
 
 def interpretar_margen(valor: float) -> str:
     """Interpreta el valor del margen de beneficio."""
@@ -90,6 +88,7 @@ def interpretar_margen(valor: float) -> str:
     else:
         return "Excelente: Margen de beneficio muy alto, típico de empresas con ventajas competitivas."
 
+
 def interpretar_roa(valor: float) -> str:
     """Interpreta el valor del ROA (Return on Assets)."""
     if valor < 0:
@@ -102,6 +101,7 @@ def interpretar_roa(valor: float) -> str:
         return "Bueno: Buen rendimiento de activos, indica eficiencia operativa."
     else:
         return "Excelente: Rendimiento de activos excepcional, empresa muy eficiente."
+
 
 def interpretar_roe(valor: float) -> str:
     """Interpreta el valor del ROE (Return on Equity)."""
@@ -116,6 +116,7 @@ def interpretar_roe(valor: float) -> str:
     else:
         return "Excelente: Rendimiento excepcional para los accionistas."
 
+
 def interpretar_endeudamiento(valor: float) -> str:
     """Interpreta el ratio de endeudamiento."""
     if valor > 0.8:
@@ -128,6 +129,7 @@ def interpretar_endeudamiento(valor: float) -> str:
         return "Bajo: Endeudamiento reducido, indica solidez financiera."
     else:
         return "Muy bajo: Endeudamiento mínimo, gran seguridad financiera."
+
 
 def interpretar_liquidez(valor: float) -> str:
     """Interpreta el ratio de liquidez."""
@@ -142,23 +144,32 @@ def interpretar_liquidez(valor: float) -> str:
     else:
         return "Excelente: Liquidez abundante, podría considerar reinversión."
 
+
 def generar_recomendaciones_ratios(ratios: dict[str, float]) -> list[str]:
     """Genera recomendaciones basadas en los ratios calculados."""
     recomendaciones = []
 
     # Recomendaciones para el margen de beneficio
     if ratios["margen_beneficio"] < 0.05:
-        recomendaciones.append("Considerar estrategias para aumentar el margen: revisar precios, reducir costos operativos o enfocarse en productos/servicios más rentables.")
+        recomendaciones.append(
+            "Considerar estrategias para aumentar el margen: revisar precios, reducir costos operativos o enfocarse en productos/servicios más rentables."
+        )
 
     # Recomendaciones para ROA
     if ratios["ROA"] < 0.03:
-        recomendaciones.append("Mejorar la utilización de activos: considerar la venta de activos improductivos o aumentar la eficiencia operativa.")
+        recomendaciones.append(
+            "Mejorar la utilización de activos: considerar la venta de activos improductivos o aumentar la eficiencia operativa."
+        )
 
     # Recomendaciones para el endeudamiento
     if ratios["ratio_endeudamiento"] > 0.7:
-        recomendaciones.append("Reducir nivel de deuda: desarrollar un plan para reducir pasivos y fortalecer la posición financiera.")
+        recomendaciones.append(
+            "Reducir nivel de deuda: desarrollar un plan para reducir pasivos y fortalecer la posición financiera."
+        )
     elif ratios["ratio_endeudamiento"] < 0.2 and ratios["ROE"] < 0.15:
-        recomendaciones.append("Considerar opciones de apalancamiento financiero para potenciar el rendimiento para los accionistas.")
+        recomendaciones.append(
+            "Considerar opciones de apalancamiento financiero para potenciar el rendimiento para los accionistas."
+        )
 
     # Recomendaciones para liquidez
     if ratios["ratio_liquidez"] > 3:
@@ -168,15 +179,15 @@ def generar_recomendaciones_ratios(ratios: dict[str, float]) -> list[str]:
 
     # Si no hay recomendaciones específicas
     if not recomendaciones:
-        recomendaciones.append("Los indicadores financieros muestran una posición equilibrada. Mantener estrategia actual y monitorear periódicamente.")
+        recomendaciones.append(
+            "Los indicadores financieros muestran una posición equilibrada. Mantener estrategia actual y monitorear periódicamente."
+        )
 
     return recomendaciones
 
+
 async def recomendar_estrategia_marketing(
-    industria: str,
-    presupuesto: float,
-    objetivo: str,
-    publico_objetivo: str | None = None
+    industria: str, presupuesto: float, objetivo: str, publico_objetivo: str | None = None
 ) -> dict[str, Any]:
     """
     Recomienda una estrategia de marketing basada en parámetros básicos.
@@ -196,22 +207,22 @@ async def recomendar_estrategia_marketing(
             "Marketing de contenidos",
             "Relaciones públicas",
             "Publicidad en YouTube",
-            "Colaboraciones con influencers"
+            "Colaboraciones con influencers",
         ],
         "conversiones": [
             "Publicidad en buscadores (SEM)",
             "Email marketing",
             "Retargeting",
             "Landing pages optimizadas",
-            "Campañas promocionales"
+            "Campañas promocionales",
         ],
         "fidelización": [
             "Programas de lealtad",
             "Email marketing personalizado",
             "Comunidad en redes sociales",
             "Servicio al cliente premium",
-            "Contenido exclusivo para clientes"
-        ]
+            "Contenido exclusivo para clientes",
+        ],
     }
 
     # Normalizar objetivo
@@ -254,17 +265,17 @@ async def recomendar_estrategia_marketing(
         if "tecnología" in industria.lower():
             adaptaciones_industria = {
                 "canales_adicionales": ["Marketing en LinkedIn", "Content marketing técnico"],
-                "enfoque": "Destacar innovación y soluciones técnicas"
+                "enfoque": "Destacar innovación y soluciones técnicas",
             }
         elif "salud" in industria.lower():
             adaptaciones_industria = {
                 "canales_adicionales": ["Webinars educativos", "Publicaciones científicas"],
-                "enfoque": "Comunicar confianza, seguridad y evidencia científica"
+                "enfoque": "Comunicar confianza, seguridad y evidencia científica",
             }
         elif "finanzas" in industria.lower():
             adaptaciones_industria = {
                 "canales_adicionales": ["Seminarios de educación financiera", "Newsletters especializadas"],
-                "enfoque": "Transmitir seguridad, confianza y transparencia"
+                "enfoque": "Transmitir seguridad, confianza y transparencia",
             }
 
     # Construir el resultado
@@ -276,7 +287,7 @@ async def recomendar_estrategia_marketing(
         "canales_recomendados": canales,
         "distribucion_presupuesto": distribucion,
         "calendario_sugerido": generar_calendario_marketing(),
-        "fecha_recomendacion": datetime.now().strftime("%Y-%m-%d")
+        "fecha_recomendacion": datetime.now().strftime("%Y-%m-%d"),
     }
 
     # Añadir adaptaciones por industria si existen
@@ -290,11 +301,12 @@ async def recomendar_estrategia_marketing(
             "recomendaciones_segmentacion": [
                 "Personalizar mensajes según características del público",
                 "Adaptar canales según hábitos de consumo del segmento",
-                "Realizar pruebas A/B para optimizar la comunicación"
-            ]
+                "Realizar pruebas A/B para optimizar la comunicación",
+            ],
         }
 
     return resultado
+
 
 def generar_calendario_marketing() -> dict[str, list[str]]:
     """Genera un calendario sugerido para implementar la estrategia de marketing."""
@@ -306,15 +318,13 @@ def generar_calendario_marketing() -> dict[str, list[str]]:
             f"Semana 1: {random.choice(['Preparación', 'Análisis', 'Planificación'])}",
             f"Semana 2: {random.choice(['Implementación', 'Lanzamiento', 'Optimización'])}",
             f"Semana 3: {random.choice(['Monitorización', 'Ajustes', 'Evaluación'])}",
-            f"Semana 4: {random.choice(['Análisis de resultados', 'Reporte', 'Planificación siguiente fase'])}"
+            f"Semana 4: {random.choice(['Análisis de resultados', 'Reporte', 'Planificación siguiente fase'])}",
         ]
 
     return calendario
 
-async def analizar_tendencia(
-    datos: list[float],
-    etiquetas: list[str] | None = None
-) -> dict[str, Any]:
+
+async def analizar_tendencia(datos: list[float], etiquetas: list[str] | None = None) -> dict[str, Any]:
     """
     Analiza la tendencia en una serie de datos.
 
@@ -326,20 +336,17 @@ async def analizar_tendencia(
         Análisis de tendencia con métricas y visualización
     """
     if len(datos) < 2:
-        return {
-            "error": "Se necesitan al menos dos puntos de datos para analizar tendencia",
-            "success": False
-        }
+        return {"error": "Se necesitan al menos dos puntos de datos para analizar tendencia", "success": False}
 
     # Crear etiquetas por defecto si no se proporcionan
     if not etiquetas:
-        etiquetas = [f"Punto {i+1}" for i in range(len(datos))]
+        etiquetas = [f"Punto {i + 1}" for i in range(len(datos))]
     elif len(etiquetas) != len(datos):
         # Ajustar si hay discrepancia
         if len(etiquetas) < len(datos):
-            etiquetas.extend([f"Punto {i+1+len(etiquetas)}" for i in range(len(datos) - len(etiquetas))])
+            etiquetas.extend([f"Punto {i + 1 + len(etiquetas)}" for i in range(len(datos) - len(etiquetas))])
         else:
-            etiquetas = etiquetas[:len(datos)]
+            etiquetas = etiquetas[: len(datos)]
 
     # Calcular estadísticas básicas
     promedio = sum(datos) / len(datos)
@@ -353,7 +360,7 @@ async def analizar_tendencia(
 
     # Calcular pendiente usando mínimos cuadrados
     numerador = n * sum(x_i * y_i for x_i, y_i in zip(x, datos, strict=False)) - sum(x) * sum(datos)
-    denominador = n * sum(x_i**2 for x_i in x) - sum(x)**2
+    denominador = n * sum(x_i**2 for x_i in x) - sum(x) ** 2
 
     if denominador == 0:  # Evitar división por cero
         pendiente = 0
@@ -385,7 +392,7 @@ async def analizar_tendencia(
     tiene_estacionalidad = False
     if len(datos) >= 4:
         # Correlación simplificada con lag=1 y lag=2
-        lag1 = sum((datos[i] - promedio) * (datos[i-1] - promedio) for i in range(1, len(datos)))
+        lag1 = sum((datos[i] - promedio) * (datos[i - 1] - promedio) for i in range(1, len(datos)))
         if lag1 > 0:  # Correlación positiva simple
             tiene_estacionalidad = True
 
@@ -412,24 +419,21 @@ async def analizar_tendencia(
             "maximo": round(maximo, 2),
             "minimo": round(minimo, 2),
             "rango": round(rango, 2),
-            "volatilidad": round(volatilidad, 2)
+            "volatilidad": round(volatilidad, 2),
         },
         "tendencia": {
             "direccion": direccion,
             "pendiente": round(pendiente, 4),
             "cambio_porcentual": round(cambio_porcentual, 2),
-            "tiene_estacionalidad": tiene_estacionalidad
+            "tiene_estacionalidad": tiene_estacionalidad,
         },
-        "datos_analizados": {
-            "valores": datos,
-            "etiquetas": etiquetas,
-            "num_puntos": len(datos)
-        },
+        "datos_analizados": {"valores": datos, "etiquetas": etiquetas, "num_puntos": len(datos)},
         "sugerencias": sugerencias,
-        "fecha_analisis": datetime.now().strftime("%Y-%m-%d")
+        "fecha_analisis": datetime.now().strftime("%Y-%m-%d"),
     }
 
     return resultado
+
 
 async def predecir_valores(datos: list[float], periodos_futuros: int = 3) -> dict[str, Any]:
     """
@@ -443,16 +447,10 @@ async def predecir_valores(datos: list[float], periodos_futuros: int = 3) -> dic
         Predicciones y confianza del modelo
     """
     if len(datos) < 3:
-        return {
-            "error": "Se necesitan al menos tres puntos de datos para hacer predicciones",
-            "success": False
-        }
+        return {"error": "Se necesitan al menos tres puntos de datos para hacer predicciones", "success": False}
 
     if periodos_futuros < 1:
-        return {
-            "error": "El número de periodos a predecir debe ser al menos 1",
-            "success": False
-        }
+        return {"error": "El número de periodos a predecir debe ser al menos 1", "success": False}
 
     # Limitar predicciones
     if periodos_futuros > 10:
@@ -513,52 +511,52 @@ async def predecir_valores(datos: list[float], periodos_futuros: int = 3) -> dic
     factor_error = 1.96 * rmse  # Aproximación para 95% confianza
 
     for pred in predicciones:
-        intervalos.append({
-            "inferior": max(0, pred - factor_error),  # Evitar valores negativos si no tienen sentido
-            "superior": pred + factor_error
-        })
+        intervalos.append(
+            {
+                "inferior": max(0, pred - factor_error),  # Evitar valores negativos si no tienen sentido
+                "superior": pred + factor_error,
+            }
+        )
 
     # Crear resultado
     resultado = {
         "predicciones": [round(p, 2) for p in predicciones],
         "periodos_predecidos": periodos_futuros,
-        "intervalos_confianza": [{
-            "inferior": round(i["inferior"], 2),
-            "superior": round(i["superior"], 2)
-        } for i in intervalos],
+        "intervalos_confianza": [
+            {"inferior": round(i["inferior"], 2), "superior": round(i["superior"], 2)} for i in intervalos
+        ],
         "metricas_modelo": {
             "rmse": round(rmse, 4),
             "r_squared": round(r_squared, 4),
             "confianza": confianza,
             "pendiente": round(slope, 4),
-            "tasa_crecimiento": round(tasa_crecimiento, 2)
+            "tasa_crecimiento": round(tasa_crecimiento, 2),
         },
-        "datos_originales": {
-            "num_puntos": len(datos),
-            "ultimo_valor": datos[-1],
-            "primer_valor": datos[0]
-        },
+        "datos_originales": {"num_puntos": len(datos), "ultimo_valor": datos[-1], "primer_valor": datos[0]},
         "advertencias": [],
-        "fecha_prediccion": datetime.now().strftime("%Y-%m-%d")
+        "fecha_prediccion": datetime.now().strftime("%Y-%m-%d"),
     }
 
     # Añadir advertencias si es necesario
     if r_squared < 0.5:
-        resultado["advertencias"].append("Predicción con baja confianza debido a alta variabilidad en los datos históricos.")
+        resultado["advertencias"].append(
+            "Predicción con baja confianza debido a alta variabilidad en los datos históricos."
+        )
 
     if len(datos) < 5:
-        resultado["advertencias"].append("Conjunto de datos pequeño. Se recomiendan al menos 10 puntos para predicciones más confiables.")
+        resultado["advertencias"].append(
+            "Conjunto de datos pequeño. Se recomiendan al menos 10 puntos para predicciones más confiables."
+        )
 
     if periodos_futuros > len(datos):
-        resultado["advertencias"].append("Predecir más periodos que los datos históricos disponibles reduce significativamente la confianza.")
+        resultado["advertencias"].append(
+            "Predecir más periodos que los datos históricos disponibles reduce significativamente la confianza."
+        )
 
     return resultado
 
-async def financial_models(
-    industria: str,
-    metodo: str,
-    datos: dict[str, Any] | None = None
-) -> dict[str, Any]:
+
+async def financial_models(industria: str, metodo: str, datos: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Proporciona modelos financieros y análisis para una industria específica.
 
@@ -577,29 +575,29 @@ async def financial_models(
             "margen_beneficio_promedio": 22.3,
             "inversion_id_promedio": 18.2,
             "roi_esperado": 25.4,
-            "tiempo_recuperacion": 2.5
+            "tiempo_recuperacion": 2.5,
         },
         "finanzas": {
             "crecimiento_anual": 8.2,
             "margen_beneficio_promedio": 30.1,
             "inversion_id_promedio": 5.3,
             "roi_esperado": 18.7,
-            "tiempo_recuperacion": 3.8
+            "tiempo_recuperacion": 3.8,
         },
         "salud": {
             "crecimiento_anual": 7.5,
             "margen_beneficio_promedio": 15.8,
             "inversion_id_promedio": 12.4,
             "roi_esperado": 16.5,
-            "tiempo_recuperacion": 4.2
+            "tiempo_recuperacion": 4.2,
         },
         "retail": {
             "crecimiento_anual": 4.8,
             "margen_beneficio_promedio": 8.2,
             "inversion_id_promedio": 3.1,
             "roi_esperado": 12.3,
-            "tiempo_recuperacion": 3.1
-        }
+            "tiempo_recuperacion": 3.1,
+        },
     }
 
     # Si la industria no está en nuestros datos, usar tecnología como default
@@ -609,14 +607,12 @@ async def financial_models(
     if metodo == "proyeccion_crecimiento":
         # Proyección de crecimiento para los próximos 5 años
         crecimiento_base = industria_data["crecimiento_anual"]
-        proyeccion = [
-            round(crecimiento_base * (1 + 0.05 * i), 2) for i in range(5)
-        ]
+        proyeccion = [round(crecimiento_base * (1 + 0.05 * i), 2) for i in range(5)]
         return {
             "industria": industria,
             "metodo": metodo,
             "proyeccion_5_años": proyeccion,
-            "crecimiento_promedio": sum(proyeccion) / len(proyeccion)
+            "crecimiento_promedio": sum(proyeccion) / len(proyeccion),
         }
 
     elif metodo == "analisis_rentabilidad":
@@ -626,37 +622,27 @@ async def financial_models(
             "metodo": metodo,
             "margen_beneficio": industria_data["margen_beneficio_promedio"],
             "roi": industria_data["roi_esperado"],
-            "tiempo_recuperacion_años": industria_data["tiempo_recuperacion"]
+            "tiempo_recuperacion_años": industria_data["tiempo_recuperacion"],
         }
 
     elif metodo == "comparativa_industria":
         # Comparativa con otras industrias
         comparativa = {}
         for ind, data in modelos_industria.items():
-            comparativa[ind] = {
-                "crecimiento": data["crecimiento_anual"],
-                "margen": data["margen_beneficio_promedio"]
-            }
-        return {
-            "industria_base": industria,
-            "metodo": metodo,
-            "comparativa": comparativa
-        }
+            comparativa[ind] = {"crecimiento": data["crecimiento_anual"], "margen": data["margen_beneficio_promedio"]}
+        return {"industria_base": industria, "metodo": metodo, "comparativa": comparativa}
 
     else:
         # Método no reconocido, devolver datos generales
         return {
             "industria": industria,
             "datos_financieros": industria_data,
-            "nota": "Método no reconocido, se devuelven datos generales de la industria"
+            "nota": "Método no reconocido, se devuelven datos generales de la industria",
         }
 
+
 async def analizar_rendimiento_campania(
-    nombre_campania: str,
-    impresiones: int,
-    clics: int,
-    conversiones: int,
-    coste: float
+    nombre_campania: str, impresiones: int, clics: int, conversiones: int, coste: float
 ) -> dict[str, Any]:
     """
     Analiza el rendimiento de una campaña de marketing.
@@ -680,16 +666,10 @@ async def analizar_rendimiento_campania(
 
     return {
         "campania": nombre_campania,
-        "metricas": {
-            "CTR": ctr,
-            "CPC": cpc,
-            "tasa_conversion": conversion_rate,
-            "CPA": cpa,
-            "ROI": roi
-        },
+        "metricas": {"CTR": ctr, "CPC": cpc, "tasa_conversion": conversion_rate, "CPA": cpa, "ROI": roi},
         "evaluacion": {
             "rendimiento_ctr": "Bueno" if ctr > 0.02 else "Regular" if ctr > 0.01 else "Bajo",
             "eficiencia_coste": "Buena" if cpa < 50 else "Regular" if cpa < 100 else "Baja",
-            "rentabilidad": "Alta" if roi > 1 else "Media" if roi > 0 else "Baja"
-        }
+            "rentabilidad": "Alta" if roi > 1 else "Media" if roi > 0 else "Baja",
+        },
     }

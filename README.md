@@ -147,8 +147,6 @@ Para configurar correctamente la conexión entre Grafana y Prometheus:
    - URL: http://prometheus:9090
    - Acceso: Proxy
 
-**IMPORTANTE**: El nombre del datasource debe estar en minúsculas para que los dashboards funcionen correctamente.
-
 ### Métricas principales monitorizadas
 
 - **API Server**:
@@ -192,25 +190,6 @@ Para añadir nuevas métricas:
 Para añadir nuevas alertas:
 1. Edita el archivo `prometheus/alert_rules.yml`
 2. Reinicia los contenedores con `docker-compose restart prometheus`
-
-## Troubleshooting
-
-### Problemas comunes y soluciones
-
-- **Grafana no muestra datos de Prometheus**: 
-  - Verifica que el nombre del datasource sea "prometheus" (en minúsculas)
-  - Reconstruye el contenedor de Grafana: `docker-compose down grafana && docker-compose up -d grafana`
-
-- **API Server no responde correctamente tras cambios de código**:
-  - Reconstruye la imagen: `docker-compose down api_server && docker-compose build api_server && docker-compose up -d api_server`
-
-- **Agente responde incorrectamente o fuera de ámbito**:
-  - Verifica los logs: `docker-compose logs api_server | grep "agent"`
-  - Asegúrate de que el System Info Agent esté configurado correctamente
-
-- **Servidor MCP no disponible**:
-  - Verifica que esté en ejecución: `docker-compose ps mcp_server`
-  - Reinicia el servicio: `docker-compose restart mcp_server`
 
 ## CI/CD
 

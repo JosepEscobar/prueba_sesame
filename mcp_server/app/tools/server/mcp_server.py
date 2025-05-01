@@ -45,7 +45,7 @@ class MCPToolServer:
         """
         try:
             # Cargar el esquema de la herramienta
-            with open(schema_path, encoding='utf-8') as f:
+            with open(schema_path, encoding="utf-8") as f:
                 schema = json.load(f)
 
             # Verificar que el esquema tenga los campos requeridos
@@ -67,7 +67,7 @@ class MCPToolServer:
             self._tool_schemas[tool_name] = {
                 "description": description,
                 "input_schema": schema.get("inputs", {}),
-                "output_schema": schema.get("outputs", {})
+                "output_schema": schema.get("outputs", {}),
             }
 
             logger.info(f"Esquema de herramienta '{tool_name}' registrado desde {schema_path}")
@@ -77,9 +77,7 @@ class MCPToolServer:
             logger.error(f"Error al registrar herramienta desde {schema_path}: {str(e)}")
             return False
 
-    def register_tool_implementation(self,
-                                     tool_name: str,
-                                     implementation: Callable[[dict[str, Any]], Any]) -> bool:
+    def register_tool_implementation(self, tool_name: str, implementation: Callable[[dict[str, Any]], Any]) -> bool:
         """
         Registra la implementación de una herramienta existente.
 
@@ -112,9 +110,7 @@ class MCPToolServer:
 
                     # Registrar métricas
                     self.metrics.record_execution(
-                        service_name="mcp_server",
-                        operation=tool_name,
-                        execution_time=execution_time
+                        service_name="mcp_server", operation=tool_name, execution_time=execution_time
                     )
 
                     logger.info(f"Herramienta MCP '{tool_name}' ejecutada exitosamente en {execution_time:.4f}s")
@@ -126,10 +122,7 @@ class MCPToolServer:
                     execution_time = time.time() - start_time
 
                     # Registrar métricas
-                    self.metrics.record_error(
-                        agent_name=f"mcp_server.{tool_name}",
-                        error_type=str(e)
-                    )
+                    self.metrics.record_error(agent_name=f"mcp_server.{tool_name}", error_type=str(e))
 
                     logger.error(f"Error al ejecutar herramienta MCP '{tool_name}': {str(e)}")
 
