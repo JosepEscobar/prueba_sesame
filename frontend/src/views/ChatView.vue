@@ -2,11 +2,11 @@
   <div class="h-full flex flex-col">
     <div class="flex-1 overflow-y-auto p-4" ref="chatContainer">
       <div v-if="messages.length === 0" class="h-full flex flex-col items-center justify-center">
-        <div class="text-center mb-8">
-          <h2 class="text-2xl font-semibold mb-2">Bienvenido a Sesame Chat</h2>
-          <p class="text-gray-600 dark:text-gray-400">¿Qué te gustaría hacer hoy?</p>
+        <div class="text-center mb-10">
+          <h2 class="text-3xl font-semibold mb-3">Bienvenido a Sesame Chat</h2>
+          <p class="text-gray-600 dark:text-gray-400 text-lg">¿Qué te gustaría hacer hoy?</p>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl">
+        <div class="w-full px-4">
           <SuggestionBubbles @select="sendSuggestion" />
         </div>
       </div>

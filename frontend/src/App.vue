@@ -37,14 +37,14 @@
 <script setup>
 import { computed } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
-import { MessageSquare, Tool, BarChart, Megaphone, Activity } from 'lucide-vue-next';
+import { MessageSquare, Wrench, BarChart, Megaphone, Activity } from 'lucide-vue-next';
 import ApiStatus from './components/ApiStatus.vue';
 
 const route = useRoute();
 
 const navItems = [
   { name: 'Chat', to: '/', icon: MessageSquare },
-  { name: 'Herramientas', to: '/tools', icon: Tool },
+  { name: 'Herramientas', to: '/tools', icon: Wrench },
   { name: 'Finanzas', to: '/finance', icon: BarChart },
   { name: 'Marketing', to: '/marketing', icon: Megaphone },
   { name: 'Estado', to: '/status', icon: Activity }

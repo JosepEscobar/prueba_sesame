@@ -83,7 +83,7 @@
                 :key="tool.name"
                 class="flex items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
               >
-                <Tool class="w-4 h-4 text-primary-600 mr-2" />
+                <Wrench class="w-4 h-4 text-primary-600 mr-2" />
                 <div>
                   <div class="font-medium">{{ tool.name }}</div>
                   <div v-if="tool.description" class="text-xs text-gray-500 dark:text-gray-400">
@@ -142,7 +142,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import axios from 'axios';
-import { RefreshCw, Tool } from 'lucide-vue-next';
+import { RefreshCw, Wrench } from 'lucide-vue-next';
 
 // Estado de salud
 const health = ref('loading');
