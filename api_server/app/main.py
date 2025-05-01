@@ -1,30 +1,27 @@
-import time
-import uuid
-import contextlib
 import asyncio
-from fastapi import FastAPI, Request, Depends, Response
-from fastapi.responses import JSONResponse, RedirectResponse
+import time
+import traceback
+from contextlib import asynccontextmanager
+
+import uvicorn
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse, RedirectResponse
 from prometheus_client import make_asgi_app
-import logging
-from contextlib import asynccontextmanager
-from app.core.config import get_settings
-from app.core.logging import setup_logging, logger
-from app.core.metrics import setup_metrics
+from starlette.middleware.base import BaseHTTPMiddleware
+
 from app.api.router import api_router
 from app.api.routes import router as routes_router
-from app.tools.register_tools import register_all_tools
-from app.tools.server.server_init import start_mcp_server_process, stop_mcp_server_process
+from app.core.config import get_settings
+from app.core.logging import logger, setup_logging
+from app.core.metrics import setup_metrics
 from app.tools.mcp_adapter import get_mcp_tools
-import uvicorn
-import os
-import sys
-from pathlib import Path
-import traceback
-from starlette.middleware.base import BaseHTTPMiddleware
-import multiprocessing
-from typing import Optional
+from app.tools.register_tools import register_all_tools
+from app.tools.server.server_init import (
+    start_mcp_server_process,
+    stop_mcp_server_process,
+)
 
 # Configuración de logging
 setup_logging()
@@ -50,12 +47,12 @@ mcp_process = None
 
 class TimeoutMiddleware(BaseHTTPMiddleware):
     """Middleware para agregar un timeout a todas las solicitudes."""
-    
+
     async def dispatch(self, request: Request, call_next):
         try:
             # Establecer un timeout de 10 segundos para todas las solicitudes
             return await asyncio.wait_for(call_next(request), timeout=10.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"Timeout en la solicitud: {request.method} {request.url.path}")
             return JSONResponse(
                 status_code=504,
@@ -70,20 +67,20 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware para registrar solicitudes HTTP."""
-    
+
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
         request_id = request.headers.get("X-Request-ID", "unknown")
-        
+
         logger.info(
             f"Solicitud iniciada: {request.method} {request.url.path}",
             extra={"request_id": request_id, "method": request.method, "path": request.url.path}
         )
-        
+
         try:
             response = await call_next(request)
             process_time = time.time() - start_time
-            
+
             logger.info(
                 f"Solicitud completada: {request.method} {request.url.path} - {response.status_code} en {process_time:.4f}s",
                 extra={
@@ -94,15 +91,15 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     "process_time": process_time
                 }
             )
-            
+
             # Añadir cabecera de tiempo de procesamiento
             response.headers["X-Process-Time"] = str(process_time)
             return response
-            
+
         except Exception as e:
             process_time = time.time() - start_time
             error_traceback = traceback.format_exc()
-            
+
             logger.error(
                 f"Error en solicitud: {request.method} {request.url.path} - {str(e)}",
                 extra={
@@ -114,7 +111,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     "exc_info": error_traceback
                 }
             )
-            
+
             # En caso de error no controlado, devolver respuesta de error 500
             return JSONResponse(
                 status_code=500,
@@ -123,14 +120,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 class ResponseLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware para registrar todas las respuestas HTTP con su contenido."""
-    
+
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
         request_id = request.headers.get("X-Request-ID", "unknown")
-        
+
         path = request.url.path
         method = request.method
-        
+
         # Solo loguear ciertas rutas, especialmente las APIs
         if "/api/" in path:
             try:
@@ -147,10 +144,10 @@ class ResponseLoggingMiddleware(BaseHTTPMiddleware):
                         logger.warning(f"No se pudo decodificar el cuerpo: {str(e)}")
             except Exception as e:
                 logger.warning(f"No se pudo leer el cuerpo de la solicitud: {str(e)}")
-        
+
         # Procesar la solicitud
         response = await call_next(request)
-        
+
         # Si es una respuesta JSON de la API, capturar y loguear el contenido completo
         if "/api/" in path and "application/json" in response.headers.get("content-type", ""):
             try:
@@ -158,21 +155,21 @@ class ResponseLoggingMiddleware(BaseHTTPMiddleware):
                 original_body = b""
                 async for chunk in response.body_iterator:
                     original_body += chunk
-                
+
                 # Decodificar para loguear
                 body_str = original_body.decode('utf-8')
-                
+
                 # Loguear el cuerpo completo para depuración
                 logger.info(
                     f"Respuesta completa: {body_str}",
                     extra={
-                        "request_id": request_id, 
-                        "path": path, 
+                        "request_id": request_id,
+                        "path": path,
                         "method": method,
                         "status_code": response.status_code
                     }
                 )
-                
+
                 # Crear una nueva respuesta con el mismo cuerpo
                 return Response(
                     content=original_body,
@@ -183,7 +180,7 @@ class ResponseLoggingMiddleware(BaseHTTPMiddleware):
             except Exception as e:
                 logger.error(f"Error al loguear respuesta: {str(e)}")
                 return response
-        
+
         return response
 
 @asynccontextmanager
@@ -193,25 +190,25 @@ async def lifespan(app: FastAPI):
     Se ejecuta al iniciar y detener la aplicación.
     """
     global mcp_process
-    
+
     try:
         # Iniciar el servidor MCP en un proceso separado
         logger.info("Iniciando servidor MCP en un proceso separado...")
         mcp_process = start_mcp_server_process(
-            host=settings.MCP_HOST, 
+            host=settings.MCP_HOST,
             port=settings.MCP_PORT
         )
-        
+
         if mcp_process is None:
             logger.error("No se pudo iniciar el servidor MCP. La aplicación continuará pero las herramientas MCP no estarán disponibles.")
         else:
             logger.info(f"Servidor MCP iniciado con PID {mcp_process.pid}")
-            
+
             # Esperar más tiempo para asegurar que el servidor MCP esté completamente iniciado
             # y haya cargado todas las herramientas
             logger.info("Esperando a que el servidor MCP esté completamente iniciado...")
             time.sleep(5)
-            
+
             # Verificar que el proceso sigue en ejecución
             if mcp_process.poll() is not None:
                 exit_code = mcp_process.poll()
@@ -226,23 +223,23 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Error al iniciar el servidor MCP: {str(e)}")
         logger.warning("La aplicación continuará pero las herramientas MCP no estarán disponibles.")
-    
+
     # Continuar con la inicialización de la aplicación
     logger.info("Iniciando aplicación FastAPI...")
-    
+
     # Registrar herramientas disponibles para los agentes
     tool_stats = register_all_tools()
     logger.info(f"Herramientas registradas: {tool_stats['implemented_tools']}/{tool_stats['total_tools']}")
-    
+
     # Cargar herramientas MCP adaptadas
     tools = get_mcp_tools()
     logger.info(f"Herramientas MCP adaptadas cargadas: {len(tools)} herramientas disponibles")
-    
+
     yield
-    
+
     # Código que se ejecuta al detener la aplicación
     logger.info("Deteniendo la aplicación...")
-    
+
     # Detener el servidor MCP si está en ejecución
     if mcp_process is not None:
         logger.info("Deteniendo servidor MCP...")
@@ -293,7 +290,7 @@ app.include_router(api_router, prefix=settings.API_PREFIX)
 app.include_router(routes_router, prefix=settings.API_PREFIX)
 
 # Endpoint raíz
-@app.get("/", 
+@app.get("/",
     tags=["system"],
     summary="Punto de entrada principal",
     description="Devuelve un mensaje de bienvenida con información básica sobre el sistema"
@@ -315,7 +312,7 @@ async def root():
     }
 
 # Endpoint de chequeo de salud
-@app.get("/health", 
+@app.get("/health",
     tags=["system"],
     summary="Verificar estado del sistema",
     description="Devuelve información sobre el estado de salud del sistema y sus componentes"
@@ -331,7 +328,7 @@ async def health_check():
             "api": "ok",
         }
     }
-    
+
     # Verificar estado del servidor MCP
     if mcp_process is not None:
         # Si el proceso ha terminado (poll() devuelve código de salida)
@@ -342,37 +339,37 @@ async def health_check():
             health_status["services"]["mcp_server"] = "ok"
     else:
         health_status["services"]["mcp_server"] = "no iniciado"
-    
+
     return health_status
 
 # Personalizar el esquema OpenAPI para añadir más metadatos
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
-        
+
     openapi_schema = get_openapi(
         title=app.title,
         version=app.version,
         description=app.description,
         routes=app.routes,
     )
-    
+
     # Añadir ejemplos adicionales, esquemas o metadatos según sea necesario
     openapi_schema["info"]["x-logo"] = {
         "url": "https://multiagentsystem.com/logo.png"
     }
-    
+
     # Añadir servidores de producción y desarrollo para pruebas
     openapi_schema["servers"] = [
         {"url": "https://api.multiagentsystem.com", "description": "Servidor de producción"},
         {"url": "https://staging-api.multiagentsystem.com", "description": "Servidor de staging"},
         {"url": "http://localhost:8000", "description": "Servidor local de desarrollo"}
     ]
-    
+
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
-app.openapi = custom_openapi 
+app.openapi = custom_openapi
 
 # Crear una aplicación para redirigir /docs a /api/v1/docs
 @app.get("/docs", include_in_schema=False)
@@ -392,4 +389,4 @@ if __name__ == "__main__":
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.DEBUG
-    ) 
+    )

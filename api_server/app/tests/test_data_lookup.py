@@ -1,9 +1,10 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-import json
 import requests
 
 from app.services.data_lookup import DataLookupService
+
 
 @pytest.fixture
 def data_lookup_service():
@@ -30,10 +31,10 @@ def test_search_market_data(data_lookup_service):
             }
         ]
     }
-    
+
     with patch('requests.get', return_value=mock_response):
         result = data_lookup_service.search_market_data("Apple")
-    
+
     assert "results" in result
     assert len(result["results"]) == 1
     assert result["results"][0]["symbol"] == "AAPL"
@@ -44,7 +45,7 @@ def test_search_market_data_error(data_lookup_service):
     # Simular error en la solicitud
     with patch('requests.get', side_effect=requests.exceptions.RequestException("Error de conexión")):
         result = data_lookup_service.search_market_data("Apple")
-    
+
     assert "error" in result
     assert "Error al obtener datos de mercado" in result["error"]
     assert "results" in result
@@ -66,10 +67,10 @@ def test_search_news(data_lookup_service):
             }
         ]
     }
-    
+
     with patch('requests.get', return_value=mock_response):
         result = data_lookup_service.search_news("fintech")
-    
+
     assert "results" in result
     assert len(result["results"]) == 1
     assert result["results"][0]["title"] == "Noticia de prueba"
@@ -78,7 +79,7 @@ def test_search_news(data_lookup_service):
 def test_search_industry_reports(data_lookup_service):
     """Test de búsqueda de informes de industria."""
     result = data_lookup_service.search_industry_reports("fintech")
-    
+
     assert "results" in result
     assert len(result["results"]) > 0
     assert "title" in result["results"][0]
@@ -101,10 +102,10 @@ def test_search_web(data_lookup_service):
             ]
         }
     }
-    
+
     with patch('requests.get', return_value=mock_response):
         result = data_lookup_service.search_web("fintech latinoamerica")
-    
+
     assert "results" in result
     assert len(result["results"]) == 1
     assert result["results"][0]["title"] == "Resultado de prueba"
@@ -124,10 +125,10 @@ def test_lookup_company_data(data_lookup_service):
             "revenue": "$1.5B"
         }
     }
-    
+
     with patch('requests.get', return_value=mock_response):
         result = data_lookup_service.lookup_company_data("Nubank")
-    
+
     assert "company" in result
     assert result["company"]["name"] == "Nubank"
     assert "processing_time" in result
@@ -137,7 +138,7 @@ def test_lookup_company_data_fallback(data_lookup_service):
     # Simular error en la solicitud
     with patch('requests.get', side_effect=requests.exceptions.RequestException("Error de conexión")):
         result = data_lookup_service.lookup_company_data("Nubank")
-    
+
     # Verificar que devuelve datos simulados en caso de error
     assert "company" in result
     assert "name" in result["company"]
@@ -146,7 +147,7 @@ def test_lookup_company_data_fallback(data_lookup_service):
 
 class TestDataLookupService:
     """Pruebas para el servicio DataLookupService."""
-    
+
     def setup_method(self):
         """Configuración inicial para cada prueba."""
         self.service = DataLookupService(
@@ -154,7 +155,7 @@ class TestDataLookupService:
             news_api_key="test_news_key",
             bing_search_api_key="test_bing_key"
         )
-    
+
     @patch('requests.get')
     def test_search_market_data_success(self, mock_get):
         """Prueba la búsqueda de datos de mercado exitosa."""
@@ -177,34 +178,34 @@ class TestDataLookupService:
             }
         }
         mock_get.return_value = mock_response
-        
+
         # Ejecutar búsqueda
         result = self.service.search_market_data("TSLA")
-        
+
         # Verificar llamada a API
         mock_get.assert_called_once()
-        
+
         # Verificar resultados
         assert result["status"] == "success"
         assert "data" in result
         assert "TSLA" in str(result["data"])
         assert "processing_time" in result
-    
+
     @patch('requests.get')
     def test_search_market_data_error(self, mock_get):
         """Prueba el manejo de errores en búsqueda de datos de mercado."""
         # Configurar mock para generar error
         mock_get.side_effect = requests.RequestException("API error")
-        
+
         # Ejecutar búsqueda
         result = self.service.search_market_data("TSLA")
-        
+
         # Verificar resultados de error
         assert result["status"] == "error"
         assert "error" in result
         assert "API error" in result["error"]
         assert "processing_time" in result
-    
+
     @patch('requests.get')
     def test_search_news_success(self, mock_get):
         """Prueba la búsqueda de noticias exitosa."""
@@ -234,20 +235,20 @@ class TestDataLookupService:
             ]
         }
         mock_get.return_value = mock_response
-        
+
         # Ejecutar búsqueda
         result = self.service.search_news("business finance")
-        
+
         # Verificar llamada a API
         mock_get.assert_called_once()
-        
+
         # Verificar resultados
         assert result["status"] == "success"
         assert "data" in result
         assert len(result["data"]["articles"]) == 2
         assert "Test Article 1" in str(result["data"])
         assert "processing_time" in result
-    
+
     @patch('requests.get')
     def test_search_industry_reports_success(self, mock_get):
         """Prueba la búsqueda de informes de industria exitosa."""
@@ -273,20 +274,20 @@ class TestDataLookupService:
             ]
         }
         mock_get.return_value = mock_response
-        
+
         # Ejecutar búsqueda
         result = self.service.search_industry_reports("technology")
-        
+
         # Verificar llamada a API
         mock_get.assert_called_once()
-        
+
         # Verificar resultados
         assert result["status"] == "success"
         assert "data" in result
         assert len(result["data"]["reports"]) == 2
         assert "Tech Industry Report" in str(result["data"])
         assert "processing_time" in result
-    
+
     @patch('requests.get')
     def test_search_web_success(self, mock_get):
         """Prueba la búsqueda web exitosa."""
@@ -311,20 +312,20 @@ class TestDataLookupService:
             }
         }
         mock_get.return_value = mock_response
-        
+
         # Ejecutar búsqueda
         result = self.service.search_web("test query")
-        
+
         # Verificar llamada a API
         mock_get.assert_called_once()
-        
+
         # Verificar resultados
         assert result["status"] == "success"
         assert "data" in result
         assert len(result["data"]["webPages"]["value"]) == 2
         assert "Test Web Page 1" in str(result["data"])
         assert "processing_time" in result
-    
+
     @patch('requests.get')
     def test_lookup_company_data_success(self, mock_get):
         """Prueba la búsqueda de datos de empresa exitosa."""
@@ -351,13 +352,13 @@ class TestDataLookupService:
             }
         }
         mock_get.return_value = mock_response
-        
+
         # Ejecutar búsqueda
         result = self.service.lookup_company_data("Apple")
-        
+
         # Verificar llamada a API
         mock_get.assert_called_once()
-        
+
         # Verificar resultados
         assert result["status"] == "success"
         assert "data" in result

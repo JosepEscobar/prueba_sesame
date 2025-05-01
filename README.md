@@ -70,10 +70,73 @@ Esto iniciará ambos servicios:
 - API: http://localhost:8000
 - MCP: http://localhost:4000
 
+## Configuración del entorno de desarrollo
+
+### Configuración de VS Code
+
+Para configurar VS Code para el desarrollo del proyecto:
+
+1. Instala VS Code desde [https://code.visualstudio.com/](https://code.visualstudio.com/)
+
+2. Instala las siguientes extensiones recomendadas:
+   - Python (Microsoft)
+   - Ruff (Astral Software)
+   - TOML Language Support
+   - Pylance
+   - Test Explorer UI
+
+3. El proyecto ya incluye una carpeta `.vscode` con la configuración necesaria:
+   - `settings.json`: Configuración para Ruff y pytest
+   - `launch.json`: Configuraciones para ejecutar y depurar
+
+4. Para ejecutar o depurar:
+   - Abre la pestaña "Ejecutar y depurar" (Ctrl+Shift+D o Cmd+Shift+D)
+   - Selecciona la configuración deseada en el menú desplegable superior:
+     - "API Server": Ejecuta el servidor de API
+     - "MCP Server": Ejecuta el servidor MCP
+     - "API Server Tests": Ejecuta todas las pruebas del API Server
+     - "MCP Server Tests": Ejecuta todas las pruebas del MCP Server
+     - "Test File Actual": Ejecuta las pruebas del archivo actual
+   - Presiona F5 o el botón verde de ejecutar
+
+5. Para establecer puntos de interrupción (breakpoints):
+   - Haz clic en el margen izquierdo junto al número de línea donde deseas detener la ejecución
+   - Cuando ejecutes en modo depuración, el programa se detendrá en ese punto
+   - Puedes inspeccionar variables, pasar a la siguiente línea, y más usando la barra de herramientas de depuración
+
+### Configuración de pruebas unitarias
+
+Para ejecutar pruebas unitarias desde VS Code:
+
+1. Abre la vista de pruebas en la barra lateral (icono de matraz)
+2. VS Code detectará automáticamente las pruebas de pytest de ambos componentes
+3. Puedes ejecutar pruebas individuales o todas las pruebas desde esta vista
+4. Para depurar una prueba, haz clic derecho en ella y selecciona "Debug Test"
+
+También puedes ejecutar pruebas desde la terminal:
+```bash
+cd api_server  # o mcp_server
+python -m pytest
+```
+
+### Configuración de Ruff para formateo y linting
+
+Ruff es un formateador y linter para Python. El proyecto ya incluye un archivo `pyproject.toml` con la configuración necesaria y un `settings.json` que activa Ruff.
+
+1. El formateo y corrección de código se aplicarán automáticamente al guardar los archivos
+
+2. Para formatear manualmente:
+   - Abre la paleta de comandos (Ctrl+Shift+P o Cmd+Shift+P)
+   - Ejecuta "Ruff: Format Document"
+
+3. Para ver problemas detectados por Ruff:
+   - Abre el panel de "Problemas" (Ctrl+Shift+M o Cmd+Shift+M)
+
 ## Requisitos
 
 - Python 3.10+
 - Dependencias especificadas en los archivos `requirements.txt` de cada componente
+- Visual Studio Code (recomendado para desarrollo)
 
 ## Desarrollo
 
@@ -86,6 +149,10 @@ Para contribuir al proyecto:
 5. Realiza tus cambios
 6. Ejecuta las pruebas
 7. Envía tu pull request
+
+## Configuración de herramientas
+
+El proyecto usa configuración centralizada en `pyproject.toml` para herramientas Python como Ruff, siguiendo las mejores prácticas definidas en PEP 518 y PEP 621.
 
 ## Licencia
 

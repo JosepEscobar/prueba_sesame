@@ -122,3 +122,104 @@ Para contribuir al proyecto:
 2. Realiza tus cambios
 3. Ejecuta las pruebas
 4. Envía tu pull request 
+
+## Configuración para desarrollo
+
+### Configuración de VS Code
+
+Para configurar VS Code para el desarrollo del API Server:
+
+1. Abre la carpeta `api_server` en VS Code:
+   ```bash
+   code ruta/a/proyecto-sesame/api_server
+   ```
+
+2. Instala las extensiones recomendadas:
+   - Python (Microsoft)
+   - Ruff (Astral Software)
+   - FastAPI (opcional, para mejor soporte de FastAPI)
+   - Test Explorer UI
+
+3. Configuración para depuración:
+   - Crea un archivo `.vscode/launch.json` con el siguiente contenido:
+   ```json
+   {
+     "version": "0.2.0",
+     "configurations": [
+       {
+         "name": "API Server",
+         "type": "python",
+         "request": "launch",
+         "program": "${workspaceFolder}/main.py",
+         "console": "integratedTerminal",
+         "justMyCode": true
+       },
+       {
+         "name": "Ejecutar Test Actual",
+         "type": "python",
+         "request": "launch",
+         "module": "pytest",
+         "args": [
+           "${file}"
+         ],
+         "console": "integratedTerminal"
+       },
+       {
+         "name": "Ejecutar Todos los Tests",
+         "type": "python",
+         "request": "launch",
+         "module": "pytest",
+         "console": "integratedTerminal"
+       }
+     ]
+   }
+   ```
+   - Ahora puedes iniciar la depuración desde VS Code usando F5 o el panel de depuración
+   - Para establecer puntos de interrupción, haz clic en el margen izquierdo junto al número de línea
+   - La depuración te permitirá inspeccionar variables, seguir la ejecución paso a paso y evaluar expresiones
+
+### Ejecutar pruebas unitarias
+
+Para ejecutar las pruebas unitarias desde VS Code:
+
+1. Abre la vista de pruebas en la barra lateral (icono de matraz)
+2. VS Code detectará automáticamente las pruebas de pytest
+3. Puedes ejecutar pruebas individuales o todas las pruebas desde esta vista
+4. Para depurar una prueba específica, haz clic derecho en ella y selecciona "Debug Test"
+
+También puedes ejecutar pruebas desde la terminal:
+```bash
+python -m pytest
+```
+
+### Formateo de código con Ruff
+
+El proyecto utiliza Ruff como linter y formateador de código. Configúralo en tu entorno:
+
+1. Instala la extensión de Ruff para VS Code:
+   - Abre VS Code
+   - Presiona `Ctrl+P` (o `Cmd+P` en macOS)
+   - Pega el siguiente comando: `ext install charliermarsh.ruff`
+
+2. Asegúrate de tener Ruff instalado: `pip install ruff`
+
+3. Configura VS Code para usar Ruff automáticamente:
+   - Abre la paleta de comandos con `Ctrl+Shift+P` o `Cmd+Shift+P`
+   - Busca "Preferences: Open Settings (JSON)"
+   - Añade lo siguiente:
+   ```json
+   {
+     "editor.formatOnSave": true,
+     "editor.codeActionsOnSave": {
+       "source.fixAll.ruff": true,
+       "source.organizeImports.ruff": true
+     },
+     "[python]": {
+       "editor.defaultFormatter": "charliermarsh.ruff"
+     }
+   }
+   ```
+
+4. El formateo y corrección de código se aplicarán automáticamente al guardar los archivos
+5. Para formatear manualmente un archivo, abre la paleta de comandos y ejecuta "Ruff: Format Document"
+6. Para ver problemas detectados por Ruff, abre el panel de "Problemas" (Ctrl+Shift+M o Cmd+Shift+M) 

@@ -1,0 +1,55 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "API Server",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/api_server/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "MCP Server",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/mcp_server/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "API Server Tests",
+            "type": "python",
+            "request": "launch",
+            "module": "pytest",
+            "cwd": "${workspaceFolder}/api_server",
+            "args": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "MCP Server Tests",
+            "type": "python",
+            "request": "launch",
+            "module": "pytest",
+            "cwd": "${workspaceFolder}/mcp_server",
+            "args": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Test File Actual",
+            "type": "python",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "${file}"
+            ],
+            "console": "integratedTerminal"
+        }
+    ]
+}

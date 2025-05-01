@@ -3,11 +3,12 @@
 Servidor API mínimo que verifica la conexión con el servidor MCP.
 """
 
-from fastapi import FastAPI
-import uvicorn
 import logging
 
-from app.agents.mcp_integration import get_mcp_tools, get_mcp_client
+import uvicorn
+from fastapi import FastAPI
+
+from app.agents.mcp_integration import get_mcp_client, get_mcp_tools
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -29,9 +30,9 @@ async def mcp_status():
     try:
         client = get_mcp_client()
         tools = get_mcp_tools()
-        
+
         tool_names = [tool.name for tool in tools] if tools else []
-        
+
         return {
             "connection": "success" if len(tool_names) > 0 else "partial",
             "tools_count": len(tool_names),
@@ -46,4 +47,4 @@ async def mcp_status():
 
 if __name__ == "__main__":
     logger.info("Iniciando servidor mínimo para pruebas MCP")
-    uvicorn.run(app, host="0.0.0.0", port=8001) 
+    uvicorn.run(app, host="0.0.0.0", port=8001)

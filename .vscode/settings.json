@@ -1,0 +1,23 @@
+{
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.ruff": "always",
+        "source.organizeImports.ruff": "always"
+    },
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff"
+    },
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.testing.nosetestsEnabled": false,
+    "python.testing.pytestArgs": [
+        "api_server",
+        "mcp_server"
+    ],
+    "python.analysis.extraPaths": [
+        "./api_server",
+        "./mcp_server"
+    ],
+    "debug.inlineValues": "on",
+    "debug.showBreakpointsInOverviewRuler": true
+}

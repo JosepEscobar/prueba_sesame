@@ -2,14 +2,15 @@
 Implementación de herramienta para obtener modelos financieros.
 """
 
-from typing import Dict, Any, List
 import random
+from typing import Any
+
 
 class FinancialModelsImplementation:
     """
     Implementación de la herramienta para obtener modelos o plantillas financieras para diferentes industrias.
     """
-    
+
     def __init__(self):
         """Inicializa la implementación con datos de ejemplo."""
         self.model_categories = {
@@ -22,19 +23,19 @@ class FinancialModelsImplementation:
             "breakeven": "Análisis de punto de equilibrio",
             "roi": "Cálculo de retorno sobre la inversión"
         }
-        
+
         self.industries = [
-            "technology", "finance", "healthcare", "retail", "manufacturing", 
+            "technology", "finance", "healthcare", "retail", "manufacturing",
             "real_estate", "education", "hospitality", "general"
         ]
-        
+
         # Datos de ejemplo para modelos financieros
         self.sample_models = self._generate_sample_models()
-    
-    def _generate_sample_models(self) -> Dict[str, List[Dict[str, Any]]]:
+
+    def _generate_sample_models(self) -> dict[str, list[dict[str, Any]]]:
         """Genera datos de ejemplo para los modelos financieros."""
         models_by_category = {}
-        
+
         for category in self.model_categories.keys():
             models = []
             for i in range(1, 5):  # 4 modelos por categoría
@@ -51,11 +52,11 @@ class FinancialModelsImplementation:
                         "tags": [category, industry, "finance", "model"]
                     })
             models_by_category[category] = models
-        
+
         return models_by_category
-    
-    def get_models(self, model_type: str, industry: str = "general", 
-                  complexity: str = "intermediate", format: str = "excel") -> Dict[str, Any]:
+
+    def get_models(self, model_type: str, industry: str = "general",
+                  complexity: str = "intermediate", format: str = "excel") -> dict[str, Any]:
         """
         Obtiene modelos financieros según los criterios especificados.
         
@@ -75,19 +76,19 @@ class FinancialModelsImplementation:
                     "error": f"Tipo de modelo no válido: {model_type}",
                     "valid_types": list(self.model_categories.keys())
                 }
-            
+
             # Filtrar modelos por tipo
             all_models = self.sample_models.get(model_type, [])
-            
+
             # Filtrar por industria, complejidad y formato
             filtered_models = []
             for model in all_models:
-                if (industry == "general" or industry in model["tags"] or 
+                if (industry == "general" or industry in model["tags"] or
                     model["tags"][1] == industry):
                     if complexity == model["complexity"] or complexity == "intermediate":
                         if format == model["format"] or format == "excel":
                             filtered_models.append(model)
-            
+
             # Generar recomendaciones
             recommendations = []
             if filtered_models:
@@ -96,19 +97,19 @@ class FinancialModelsImplementation:
                         "model_id": f"{model['name'].lower().replace(' ', '_')}",
                         "reason": f"Recomendado para {industry} con nivel de complejidad {complexity}"
                     })
-            
+
             return {
                 "models": filtered_models,
                 "recommendations": recommendations,
                 "total_results": len(filtered_models)
             }
-            
+
         except Exception as e:
             return {
                 "error": f"Error al obtener modelos financieros: {str(e)}"
             }
-    
-    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+
+    def execute(self, params: dict[str, Any]) -> dict[str, Any]:
         """
         Método para compatibilidad con el servidor MCP.
         
@@ -122,5 +123,5 @@ class FinancialModelsImplementation:
         industry = params.get("industry", "general")
         complexity = params.get("complexity", "intermediate")
         format = params.get("format", "excel")
-        
-        return self.get_models(model_type, industry, complexity, format) 
+
+        return self.get_models(model_type, industry, complexity, format)

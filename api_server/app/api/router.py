@@ -1,18 +1,18 @@
-from fastapi import APIRouter, HTTPException, Depends, Request, status, BackgroundTasks
-from typing import Dict, Any, List
 import time
 import uuid
+from typing import Any
 
-from app.core.logging import logger
-from app.core.orchestrator import Orchestrator
-from app.core.config import get_settings, Settings
-from app.services.data_lookup import DataLookupService
-from app.core.metrics import MetricsCollector
-
-# Modelo de datos para las solicitudes y respuestas
-from app.api.models import QueryRequest, QueryResponse, DataLookupRequest, DataLookupResponse, ErrorResponse
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 
 from app.api.endpoints import tools
+
+# Modelo de datos para las solicitudes y respuestas
+from app.api.models import DataLookupResponse, ErrorResponse, QueryResponse
+from app.core.config import get_settings
+from app.core.logging import logger
+from app.core.metrics import MetricsCollector
+from app.core.orchestrator import Orchestrator
+from app.services.data_lookup import DataLookupService
 
 # Crear router de la API
 api_router = APIRouter()
@@ -31,7 +31,7 @@ def get_config():
 api_router.include_router(tools.router, prefix="/tools", tags=["tools"])
 
 @api_router.post(
-    "/query", 
+    "/query",
     response_model=QueryResponse,
     status_code=status.HTTP_200_OK,
     responses={
@@ -50,8 +50,8 @@ api_router.include_router(tools.router, prefix="/tools", tags=["tools"])
     """
 )
 async def process_query(
-    request: Dict[str, Any], 
-    background_tasks: BackgroundTasks, 
+    request: dict[str, Any],
+    background_tasks: BackgroundTasks,
     req: Request
 ):
     """
@@ -69,16 +69,16 @@ async def process_query(
     """
     request_id = str(uuid.uuid4())
     logger.info(f"Procesando consulta (request_id: {request_id})")
-    
+
     start_time = time.time()
-    
+
     try:
         # Llamada síncrona al orquestador
         result = orchestrator.process_query(request)
-        
+
         # Calcular tiempo de procesamiento
         processing_time = time.time() - start_time
-        
+
         # Registrar métricas en segundo plano
         background_tasks.add_task(
             MetricsCollector.record_query_execution,
@@ -87,9 +87,9 @@ async def process_query(
             confidence=result.get("confidence", 0.0),
             execution_time=processing_time
         )
-        
+
         logger.info(f"Consulta procesada en {processing_time:.4f}s por {result.get('agent', 'unknown')} (request_id: {request_id})")
-        
+
         # Preparar la respuesta según el modelo QueryResponse
         # Asegurándonos de que todos los campos requeridos estén presentes
         response = {
@@ -98,17 +98,17 @@ async def process_query(
             "processing_time": processing_time,
             "confidence": result.get("confidence", 0.0)
         }
-        
+
         # Agregar campos opcionales si están presentes
         if "data_sources" in result:
             response["data_sources"] = result["data_sources"]
-        
+
         return response
-        
+
     except Exception as e:
         # Calcular tiempo en caso de error
         processing_time = time.time() - start_time
-        
+
         # Registrar métricas en segundo plano
         background_tasks.add_task(
             MetricsCollector.record_query_execution,
@@ -118,9 +118,9 @@ async def process_query(
             execution_time=processing_time,
             error=str(e)
         )
-        
+
         logger.error(f"Error al procesar consulta: {str(e)} (request_id: {request_id})")
-        
+
         return {
             "result": {
                 "error": "Error al procesar la consulta",
@@ -136,8 +136,8 @@ async def process_query(
         }
 
 @api_router.get(
-    "/agents", 
-    response_model=List[Dict[str, Any]],
+    "/agents",
+    response_model=list[dict[str, Any]],
     status_code=status.HTTP_200_OK,
     summary="Obtener lista de agentes disponibles",
     description="""
@@ -167,8 +167,8 @@ async def get_available_agents():
         )
 
 @api_router.get(
-    "/agents/{agent_id}", 
-    response_model=Dict[str, Any],
+    "/agents/{agent_id}",
+    response_model=dict[str, Any],
     status_code=status.HTTP_200_OK,
     responses={
         404: {"model": ErrorResponse, "description": "Agente no encontrado"},
@@ -209,8 +209,8 @@ async def get_agent_info(agent_id: str):
         )
 
 @api_router.get(
-    "/stats", 
-    response_model=Dict[str, Any],
+    "/stats",
+    response_model=dict[str, Any],
     status_code=status.HTTP_200_OK,
     summary="Obtener estadísticas del sistema multi-agente",
     description="""
@@ -241,7 +241,7 @@ async def get_system_stats():
         )
 
 @api_router.post(
-    "/lookup", 
+    "/lookup",
     response_model=DataLookupResponse,
     status_code=status.HTTP_200_OK,
     responses={
@@ -266,7 +266,7 @@ async def get_system_stats():
     y detalles sobre las fuentes utilizadas.
     """
 )
-async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks):
+async def lookup_data(request: dict[str, Any], background_tasks: BackgroundTasks):
     """
     Busca información en fuentes externas.
     
@@ -283,17 +283,17 @@ async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks
     request_id = str(uuid.uuid4())
     lookup_type = request.get("type", "")
     query = request.get("query", "")
-    
+
     logger.info(f"Realizando búsqueda de tipo '{lookup_type}': '{query}' (request_id: {request_id})")
-    
+
     start_time = time.time()
-    
+
     # Utilizar el servicio de búsqueda del orquestador
     data_lookup = orchestrator.data_lookup_service
-    
+
     try:
         result = {}
-        
+
         # Ejecutar el tipo de búsqueda adecuado
         if lookup_type == "market":
             result = data_lookup.search_market_data(query)
@@ -309,13 +309,13 @@ async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks
             result = data_lookup.lookup_company_data(company)
         else:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail=f"Tipo de búsqueda no válido: {lookup_type}"
             )
-        
+
         # Calcular tiempo de procesamiento
         processing_time = time.time() - start_time
-        
+
         # Registrar métricas en segundo plano
         background_tasks.add_task(
             MetricsCollector.record_lookup_execution,
@@ -323,9 +323,9 @@ async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks
             success=True,
             execution_time=processing_time
         )
-        
+
         logger.info(f"Búsqueda '{lookup_type}' completada en {processing_time:.4f}s (request_id: {request_id})")
-        
+
         # Formatear la respuesta según el modelo DataLookupResponse
         response = {
             "success": True,
@@ -338,13 +338,13 @@ async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks
                 "processing_time": processing_time
             }
         }
-        
+
         return response
-        
+
     except Exception as e:
         # Calcular tiempo en caso de error
         processing_time = time.time() - start_time
-        
+
         # Registrar métricas en segundo plano
         background_tasks.add_task(
             MetricsCollector.record_lookup_execution,
@@ -353,9 +353,9 @@ async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks
             execution_time=processing_time,
             error=str(e)
         )
-        
+
         logger.error(f"Error en búsqueda '{lookup_type}': {str(e)} (request_id: {request_id})")
-        
+
         return {
             "success": False,
             "result": {"error": f"Error al realizar búsqueda de tipo '{lookup_type}'", "detail": str(e)},
@@ -366,4 +366,4 @@ async def lookup_data(request: Dict[str, Any], background_tasks: BackgroundTasks
                 "processing_time": processing_time,
                 "success": False
             }
-        } 
+        }

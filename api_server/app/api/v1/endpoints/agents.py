@@ -1,26 +1,28 @@
+import time
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Dict, Any, Optional, List
-from app.core.orchestrator import AgentOrchestrator
+
 from app.core.logging import logger
 from app.core.metrics import MetricsCollector
-import time
+from app.core.orchestrator import AgentOrchestrator
 
 router = APIRouter()
 orchestrator = AgentOrchestrator()
 
 class AgentRequest(BaseModel):
     query: str
-    content: Optional[str] = None
-    action_request: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    content: str | None = None
+    action_request: str | None = None
+    metadata: dict[str, Any] | None = None
 
 class AgentResponse(BaseModel):
     status: str
     agent_used: str
     confidence: float
     result: Any
-    execution_time: Optional[float] = None
+    execution_time: float | None = None
 
 class AgentInfo(BaseModel):
     name: str
@@ -42,18 +44,18 @@ async def process_request(request: AgentRequest):
             "Nueva solicitud recibida",
             extra={"request_data": request.dict()}
         )
-        
+
         # Convertir solicitud a diccionario para el orquestador
         input_data = request.dict(exclude_unset=True)
-        
+
         # Procesar la solicitud a través del orquestador
         start_time = time.time()
         result = await orchestrator.process_request(input_data)
         execution_time = time.time() - start_time
-        
+
         # Añadir tiempo de ejecución al resultado
         result["execution_time"] = execution_time
-        
+
         logger.info(
             "Solicitud procesada exitosamente",
             extra={
@@ -62,9 +64,9 @@ async def process_request(request: AgentRequest):
                 "execution_time": execution_time
             }
         )
-        
+
         return AgentResponse(**result)
-        
+
     except Exception as e:
         logger.error(
             f"Error al procesar la solicitud: {str(e)}",
@@ -76,7 +78,7 @@ async def process_request(request: AgentRequest):
             detail=f"Error al procesar la solicitud: {str(e)}"
         )
 
-@router.get("/agents", response_model=List[AgentInfo])
+@router.get("/agents", response_model=list[AgentInfo])
 async def list_agents():
     """
     Lista todos los agentes disponibles en el sistema.
@@ -99,7 +101,7 @@ async def list_agents():
             description="Agente especializado en crear resúmenes concisos"
         )
     ]
-    
+
     return agents
 
 @router.get("/health")
@@ -119,12 +121,12 @@ async def agent_health():
             },
             "workflow": orchestrator.workflow is not None
         }
-        
+
         return health_status
-        
+
     except Exception as e:
         logger.error(f"Error en verificación de salud: {str(e)}")
         return {
             "status": "unhealthy",
             "error": str(e)
-        } 
+        }

@@ -1,16 +1,15 @@
-import pytest
-from unittest.mock import MagicMock, patch
 import json
-import re
-from typing import Any, Dict, Union, List
+from unittest.mock import MagicMock
 
-from app.agents.router_agent import RouterAgent, llm as router_llm
-from app.agents.analysis_agent import AnalysisAgent, llm as analysis_llm
-from app.agents.action_agent import ActionAgent, llm as action_llm
-from app.agents.summary_agent import SummaryAgent, llm as summary_llm
+import pytest
+
+from app.agents.action_agent import ActionAgent
+from app.agents.analysis_agent import AnalysisAgent
 from app.agents.finance_agent import FinanceAgent
 from app.agents.marketing_agent import MarketingAgent
-from app.core.config import get_settings
+from app.agents.router_agent import RouterAgent
+from app.agents.summary_agent import SummaryAgent
+
 
 class MockResponse:
     """Clase para simular la respuesta de un LLM."""
@@ -23,17 +22,17 @@ class MockLLM:
         self.response_content = response_content
         self.invoke_count = 0
         self.last_prompt = None
-        
-    def invoke(self, prompt: Union[str, Dict, List], **kwargs):
+
+    def invoke(self, prompt: str | dict | list, **kwargs):
         """Simula la invocación de un LLM."""
         self.invoke_count += 1
         self.last_prompt = prompt
         return MockResponse(self.response_content)
-        
+
     def get_invoke_count(self):
         """Retorna el número de veces que se ha llamado a invoke."""
         return self.invoke_count
-        
+
     def assert_called_once(self):
         """Verifica que invoke haya sido llamado exactamente una vez."""
         if self.invoke_count != 1:
@@ -110,7 +109,7 @@ def test_router_agent_extract_decision():
     agent = RouterAgent(model="test-model")
     json_response = '{"agent": "finance", "reasoning": "La consulta es sobre finanzas", "confidence": 0.85}'
     decision = agent._extract_agent_decision(json_response)
-    
+
     assert decision["agent"] == "finance_agent"
     assert decision["confidence"] == 0.85
     assert "reasoning" in decision
@@ -121,7 +120,7 @@ def test_router_agent_fallback():
     agent = RouterAgent(model="test-model")
     invalid_response = "No soy un JSON válido"
     decision = agent._extract_agent_decision(invalid_response)
-    
+
     assert "agent" in decision
     assert decision["confidence"] <= 0.6  # Confianza reducida para fallback
 
@@ -133,10 +132,10 @@ def test_router_agent_execute(router_agent_with_mock):
         "query": "¿Cuáles son las mejores estrategias de inversión para 2023?",
         "context": {"industry": "fintech"}
     }
-    
+
     # Ejecutar el agente
     result = router_agent._execute_impl(input_data)
-    
+
     # Verificar el resultado
     assert "agent" in result
     assert "confidence" in result
@@ -147,16 +146,16 @@ def test_router_agent_execute(router_agent_with_mock):
 def test_summary_agent_execute(summary_agent_with_mock):
     """Test que el SummaryAgent ejecuta correctamente."""
     summary_agent, mock = summary_agent_with_mock
-    
+
     # Crear una consulta de prueba
     input_data = {
         "query": "Resume esta información",
         "context": "Información detallada que necesita ser resumida..."
     }
-    
+
     # Ejecutar el agente
     result = summary_agent._execute_impl(input_data)
-    
+
     # Verificar el resultado
     assert "result" in result
     assert result["result"] == "Este es un resumen de prueba"
@@ -171,16 +170,16 @@ def test_finance_agent_execute(finance_agent):
         "query": "Analiza el mercado financiero actual",
         "context": {"industry": "banca"}
     }
-    
+
     # Crear mock para data_lookup
     mock_data_service = MagicMock()
     mock_data_service.search_market_data.return_value = {"results": []}
     mock_data_service.search_news.return_value = {"results": []}
     finance_agent.add_tool("data_lookup", mock_data_service)
-    
+
     # Ejecutar el agente
     result = finance_agent._execute_impl(input_data)
-    
+
     # Verificar el resultado
     assert "result" in result
     assert "confidence" in result
@@ -193,16 +192,16 @@ def test_marketing_agent_execute(marketing_agent):
         "query": "Estrategias de marketing digital para fintech",
         "context": {"target_market": "millennials"}
     }
-    
+
     # Crear mock para data_lookup
     mock_data_service = MagicMock()
     mock_data_service.search_market_data.return_value = {"results": []}
     mock_data_service.search_news.return_value = {"results": []}
     marketing_agent.add_tool("data_lookup", mock_data_service)
-    
+
     # Ejecutar el agente
     result = marketing_agent._execute_impl(input_data)
-    
+
     # Verificar el resultado
     assert "result" in result
     assert "confidence" in result
@@ -210,76 +209,76 @@ def test_marketing_agent_execute(marketing_agent):
 
 class TestRouterAgent:
     """Pruebas para el RouterAgent."""
-    
+
     def test_execute_impl(self, router_agent_with_mock):
         """Prueba del método _execute_impl de RouterAgent."""
         agent, mock = router_agent_with_mock
-        
+
         # Ejecutar el agente
         result = agent.execute({"query": "Analiza este documento financiero"})
-        
+
         # Verificar el resultado
         assert "agent" in result
         assert "confidence" in result
         assert "input" in result
-        
+
         # Verificar que el LLM fue llamado
         assert mock.get_invoke_count() > 0
 
 class TestAnalysisAgent:
     """Pruebas para el AnalysisAgent."""
-    
+
     def test_execute_impl(self, analysis_agent_with_mock):
         """Prueba del método _execute_impl de AnalysisAgent."""
         agent, mock = analysis_agent_with_mock
-        
+
         # Ejecutar el agente
         result = agent.execute({"query": "Analiza este documento"})
-        
+
         # Verificar el resultado
         assert "analysis_result" in result
         assert "confidence" in result
         assert "input" in result
         assert "processing_time" in result
-        
+
         # Verificar que el LLM fue llamado
         assert mock.get_invoke_count() > 0
 
 class TestActionAgent:
     """Pruebas para el ActionAgent."""
-    
+
     def test_execute_impl(self, action_agent_with_mock):
         """Prueba del método _execute_impl de ActionAgent."""
         agent, mock = action_agent_with_mock
-        
+
         # Ejecutar el agente
         result = agent.execute({"query": "Crea un reporte financiero"})
-        
+
         # Verificar el resultado
         assert "action_result" in result
         assert "confidence" in result
         assert "input" in result
         assert "processing_time" in result
-        
+
         # Verificar que el LLM fue llamado
         assert mock.get_invoke_count() > 0
 
 class TestSummaryAgent:
     """Pruebas para el SummaryAgent."""
-    
+
     def test_execute_impl(self, summary_agent_with_mock):
         """Prueba del método _execute_impl de SummaryAgent."""
         agent, mock = summary_agent_with_mock
-        
+
         # Ejecutar el agente
         result = agent.execute({"query": "Resume este documento extenso"})
-        
+
         # Verificar el resultado
         assert "summary_result" in result
         assert "result" in result
         assert "confidence" in result
         assert "input" in result
         assert "processing_time" in result
-        
+
         # Verificar que el LLM fue llamado
-        assert mock.get_invoke_count() > 0 
+        assert mock.get_invoke_count() > 0

@@ -4,16 +4,15 @@ Módulo para integración de herramientas MCP con agentes.
 Este módulo proporciona funciones para conectar agentes con herramientas MCP.
 """
 
-import os
-import asyncio
-from typing import List, Dict, Any, Optional
+from typing import Any
+
 from app.core.logging import logger
 from app.tools.mcp_client import MCPClient
 
 # Mantener una referencia global al cliente MCP para reutilizarlo
 _mcp_client = None
 
-def get_mcp_tools_sync() -> List[Dict[str, Any]]:
+def get_mcp_tools_sync() -> list[dict[str, Any]]:
     """
     Versión sincrónica para obtener herramientas MCP disponibles.
     
@@ -21,7 +20,7 @@ def get_mcp_tools_sync() -> List[Dict[str, Any]]:
         Lista de herramientas MCP adaptadas para uso con LangChain
     """
     global _mcp_client
-    
+
     try:
         # Deducir la ruta del servidor MCP relativa al proyecto
         import os
@@ -29,9 +28,9 @@ def get_mcp_tools_sync() -> List[Dict[str, Any]]:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = Path(current_dir).parent.parent.parent.parent
         mcp_server_path = os.path.join(project_root, "mcp_server", "main.py")
-        
+
         logger.info(f"Ruta MCP deducida: {mcp_server_path}")
-        
+
         # Usar cliente global si existe, o crear uno nuevo
         if _mcp_client is None:
             logger.info("Creando nuevo cliente MCP global")
@@ -40,23 +39,23 @@ def get_mcp_tools_sync() -> List[Dict[str, Any]]:
                 use_stdio=False,  # No usar stdio para evitar problemas con loop de eventos
                 mcp_server_path=mcp_server_path
             )
-        
+
         # Inicializar de manera sincrónica y obtener herramientas
         success = _mcp_client.initialize_sync()
-        
+
         if not success:
             logger.error("No se pudo inicializar el cliente MCP")
             return []
-            
+
         # Obtener las herramientas usando la versión sincrónica
         tools = _mcp_client.list_tools_sync()
-        
+
         # Convertir herramientas a formato para LangChain
         langchain_tools = []
         for tool in tools:
             # Crear funciones closures para cada herramienta
             tool_name = tool["name"]
-            
+
             def create_tool_function(tool_name):
                 def tool_function(**kwargs):
                     # Usar el cliente global
@@ -66,21 +65,21 @@ def get_mcp_tools_sync() -> List[Dict[str, Any]]:
                         return {"error": "Cliente MCP no inicializado"}
                     return _mcp_client.call_tool_sync(tool_name, kwargs)
                 return tool_function
-                
+
             langchain_tools.append({
                 "name": tool_name,
                 "description": tool.get("description", f"Herramienta {tool_name} del servidor MCP"),
                 "func": create_tool_function(tool_name)
             })
-        
+
         logger.info(f"Herramientas MCP cargadas: {len(langchain_tools)}")
         return langchain_tools
-        
+
     except Exception as e:
         logger.error(f"Error al cargar herramientas MCP: {str(e)}")
         return []
 
-async def get_mcp_tools() -> List[Dict[str, Any]]:
+async def get_mcp_tools() -> list[dict[str, Any]]:
     """
     Obtiene herramientas MCP disponibles y las convierte a formato para LangChain.
     
@@ -119,7 +118,7 @@ def configure_agent_with_mcp(agent, tools):
                 # No podemos hacer nada con este formato
                 logger.error("No se puede procesar el formato de herramientas proporcionado")
                 return
-        
+
         # Ahora configurar el agente con la lista de herramientas
         if hasattr(agent, "tools"):
             if isinstance(agent.tools, list):
@@ -135,13 +134,13 @@ def configure_agent_with_mcp(agent, tools):
                 agent.tools = {}
                 for tool in tools:
                     agent.tools[tool["name"]] = tool
-                logger.info(f"Creado nuevo diccionario de herramientas para el agente")
+                logger.info("Creado nuevo diccionario de herramientas para el agente")
         else:
             # Si el agente no tiene atributo tools, crearlo como diccionario
             agent.tools = {}
             for tool in tools:
                 agent.tools[tool["name"]] = tool
-            logger.info(f"Inicializado nuevo atributo tools para el agente")
-            
+            logger.info("Inicializado nuevo atributo tools para el agente")
+
     except Exception as e:
-        logger.error(f"Error al configurar agente con herramientas MCP: {str(e)}") 
+        logger.error(f"Error al configurar agente con herramientas MCP: {str(e)}")
