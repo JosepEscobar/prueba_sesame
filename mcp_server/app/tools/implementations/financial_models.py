@@ -19,13 +19,13 @@ async def calcular_ratios_financieros(
 ) -> dict[str, float]:
     """
     Calcula ratios financieros a partir de datos básicos.
-    
+
     Args:
         ingresos: Ingresos totales del periodo
         beneficio_neto: Beneficio neto del periodo
         activos_totales: Valor de los activos totales
         pasivos_totales: Valor de los pasivos totales
-    
+
     Returns:
         Ratios financieros calculados
     """
@@ -180,13 +180,13 @@ async def recomendar_estrategia_marketing(
 ) -> dict[str, Any]:
     """
     Recomienda una estrategia de marketing basada en parámetros básicos.
-    
+
     Args:
         industria: Industria o sector del negocio
         presupuesto: Presupuesto disponible
         objetivo: Objetivo principal (awareness, conversiones, fidelización)
         publico_objetivo: Descripción del público objetivo
-    
+
     Returns:
         Recomendación de estrategia de marketing
     """
@@ -317,11 +317,11 @@ async def analizar_tendencia(
 ) -> dict[str, Any]:
     """
     Analiza la tendencia en una serie de datos.
-    
+
     Args:
         datos: Lista de valores numéricos
         etiquetas: Opcional. Etiquetas para cada punto de datos (ej. fechas)
-    
+
     Returns:
         Análisis de tendencia con métricas y visualización
     """
@@ -434,11 +434,11 @@ async def analizar_tendencia(
 async def predecir_valores(datos: list[float], periodos_futuros: int = 3) -> dict[str, Any]:
     """
     Predice valores futuros basados en datos históricos usando tendencias simples.
-    
+
     Args:
         datos: Serie histórica de valores
         periodos_futuros: Número de periodos a predecir
-    
+
     Returns:
         Predicciones y confianza del modelo
     """
@@ -561,12 +561,12 @@ async def financial_models(
 ) -> dict[str, Any]:
     """
     Proporciona modelos financieros y análisis para una industria específica.
-    
+
     Args:
         industria: Industria o sector para analizar
         metodo: Tipo de análisis financiero a realizar
         datos: Datos adicionales para el análisis (opcional)
-    
+
     Returns:
         Resultados del análisis financiero
     """
@@ -660,14 +660,14 @@ async def analizar_rendimiento_campania(
 ) -> dict[str, Any]:
     """
     Analiza el rendimiento de una campaña de marketing.
-    
+
     Args:
         nombre_campania: Nombre de la campaña
         impresiones: Número total de impresiones
         clics: Número total de clics
         conversiones: Número total de conversiones
         coste: Coste total de la campaña
-    
+
     Returns:
         Análisis de rendimiento de la campaña
     """

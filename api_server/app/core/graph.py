@@ -270,10 +270,10 @@ class AgentGraph:
     def run(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """
         Ejecuta el flujo completo para una consulta.
-        
+
         Args:
             input_data: Diccionario con la consulta y contexto
-            
+
         Returns:
             Resultado del procesamiento
         """

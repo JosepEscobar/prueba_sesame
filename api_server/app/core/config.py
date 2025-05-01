@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     BING_SEARCH_API_KEY: str = ""  # Será cargada desde .env
 
     # Configuración del servidor API
-    API_HOST: str = "0.0.0.0"
+    API_HOST: str = "127.0.0.1"
     API_PORT: int = 8000
 
     # Configuración del servidor MCP
@@ -79,10 +79,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str | None = None
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        case_sensitive=True,
-        env_file_encoding="utf-8",
-        extra="ignore"
+        env_file=".env", case_sensitive=True, env_file_encoding="utf-8", extra="ignore"
     )
 
     @field_validator("API_PREFIX")
@@ -93,7 +90,11 @@ class Settings(BaseSettings):
 
     def is_openai_api_key_valid(self) -> bool:
         """Verifica si la clave API de OpenAI es válida para su uso."""
-        return bool(self.OPENAI_API_KEY) and self.OPENAI_API_KEY != "sk-your-key-here" and self.OPENAI_API_KEY != ""
+        return (
+            bool(self.OPENAI_API_KEY)
+            and self.OPENAI_API_KEY != "sk-your-key-here"
+            and self.OPENAI_API_KEY != ""
+        )
 
 
 @lru_cache

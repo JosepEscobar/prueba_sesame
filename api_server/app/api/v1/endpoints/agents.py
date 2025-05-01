@@ -32,10 +32,10 @@ class AgentInfo(BaseModel):
 async def process_request(request: AgentRequest):
     """
     Procesa una solicitud a través del sistema de orquestación de agentes.
-    
+
     Args:
         request: La solicitud con el query y datos adicionales
-        
+
     Returns:
         AgentResponse con el resultado del procesamiento
     """

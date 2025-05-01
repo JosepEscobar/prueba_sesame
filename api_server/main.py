@@ -16,14 +16,15 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 # Añadir el directorio raíz al path para poder importar módulos
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Importar primero la configuración para asegurar que las variables de entorno estén cargadas
+# Importar primero la configuración para asegurar que las variables de entorno
+# estén cargadas
 from app.core.config import get_settings
 
 # Obtener configuración
@@ -48,15 +49,32 @@ logger = logging.getLogger("api_server")
 try:
     from app.core.graph import AgentGraph
 
-    logger.info("RouterAgent importado correctamente")
+    logger.info("AgentGraph importado correctamente")
 except Exception as e:
-    logger.error(f"Error al importar RouterAgent: {str(e)}")
+    logger.error(f"Error al importar AgentGraph: {str(e)}")
+
+    # En lugar de fallar silenciosamente, asegurarnos de que esté disponible
+    # para propósitos de desarrollo
+    class AgentGraph:
+        def __init__(self):
+            logger.warning("Usando implementación ficticia de AgentGraph")
+
+        def run(self, input_data: dict[str, Any]) -> dict[str, Any]:
+            logger.warning("Usando implementación ficticia de AgentGraph.run()")
+            agent_name = input_data.get("agent_name", "analysis_agent")
+            query = input_data.get("query", "")
+            return {
+                "result": simulate_agent_response(agent_name, query),
+                "agent": agent_name,
+                "confidence": 0.8,
+            }
 
 
 # ---- Modelos de datos Pydantic ----
 class HealthResponse(BaseModel):
     """
-    Respuesta del endpoint de health check que proporciona información sobre el estado del sistema.
+    Respuesta del endpoint de health check que proporciona información sobre
+    el estado del sistema.
 
     Permite monitorear la salud de la API y su conexión con el servidor MCP.
     """
@@ -76,7 +94,8 @@ class MCPStatusResponse(BaseModel):
     """
     Información detallada sobre el estado de la conexión con el servidor MCP.
 
-    Proporciona detalles sobre la disponibilidad del servidor MCP, su URL y las herramientas registradas.
+    Proporciona detalles sobre la disponibilidad del servidor MCP, su URL y las
+    herramientas registradas.
     """
 
     status: str = Field(
@@ -121,22 +140,17 @@ class FinancialMetrics(BaseModel):
     """
     Métricas financieras estándar proporcionadas en respuestas de análisis financiero.
 
-    Incluye indicadores clave de rendimiento financiero como ingresos, beneficios y ratios.
+    Incluye indicadores clave de rendimiento financiero como ingresos, beneficios y
+    ratios.
     """
 
-    revenue: float = Field(
-        description="Ingresos totales en la moneda base", example=1250000, gt=0
-    )
-    profit: float = Field(
-        description="Beneficio neto en la moneda base", example=450000
-    )
+    revenue: float = Field(description="Ingresos totales en la moneda base", example=1250000, gt=0)
+    profit: float = Field(description="Beneficio neto en la moneda base", example=450000)
     growth: str = Field(
         description="Porcentaje de crecimiento respecto al periodo anterior",
         example="15%",
     )
-    margin: float | None = Field(
-        description="Margen de beneficio (profit/revenue)", example=0.36, ge=0, le=1
-    )
+    margin: float | None = Field(description="Margen de beneficio (profit/revenue)", example=0.36, ge=0, le=1)
     roi: float | None = Field(description="Retorno de inversión", example=0.22)
 
 
@@ -152,21 +166,18 @@ class FinanceResponse(BaseModel):
         example="Análisis financiero completo de MiEmpresa para Q1 2025",
         min_length=5,
     )
-    metrics: FinancialMetrics = Field(
-        description="Conjunto de métricas financieras calculadas"
-    )
+    metrics: FinancialMetrics = Field(description="Conjunto de métricas financieras calculadas")
 
 
 class MarketingMetrics(BaseModel):
     """
-    Métricas de marketing estándar proporcionadas en respuestas de análisis de marketing.
+    Métricas de marketing estándar proporcionadas en respuestas de análisis de
+    marketing.
 
     Incluye indicadores clave de rendimiento de marketing y campañas.
     """
 
-    ctr: float = Field(
-        description="Click-through rate (tasa de clics)", example=0.025, ge=0, le=1
-    )
+    ctr: float = Field(description="Click-through rate (tasa de clics)", example=0.025, ge=0, le=1)
     conversion_rate: float = Field(
         description="Tasa de conversión (porcentaje de conversiones sobre visitas)",
         example=0.032,
@@ -174,12 +185,8 @@ class MarketingMetrics(BaseModel):
         le=1,
     )
     roi: float = Field(description="Retorno de inversión de marketing", example=2.4)
-    cpa: float | None = Field(
-        description="Coste por adquisición en la moneda base", example=45.0, gt=0
-    )
-    campaign_count: int | None = Field(
-        description="Número de campañas incluidas en el análisis", example=5, ge=0
-    )
+    cpa: float | None = Field(description="Coste por adquisición en la moneda base", example=45.0, gt=0)
+    campaign_count: int | None = Field(description="Número de campañas incluidas en el análisis", example=5, ge=0)
 
 
 class MarketingResponse(BaseModel):
@@ -194,9 +201,7 @@ class MarketingResponse(BaseModel):
         example="Análisis de marketing completo para la campaña Verano 2025",
         min_length=5,
     )
-    metrics: MarketingMetrics = Field(
-        description="Conjunto de métricas de marketing calculadas"
-    )
+    metrics: MarketingMetrics = Field(description="Conjunto de métricas de marketing calculadas")
 
 
 class AgentResponse(BaseModel):
@@ -222,9 +227,7 @@ class AgentResponse(BaseModel):
         ge=0,
         le=1,
     )
-    processing_time: float | None = Field(
-        description="Tiempo de procesamiento en segundos", example=1.25, gt=0
-    )
+    processing_time: float | None = Field(description="Tiempo de procesamiento en segundos", example=1.25, gt=0)
 
 
 # Crear la aplicación FastAPI
@@ -232,24 +235,25 @@ app = FastAPI(
     title="Sesame API",
     description="""
     ## 🚀 Plataforma de Asistencia Empresarial Sesame
-    
-    Sesame es una plataforma avanzada que integra análisis de datos empresariales a través de:
-    
+
+    Sesame es una plataforma avanzada que integra análisis de datos empresariales
+    a través de:
+
     * **Asistentes Inteligentes** para análisis financiero y de marketing
     * **Herramientas MCP** para procesamiento específico de datos
     * **Integración Completa** entre diferentes funciones empresariales
-    
+
     Esta API proporciona acceso directo a los recursos de Sesame.
-    
+
     ### 📊 Principales funcionalidades
-    
+
     * Análisis financiero y proyecciones
     * Evaluación de estrategias de marketing
     * Planificación de campañas
     * Acceso directo a herramientas de procesamiento
-    
+
     ### 🔗 Enlaces útiles
-    
+
     * [Documentación extendida](https://sesame.example.com/docs)
     * [Guía de inicio rápido](https://sesame.example.com/quickstart)
     * [Repositorio del proyecto](https://github.com/sesame/api)
@@ -277,14 +281,6 @@ app = FastAPI(
             "externalDocs": {
                 "description": "Documentación sobre MCP",
                 "url": "https://sesame.example.com/docs/mcp",
-            },
-        },
-        {
-            "name": "Agentes",
-            "description": "Consultas procesadas mediante agentes especializados con IA",
-            "externalDocs": {
-                "description": "Guía de agentes",
-                "url": "https://sesame.example.com/docs/agents",
             },
         },
         {
@@ -329,9 +325,10 @@ logger.info(f"URL del servidor MCP configurada como: {mcp_url}")
     summary="Página de inicio de Sesame API",
     description="""
     Punto de entrada principal de la API Sesame.
-    
-    Esta ruta devuelve información básica sobre la API y enlaces a la documentación interactiva.
-    Es útil como verificación rápida de que la API está funcionando correctamente.
+
+    Esta ruta devuelve información básica sobre la API y enlaces a la documentación
+    interactiva. Es útil como verificación rápida de que la API está funcionando
+    correctamente.
     """,
     response_description="Información de bienvenida de la API",
     tags=["General"],
@@ -349,7 +346,7 @@ logger.info(f"URL del servidor MCP configurada como: {mcp_url}")
         }
     },
 )
-async def root():
+async def root() -> dict[str, str]:
     """
     Ruta raíz que proporciona información básica sobre la API.
     """
@@ -361,15 +358,15 @@ async def root():
     summary="Verificar estado de salud del servicio",
     description="""
     Endpoint de health check para monitoreo de la API.
-    
+
     Permite verificar si la API está funcionando correctamente y cuál es su estado
     de conexión con otros servicios como el servidor MCP.
-    
+
     Este endpoint es útil para:
     * Sistemas de monitoreo automático
     * Verificaciones de alta disponibilidad
     * Comprobación de estado de dependencias
-    
+
     El campo `status` puede tener los siguientes valores:
     * `healthy`: El servicio funciona correctamente
     * `degraded`: El servicio funciona con limitaciones
@@ -393,7 +390,7 @@ async def root():
         }
     },
 )
-async def health_check():
+async def health_check() -> HealthResponse:
     """
     Verificar el estado de la API.
 
@@ -408,16 +405,16 @@ async def health_check():
     summary="Obtener estado de conexión con MCP",
     description="""
     Proporciona información detallada sobre la conexión con el servidor MCP.
-    
+
     El servidor MCP (Model Context Protocol) es responsable de gestionar
     las herramientas especializadas que utilizan los agentes de Sesame.
-    
+
     Este endpoint permite verificar:
     * Estado de la conexión con el servidor MCP
     * URL del servidor MCP actualmente configurado
     * Listado completo de herramientas disponibles
     * Número total de herramientas registradas
-    
+
     Es útil para diagnóstico y para conocer qué capacidades están disponibles
     en el sistema en tiempo real.
     """,
@@ -447,7 +444,7 @@ async def health_check():
         }
     },
 )
-async def mcp_status():
+async def mcp_status() -> dict[str, Any]:
     """
     Verificar el estado del cliente MCP.
 
@@ -474,32 +471,33 @@ async def mcp_status():
     summary="Procesar consulta general",
     description="""
     Punto de entrada principal para consultas de usuarios.
-    
+
     Este endpoint recibe consultas en lenguaje natural y las enruta al agente
     más adecuado según su contenido. Funciona como un dispatcher inteligente
     que determina si la consulta debe ser procesada por:
-    
+
     * El agente financiero (finance_agent)
     * El agente de marketing (marketing_agent)
     * El agente de análisis general (analysis_agent)
     * O queda en manos del router_agent
-    
+
     ### Ejemplo de consultas:
-    
+
     * "Analiza el rendimiento financiero del último trimestre"
     * "Evalúa el impacto de nuestra campaña de marketing digital"
     * "¿Cuáles son las tendencias actuales de nuestro mercado?"
     """,
 )
-async def process_query(request: Request, query_data: QueryRequest):
+async def process_query(request: Request, query_data: QueryRequest) -> dict[str, Any]:
     """
     Endpoint para procesar consultas generales.
 
     Args:
-        query_data: Datos de la consulta
+        request: Objeto de solicitud HTTP
+        query_data: Datos de la consulta enviada por el usuario
 
     Returns:
-        Respuesta procesada
+        Resultado de la consulta procesada por el agente adecuado
     """
     start_time = time.time()
     # Generar un ID único para esta solicitud
@@ -514,9 +512,7 @@ async def process_query(request: Request, query_data: QueryRequest):
         # Extraer el contexto
         context = query_data.context
 
-        logger.info(
-            f"Recibida consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}..."
-        )
+        logger.info(f"Recibida consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}...")
 
         # Inicializar el grafo de agentes
         try:
@@ -802,17 +798,26 @@ def classify_query_by_keywords(query: str) -> str:
 
 
 def simulate_agent_response(agent_name: str, query: str) -> str:
-    """
-    Genera una respuesta simulada para el modo de desarrollo sin API key.
-    """
-    query_preview = query[:30] + "..." if len(query) > 30 else query
+    query_preview = query[:30] + ("..." if len(query) > 30 else "")
 
     if agent_name == "finance_agent":
-        return f"[SIMULACIÓN] Análisis financiero para: {query_preview}\n\nEste es un resultado simulado para el agente financiero en modo desarrollo."
+        return (
+            f"Análisis financiero para: {query_preview}\n\n"
+            "Este es un resultado simulado para el agente "
+            "financiero en modo desarrollo."
+        )
     elif agent_name == "marketing_agent":
-        return f"[SIMULACIÓN] Análisis de marketing para: {query_preview}\n\nEste es un resultado simulado para el agente de marketing en modo desarrollo."
+        return (
+            f"Análisis de marketing para: {query_preview}\n\n"
+            "Este es un resultado simulado para el agente "
+            "de marketing en modo desarrollo."
+        )
     else:
-        return f"[SIMULACIÓN] Análisis general para: {query_preview}\n\nEste es un resultado simulado para el agente de análisis en modo desarrollo."
+        return (
+            f"Análisis para: {query_preview}\n\n"
+            "Este es un resultado simulado para el agente "
+            "de análisis en modo desarrollo."
+        )
 
 
 @app.post(
@@ -820,30 +825,30 @@ def simulate_agent_response(agent_name: str, query: str) -> str:
     summary="Analizar datos financieros",
     description="""
     Realiza un análisis financiero detallado basado en la consulta proporcionada.
-    
+
     Este endpoint está especializado en el procesamiento de consultas relacionadas
     con finanzas empresariales. Utiliza el agente financiero (finance_agent) para
     procesar la consulta y generar análisis basados en:
-    
+
     * Estados financieros
     * Indicadores de rendimiento (KPIs)
     * Tendencias históricas
     * Comparativas sectoriales
-    
+
     ### Ejemplos de consultas:
-    
+
     * "Calcula los ratios financieros basados en el balance"
     * "¿Cuál ha sido la evolución de nuestro ROI en los últimos 4 trimestres?"
     * "Compara nuestro margen de beneficio con el del sector"
-    
+
     ### Métricas proporcionadas:
-    
+
     * Ingresos (revenue)
     * Beneficio (profit)
     * Crecimiento (growth)
     * Margen (margin)
     * Retorno de inversión (roi)
-    
+
     > Nota: Este endpoint es específico para análisis financiero. Para consultas
     > generales, utiliza el endpoint `/api/v1/query`.
     """,
@@ -871,7 +876,7 @@ def simulate_agent_response(agent_name: str, query: str) -> str:
         422: {"description": "Consulta inválida o incompleta"},
     },
 )
-async def analyze_finance(request: QueryRequest = Body(...)):
+async def analyze_finance(request: QueryRequest) -> dict[str, Any]:
     """
     Analizar datos financieros.
 
@@ -895,28 +900,28 @@ async def analyze_finance(request: QueryRequest = Body(...)):
     summary="Generar pronósticos financieros",
     description="""
     Proyecta tendencias financieras futuras utilizando modelos predictivos.
-    
+
     Este endpoint aplica técnicas avanzadas de modelado estadístico y aprendizaje
     automático para generar pronósticos financieros basados en:
-    
+
     * Datos históricos de la empresa
     * Tendencias del mercado
     * Variables macroeconómicas
     * Estacionalidad y eventos especiales
-    
+
     ### Ejemplos de consultas:
-    
+
     * "Proyecta los ingresos para el próximo trimestre"
     * "¿Cómo evolucionará nuestro margen en los próximos 6 meses?"
     * "Estima el ROI de nuestra nueva línea de productos"
-    
+
     ### Casos de uso:
-    
+
     * Planificación presupuestaria
     * Toma de decisiones estratégicas
     * Evaluación de nuevas inversiones
     * Gestión de riesgos financieros
-    
+
     > Advertencia: Los pronósticos son estimaciones basadas en datos históricos
     > y modelos estadísticos. Los resultados reales pueden variar.
     """,
@@ -944,7 +949,7 @@ async def analyze_finance(request: QueryRequest = Body(...)):
         422: {"description": "Consulta inválida o incompleta"},
     },
 )
-async def financial_forecast(request: QueryRequest = Body(...)):
+async def financial_forecast(request: QueryRequest) -> dict[str, Any]:
     """
     Generar pronósticos financieros.
 
@@ -968,23 +973,23 @@ async def financial_forecast(request: QueryRequest = Body(...)):
     summary="Analizar marketing",
     description="""
     Evalúa el rendimiento de estrategias y campañas de marketing.
-    
+
     Este endpoint proporciona análisis detallados sobre el desempeño de las
     actividades de marketing, incluyendo:
-    
+
     * Rendimiento de campañas digitales
     * Efectividad de canales de adquisición
     * Análisis de conversión
     * Retorno de inversión en marketing
-    
+
     ### Ejemplos de consultas:
-    
+
     * "Analiza el rendimiento de nuestra campaña digital"
     * "¿Qué canales de marketing están generando mayor ROI?"
     * "Evalúa la efectividad de nuestras campañas de email marketing"
-    
+
     ### Métricas proporcionadas:
-    
+
     * CTR (Click-Through Rate)
     * Tasa de conversión (Conversion Rate)
     * ROI de marketing
@@ -1015,7 +1020,7 @@ async def financial_forecast(request: QueryRequest = Body(...)):
         422: {"description": "Consulta inválida o incompleta"},
     },
 )
-async def analyze_marketing(request: QueryRequest = Body(...)):
+async def analyze_marketing(request: QueryRequest) -> dict[str, Any]:
     """
     Analizar estrategias y resultados de marketing.
 
@@ -1039,32 +1044,32 @@ async def analyze_marketing(request: QueryRequest = Body(...)):
     summary="Planificar campaña de marketing",
     description="""
     Genera recomendaciones para el diseño de nuevas campañas de marketing.
-    
+
     Este endpoint utiliza modelos avanzados para crear planes de campaña
     optimizados según los objetivos establecidos. Considera factores como:
-    
+
     * Público objetivo
     * Canales disponibles
     * Presupuesto asignado
     * Objetivos de conversión
     * Estacionalidad
-    
+
     ### Ejemplos de consultas:
-    
+
     * "Diseña una campaña para el lanzamiento del producto"
     * "¿Qué estrategia de marketing debemos usar para aumentar conversiones?"
     * "Crea un plan para mejorar nuestra presencia en redes sociales"
-    
+
     ### Contexto relevante:
-    
+
     Es recomendable proporcionar información adicional en el campo `context` como:
     * Producto o servicio objetivo
     * Presupuesto disponible
     * Duración prevista
     * Canales preferidos
-    
+
     ### Métricas proyectadas:
-    
+
     El resultado incluye proyecciones de métricas clave como CTR, tasa de
     conversión y ROI esperado basadas en campañas similares anteriores.
     """,
@@ -1092,7 +1097,7 @@ async def analyze_marketing(request: QueryRequest = Body(...)):
         422: {"description": "Consulta inválida o incompleta"},
     },
 )
-async def plan_campaign(request: QueryRequest = Body(...)):
+async def plan_campaign(request: QueryRequest) -> dict[str, Any]:
     """
     Planificar una campaña de marketing.
 
@@ -1116,29 +1121,29 @@ async def plan_campaign(request: QueryRequest = Body(...)):
     summary="Invocar herramienta MCP",
     description="""
     Acceso directo a las herramientas del servidor MCP.
-    
+
     Este endpoint permite llamar directamente a cualquiera de las herramientas
     disponibles en el servidor MCP sin pasar por los agentes intermediarios.
     Es útil para operaciones específicas donde se conoce exactamente qué
     herramienta se necesita.
-    
+
     ### Herramientas disponibles:
-    
+
     * `buscar_datos_financieros`: Búsqueda de datos financieros específicos
     * `calcular_ratios_financieros`: Cálculo de ratios a partir de datos
     * `analizar_rendimiento_campania`: Análisis detallado de una campaña
     * `recomendar_estrategia_marketing`: Recomendaciones de estrategia
     * `analizar_tendencia`: Análisis de tendencias en series temporales
     * `predecir_valores`: Predicción de valores futuros
-    
+
     ### Parámetros:
-    
+
     Los parámetros requeridos dependen de cada herramienta específica.
     Consulta la documentación detallada de cada herramienta para conocer
     los parámetros aceptados.
-    
+
     ### Seguridad:
-    
+
     Este endpoint requiere conocimiento específico de la herramienta a utilizar.
     Asegúrate de validar los parámetros antes de realizar la llamada.
     """,
@@ -1163,17 +1168,13 @@ async def plan_campaign(request: QueryRequest = Body(...)):
         404: {
             "description": "Herramienta no encontrada",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Herramienta 'herramienta_inexistente' no encontrada"
-                    }
-                }
+                "application/json": {"example": {"detail": "Herramienta 'herramienta_inexistente' no encontrada"}}
             },
         },
         422: {"description": "Parámetros inválidos para la herramienta"},
     },
 )
-async def call_tool(tool_name: str, params: dict[str, Any] = Body(...)):
+async def call_tool(tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
     """
     Llamar directamente a una herramienta MCP.
 
@@ -1194,9 +1195,7 @@ async def call_tool(tool_name: str, params: dict[str, Any] = Body(...)):
     ]
 
     if tool_name not in available_tools:
-        raise HTTPException(
-            status_code=404, detail=f"Herramienta '{tool_name}' no encontrada"
-        )
+        raise HTTPException(status_code=404, detail=f"Herramienta '{tool_name}' no encontrada")
 
     # Simulamos el resultado de la herramienta
     return {
@@ -1205,7 +1204,8 @@ async def call_tool(tool_name: str, params: dict[str, Any] = Body(...)):
     }
 
 
+# Punto de entrada de la aplicación
 if __name__ == "__main__":
     # Ejecutar la aplicación con uvicorn
     logger.info("Iniciando servidor API")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True, log_level="info")

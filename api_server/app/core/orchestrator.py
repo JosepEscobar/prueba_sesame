@@ -13,7 +13,7 @@ from app.services.data_lookup import DataLookupService
 class Orchestrator:
     """
     Orquestador del sistema multi-agente.
-    
+
     Coordina el flujo de trabajo entre los diferentes agentes, gestionando el
     enrutamiento de consultas, ejecución de agentes especializados y la
     integración de los resultados.
@@ -34,12 +34,12 @@ class Orchestrator:
     def process_query(self, query: str, context: dict[str, Any] | None = None, agent_preference: str | None = None) -> dict[str, Any]:
         """
         Procesa una consulta utilizando el sistema multi-agente.
-        
+
         Args:
             query: Texto de la consulta
             context: Contexto adicional para enriquecer la consulta (opcional)
             agent_preference: Preferencia de agente específico (opcional)
-            
+
         Returns:
             Resultado del procesamiento incluyendo agente utilizado, resultado y nivel de confianza
         """
@@ -71,11 +71,11 @@ class Orchestrator:
     def process_request(self, request: dict[str, Any], request_id: str | None = None) -> dict[str, Any]:
         """
         Procesa una solicitud utilizando el sistema multi-agente.
-        
+
         Args:
             request: Diccionario con los datos de la solicitud
             request_id: Identificador único para la solicitud (opcional)
-            
+
         Returns:
             Resultado del procesamiento de la solicitud
         """
@@ -132,7 +132,7 @@ class Orchestrator:
     def get_available_agents(self) -> list[dict[str, Any]]:
         """
         Retorna una lista de agentes disponibles en el sistema.
-        
+
         Returns:
             Lista de diccionarios con información de cada agente
         """
@@ -162,10 +162,10 @@ class Orchestrator:
     def get_agent_info(self, agent_id: str) -> dict[str, Any] | None:
         """
         Retorna información detallada sobre un agente específico.
-        
+
         Args:
             agent_id: Identificador del agente
-            
+
         Returns:
             Diccionario con información detallada del agente o None si no existe
         """
@@ -187,7 +187,7 @@ class Orchestrator:
     def get_system_stats(self) -> dict[str, Any]:
         """
         Retorna estadísticas del sistema multi-agente.
-        
+
         Returns:
             Diccionario con estadísticas del sistema
         """

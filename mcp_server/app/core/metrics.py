@@ -68,7 +68,7 @@ metrics = Metrics()
 
 def setup_metrics(app=None):
     """Configura las métricas para la aplicación.
-    
+
     Args:
         app: Instancia de la aplicación FastAPI.
     """

@@ -4,7 +4,7 @@ Una plataforma de asistencia empresarial que utiliza inteligencia artificial par
 
 ## Estructura del proyecto
 
-El proyecto ha sido separado en dos componentes principales:
+El proyecto ha sido separado en tres componentes principales:
 
 ### 1. Servidor API
 
@@ -40,6 +40,29 @@ mcp_server/
 └── Dockerfile          # Para ejecutar en Docker
 ```
 
+### 3. Frontend
+
+Interfaz de usuario tipo ChatGPT para interactuar con la API de Sesame, desarrollada con Vue.js y Tailwind CSS.
+
+```
+frontend/
+├── public/             # Archivos públicos estáticos
+├── src/
+│   ├── assets/         # Recursos estáticos (imágenes, fuentes, etc.)
+│   ├── components/     # Componentes Vue reutilizables
+│   │   ├── chat/       # Componentes específicos del chat
+│   │   ├── ui/         # Componentes genéricos de interfaz
+│   │   └── App.vue     # Componente principal
+│   ├── views/          # Vistas principales de la aplicación
+│   ├── router/         # Configuración de rutas
+│   ├── stores/         # Estado global con Pinia
+│   ├── services/       # Servicios para consumir APIs
+│   └── main.js         # Punto de entrada
+├── tailwind.config.js  # Configuración de Tailwind CSS
+├── package.json        # Dependencias y scripts
+└── vite.config.js      # Configuración de Vite
+```
+
 ## Ejecución en desarrollo
 
 Para ejecutar el proyecto en desarrollo, sigue estos pasos:
@@ -58,6 +81,13 @@ cd api_server
 python main.py
 ```
 
+4. En otra terminal, inicia el frontend:
+```bash
+cd frontend
+npm install  # Solo la primera vez o cuando se actualicen dependencias
+npm run dev
+```
+
 ## Ejecución con Docker Compose
 
 El proyecto está configurado para ejecutarse con Docker Compose:
@@ -66,9 +96,10 @@ El proyecto está configurado para ejecutarse con Docker Compose:
 docker-compose up -d
 ```
 
-Esto iniciará ambos servicios:
+Esto iniciará los tres servicios:
 - API: http://localhost:8000
 - MCP: http://localhost:4000
+- Frontend: http://localhost:3000
 
 ## Configuración del entorno de desarrollo
 
@@ -84,6 +115,9 @@ Para configurar VS Code para el desarrollo del proyecto:
    - TOML Language Support
    - Pylance
    - Test Explorer UI
+   - Vue Language Features (Volar) - para desarrollo Frontend
+   - Tailwind CSS IntelliSense - para desarrollo Frontend
+   - ESLint - para desarrollo Frontend
 
 3. El proyecto ya incluye una carpeta `.vscode` con la configuración necesaria:
    - `settings.json`: Configuración para Ruff y pytest
@@ -94,6 +128,7 @@ Para configurar VS Code para el desarrollo del proyecto:
    - Selecciona la configuración deseada en el menú desplegable superior:
      - "API Server": Ejecuta el servidor de API
      - "MCP Server": Ejecuta el servidor MCP
+     - "Frontend": Ejecuta el servidor de desarrollo del frontend
      - "API Server Tests": Ejecuta todas las pruebas del API Server
      - "MCP Server Tests": Ejecuta todas las pruebas del MCP Server
      - "Test File Actual": Ejecuta las pruebas del archivo actual
@@ -150,8 +185,10 @@ Ruff es un formateador y linter para Python. El proyecto ya incluye un archivo `
 
 ## Requisitos
 
-- Python 3.10+
-- Dependencias especificadas en los archivos `requirements.txt` de cada componente
+- Python 3.10+ (para backend)
+- Node.js 16+ y npm (para frontend)
+- Dependencias especificadas en los archivos `requirements.txt` de cada componente backend
+- Dependencias especificadas en `package.json` para el frontend
 - Visual Studio Code (recomendado para desarrollo)
 
 ## Desarrollo

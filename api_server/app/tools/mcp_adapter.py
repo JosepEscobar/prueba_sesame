@@ -9,7 +9,7 @@ def get_mcp_tools():
     """
     Obtiene las herramientas MCP adaptadas para LangChain/LangGraph
     siguiendo el patrón oficial de la documentación.
-    
+
     Returns:
         Lista de herramientas adaptadas para LangChain
     """
