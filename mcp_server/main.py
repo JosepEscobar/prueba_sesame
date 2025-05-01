@@ -124,9 +124,7 @@ async def list_tools():
 async def execute_tool(tool_name: str, request: Request):
     """Ejecutar una herramienta específica."""
     if tool_name not in tools_registry:
-        raise HTTPException(
-            status_code=404, detail=f"Herramienta '{tool_name}' no encontrada"
-        )
+        raise HTTPException(status_code=404, detail=f"Herramienta '{tool_name}' no encontrada")
 
     try:
         # Obtener parámetros de la solicitud
@@ -147,9 +145,7 @@ async def execute_tool(tool_name: str, request: Request):
 
 
 @register_tool()
-async def buscar_datos_financieros(
-    empresa: str, periodo: str | None = None
-) -> dict[str, Any]:
+async def buscar_datos_financieros(empresa: str, periodo: str | None = None) -> dict[str, Any]:
     """
     Busca datos financieros de una empresa específica.
 
@@ -227,8 +223,7 @@ async def calcular_ratios_financieros(
         "ROA": roa,
         "ROE": roe,
         "ratio_endeudamiento": ratio_endeudamiento,
-        "ratio_liquidez": activos_totales
-        / (pasivos_totales if pasivos_totales > 0 else 1),
+        "ratio_liquidez": activos_totales / (pasivos_totales if pasivos_totales > 0 else 1),
     }
 
 
@@ -269,16 +264,8 @@ async def analizar_rendimiento_campania(
             "ROI": roi,
         },
         "evaluacion": {
-            "rendimiento_ctr": "Bueno"
-            if ctr > 0.02
-            else "Regular"
-            if ctr > 0.01
-            else "Bajo",
-            "eficiencia_coste": "Buena"
-            if cpa < 50
-            else "Regular"
-            if cpa < 100
-            else "Baja",
+            "rendimiento_ctr": "Bueno" if ctr > 0.02 else "Regular" if ctr > 0.01 else "Bajo",
+            "eficiencia_coste": "Buena" if cpa < 50 else "Regular" if cpa < 100 else "Baja",
             "rentabilidad": "Alta" if roi > 1 else "Media" if roi > 0 else "Baja",
         },
     }
@@ -359,9 +346,7 @@ async def recomendar_estrategia_marketing(
 
 
 @register_tool()
-async def analizar_tendencia(
-    datos: list[float], etiquetas: list[str] | None = None
-) -> dict[str, Any]:
+async def analizar_tendencia(datos: list[float], etiquetas: list[str] | None = None) -> dict[str, Any]:
     """
     Analiza la tendencia en una serie de datos.
 
@@ -384,9 +369,7 @@ async def analizar_tendencia(
 
     # Calcular cambio total
     cambio_total = datos[-1] - datos[0]
-    cambio_porcentual = (
-        (cambio_total / datos[0]) * 100 if datos[0] != 0 else float("inf")
-    )
+    cambio_porcentual = (cambio_total / datos[0]) * 100 if datos[0] != 0 else float("inf")
 
     # Determinar dirección de la tendencia
     if cambio_total > 0:
@@ -418,9 +401,7 @@ async def analizar_tendencia(
 
 
 @register_tool()
-async def predecir_valores(
-    datos: list[float], periodos_futuros: int = 3
-) -> dict[str, Any]:
+async def predecir_valores(datos: list[float], periodos_futuros: int = 3) -> dict[str, Any]:
     """
     Predice valores futuros basados en datos históricos.
 
@@ -432,9 +413,7 @@ async def predecir_valores(
         Predicciones de valores futuros
     """
     if not datos or len(datos) < 3:
-        return {
-            "error": "Se necesitan al menos tres puntos de datos para hacer predicciones"
-        }
+        return {"error": "Se necesitan al menos tres puntos de datos para hacer predicciones"}
 
     if periodos_futuros < 1:
         return {"error": "El número de periodos a predecir debe ser al menos 1"}
@@ -481,9 +460,7 @@ async def predecir_valores(
 
 
 @register_tool()
-async def financial_models(
-    industria: str, metodo: str, datos: dict[str, Any] | None = None
-) -> dict[str, Any]:
+async def financial_models(industria: str, metodo: str, datos: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Proporciona modelos financieros y análisis para una industria específica.
 
@@ -528,9 +505,7 @@ async def financial_models(
     }
 
     # Si la industria no está en nuestros datos, usar tecnología como default
-    industria_data = modelos_industria.get(
-        industria.lower(), modelos_industria["tecnología"]
-    )
+    industria_data = modelos_industria.get(industria.lower(), modelos_industria["tecnología"])
 
     # Procesar según el método solicitado
     if metodo == "proyeccion_crecimiento":
@@ -616,9 +591,17 @@ async def execute_tool_root(tool_name: str, request: Request):
 # Función de inicio del servidor
 def iniciar_servidor():
     """Inicia el servidor MCP."""
-    # Verificar puerto disponible
-    host = os.environ.get("MCP_HOST", "127.0.0.1")
-    port = int(os.environ.get("MCP_PORT", "4000"))
+    # Procesar argumentos de línea de comandos
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Iniciar servidor MCP")
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host donde escuchar")
+    parser.add_argument("--port", type=int, default=4000, help="Puerto donde escuchar")
+    args = parser.parse_args()
+
+    # Usar los argumentos de línea de comandos o las variables de entorno
+    host = os.environ.get("MCP_HOST", args.host)
+    port = int(os.environ.get("MCP_PORT", args.port))
 
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

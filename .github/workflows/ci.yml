@@ -148,7 +148,7 @@ jobs:
       if: github.event_name == 'pull_request'
       uses: actions/github-script@v6
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+        github-token: ${{ secrets.GITHUB_TOCKEN }}
         script: |
           const { execSync } = require('child_process');
           execSync('npm install xml2js');
@@ -250,7 +250,7 @@ jobs:
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
-        password: ${{ secrets.GHCR_TOCKEN }}
+        password: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Build and push API Server
       uses: docker/build-push-action@v5

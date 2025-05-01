@@ -18,4 +18,4 @@ RUN mkdir -p logs
 EXPOSE 8000
 
 # Comando para ejecutar la API
-CMD ["python", "main.py"] 
+CMD ["python", "main.py", "--host", "0.0.0.0", "--port", "8000"] 

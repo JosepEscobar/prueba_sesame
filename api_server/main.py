@@ -1208,4 +1208,4 @@ async def call_tool(tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
 if __name__ == "__main__":
     # Ejecutar la aplicación con uvicorn
     logger.info("Iniciando servidor API")
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True, log_level="info")
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")
