@@ -1,7 +1,7 @@
 <template>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-4xl mx-auto">
     <div v-for="(suggestion, index) in suggestions" :key="index"
-         class="suggestion-card" @click="$emit('select', suggestion.text)">
+         class="suggestion-card" @click="selectSuggestion(suggestion)">
       <div class="flex items-center mb-2">
         <div class="icon-container">
           <component :is="suggestion.icon" class="w-5 h-5" />
@@ -20,10 +20,22 @@ import {
   BarChart2, 
   TrendingUp, 
   Users,
-  Megaphone
+  Megaphone,
+  DollarSign,
+  List,
+  ShieldAlert,
+  Globe
 } from 'lucide-vue-next';
 
 const emit = defineEmits(['select']);
+
+const selectSuggestion = (suggestion) => {
+  if (suggestion.jsonQuery) {
+    emit('select', suggestion.jsonQuery);
+  } else {
+    emit('select', suggestion.text);
+  }
+};
 
 const suggestions = [
   {
@@ -55,6 +67,30 @@ const suggestions = [
     title: 'Campaña de Marketing',
     text: 'Sugiere una nueva estrategia para aumentar nuestro alcance en redes sociales',
     icon: Users
+  },
+  {
+    title: 'Pronóstico Financiero con ingresos',
+    text: 'Proporciona un análisis financiero para una empresa de software con ingresos de 5 millones',
+    icon: DollarSign,
+    jsonQuery: '{"query": "Proporciona un análisis financiero para una empresa de software con ingresos de 5 millones"}'
+  },
+  {
+    title: 'Análisis de Acciones',
+    text: '¿Qué acciones debo tomar para mejorar la tasa de conversión en mi sitio web de e-commerce?',
+    icon: List,
+    jsonQuery: '{"query": "¿Qué acciones debo tomar para mejorar la tasa de conversión en mi sitio web de e-commerce?"}'
+  },
+  {
+    title: 'Guarda rail',
+    text: '¿Cuales son los ingredientes de una paella?',
+    icon: ShieldAlert,
+    jsonQuery: '{"query": "¿Cuales son los ingredientes de una paella?"}'
+  },
+  {
+    title: 'Guarda rail',
+    text: '¿Por que la tierra es esférica?',
+    icon: Globe,
+    jsonQuery: '{"query": "¿Por que la tierra es esférica?"}'
   }
 ];
 </script>

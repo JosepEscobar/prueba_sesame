@@ -171,6 +171,19 @@ const sendMessage = async () => {
 };
 
 const sendSuggestion = (suggestion) => {
+  // Verificar si la sugerencia es JSON
+  try {
+    const jsonSuggestion = JSON.parse(suggestion);
+    if (jsonSuggestion && jsonSuggestion.query) {
+      userInput.value = jsonSuggestion.query;
+      sendMessage();
+      return;
+    }
+  } catch (e) {
+    // No es JSON, continuar como texto normal
+  }
+  
+  // Tratar como texto plano
   userInput.value = suggestion;
   sendMessage();
 };
