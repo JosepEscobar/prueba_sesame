@@ -1,0 +1,48 @@
+:root {
+    --main-surface-background: #212121e6;
+    --message-surface: #323232d9;
+    --composer-blue-bg: #2a4a6d;
+    --composer-blue-hover: #1a416a;
+    --composer-blue-text: #48aaff;
+    --composer-surface-primary: #303030;
+    --dot-color: #ffffff;
+    --text-primary: #f3f4f6;
+    --icon-surface: 240 240 240;
+    --text-primary-inverse: #030712;
+    --text-secondary: #9ca3af;
+    --text-tertiary: #6b7280;
+    --text-quaternary: #4b5563;
+    --text-placeholder: #fffc;
+    --content-primary: #f2f6fa;
+    --content-secondary: #dbe2e8;
+    --text-error: #f93a37;
+    --border-xlight: #ffffff0d;
+    --border-light: #ffffff1a;
+    --border-medium: #ffffff26;
+    --border-heavy: #fff3;
+    --border-xheavy: #ffffff40;
+    --border-sharp: #ffffff0d;
+    --main-surface-primary: #1f2937;
+    --main-surface-primary-inverse: #ffffff;
+    --main-surface-secondary: #1a1a1a;
+    --main-surface-secondary-selected: #ffffff26;
+    --main-surface-tertiary: #374151;
+    --sidebar-surface-primary: #111827;
+    --sidebar-surface-secondary: #1f2937;
+    --sidebar-surface-tertiary: #1a1a1a;
+    --sidebar-title-primary: #f0f0f080;
+    --sidebar-surface: #2b2b2b;
+    --sidebar-body-primary: #ededed;
+    --sidebar-icon: #a4a4a4;
+    --surface-hover: #ffffff26;
+    --link: #7ab7ff;
+    --link-hover: #5e83b3;
+    --surface-error: 249 58 55;
+}
+
+/* Clase para componentes que usan estos colores */
+.chatgpt-theme {
+    color-scheme: dark;
+    color: var(--text-primary);
+    background-color: var(--main-surface-background);
+}
