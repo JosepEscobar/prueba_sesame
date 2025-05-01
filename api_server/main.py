@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 import traceback
+import uuid
 
 # Añadir el directorio raíz al path para poder importar módulos
 sys.path.insert(0, str(Path(__file__).parent))
@@ -517,6 +518,8 @@ async def process_query(
         Respuesta procesada
     """
     start_time = time.time()
+    # Generar un ID único para esta solicitud
+    request_id = str(uuid.uuid4())
     
     try:
         # Validar que haya una consulta
@@ -534,7 +537,7 @@ async def process_query(
             # Crear una instancia del grafo de agentes
             agent_graph = AgentGraph()
             
-            # Preparar los datos de entrada para el grafo
+            # Crear el input para el grafo de agentes
             input_data = {
                 "query": query,
                 "context": context,
@@ -543,19 +546,23 @@ async def process_query(
                 # "agent_output": {}
             }
             
-            # Imprimir para depuración
-            print(f"* DEBUG: Enviando consulta al grafo: {input_data}")
+            # Usar logger en lugar de print para depuración
+            logger.debug(f"Enviando consulta al grafo: {input_data}", extra={"request_id": request_id})
             
             # Ejecutar el grafo de agentes
-            logger.info(f"Ejecutando grafo de agentes con la consulta")
+            logger.info(f"Ejecutando grafo de agentes con la consulta", extra={"request_id": request_id})
             try:
                 final_result = agent_graph.run(input_data)
             except Exception as e:
-                logger.error(f"Error al procesar consulta con el grafo: {str(e)}")
-                traceback.print_exc()
-                # DEBUG ERROR
-                print(f"* DEBUG ERROR: {str(e)}")
-                print(traceback.format_exc())
+                logger.error(f"Error al procesar consulta con el grafo: {str(e)}", extra={"request_id": request_id})
+                logger.error(traceback.format_exc(), extra={"request_id": request_id})
+                
+                # Usar logger para errores, no print
+                logger.debug(f"DEBUG ERROR: {str(e)}", extra={"request_id": request_id})
+                
+                # Registrar métrica del error
+                from app.core.metrics import MetricsCollector
+                MetricsCollector.record_error("agent_graph", str(e))
                 
                 # No usamos fallback, devolvemos un error apropiado
                 processing_time = time.time() - start_time
@@ -571,8 +578,8 @@ async def process_query(
                     "processing_time": processing_time
                 }
             
-            # Imprimir para depuración
-            print(f"* DEBUG: Resultado final del grafo: {final_result}")
+            # Usar logger en lugar de print para depuración
+            logger.debug(f"Resultado final del grafo: {final_result}", extra={"request_id": request_id})
             
             # Verificar si tenemos un resultado válido
             if isinstance(final_result, dict):
@@ -589,7 +596,7 @@ async def process_query(
                     result["confidence"] = 0.0
             else:
                 # Resultado inválido, devolver error
-                logger.error(f"Resultado inválido del grafo: {final_result}")
+                logger.error(f"Resultado inválido del grafo: {final_result}", extra={"request_id": request_id})
                 return {
                     "error": "Resultado inválido del grafo",
                     "result": {
@@ -604,8 +611,22 @@ async def process_query(
             # Calcular tiempo de procesamiento
             processing_time = time.time() - start_time
             
-            # Registrar métrica
-            logger.info(f"Consulta procesada por {result.get('agent', 'desconocido')} con confianza {result.get('confidence', 0.0)}")
+            # Registrar métrica usando MetricsCollector
+            from app.core.metrics import MetricsCollector
+            agent_name = result.get('agent', 'desconocido')
+            confidence = result.get('confidence', 0.0)
+            
+            # Registrar ejecución y confianza
+            MetricsCollector.record_query_execution(
+                success=True,
+                agent=agent_name,
+                confidence=confidence,
+                execution_time=processing_time
+            )
+            
+            # Registrar en el logger
+            logger.info(f"Consulta procesada por {agent_name} con confianza {confidence}", 
+                       extra={"request_id": request_id, "processing_time": processing_time, "agent": agent_name})
             
             # Añadir tiempo de procesamiento
             result["processing_time"] = processing_time
@@ -613,9 +634,12 @@ async def process_query(
             return result
             
         except Exception as e:
-            logger.error(f"Error al procesar consulta con el grafo: {str(e)}")
-            print(f"* DEBUG ERROR: {str(e)}")
-            traceback.print_exc()  # Imprimir stack trace completo
+            logger.error(f"Error al procesar consulta con el grafo: {str(e)}", extra={"request_id": request_id})
+            logger.error(traceback.format_exc(), extra={"request_id": request_id})
+            
+            # Registrar métrica del error
+            from app.core.metrics import MetricsCollector
+            MetricsCollector.record_error("query_processing", str(e))
             
             # Error global, devolver información clara del error
             processing_time = time.time() - start_time
@@ -631,9 +655,12 @@ async def process_query(
             }
     
     except Exception as e:
-        logger.error(f"Error global al procesar consulta: {str(e)}")
-        print(f"* DEBUG GLOBAL ERROR: {str(e)}")
-        traceback.print_exc()  # Imprimir stack trace completo
+        logger.error(f"Error global al procesar consulta: {str(e)}", extra={"request_id": request_id})
+        logger.error(traceback.format_exc(), extra={"request_id": request_id})
+        
+        # Registrar métrica del error global
+        from app.core.metrics import MetricsCollector
+        MetricsCollector.record_error("global", str(e))
         
         processing_time = time.time() - start_time
         return {

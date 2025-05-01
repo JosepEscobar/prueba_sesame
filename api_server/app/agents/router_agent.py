@@ -1,9 +1,13 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Union
 import time
 import os
 import json
+import logging
+import traceback
 
 from langchain_core.prompts import ChatPromptTemplate
+from langchain.schema import SystemMessage, HumanMessage
+from langchain.llms.base import BaseLLM
 from app.agents.base import BaseAgent
 from app.core.logging import logger
 from app.core.config import get_settings
@@ -190,35 +194,63 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
     
     def _execute_impl(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Ejecuta el análisis de la consulta y determina qué agente debe procesarla.
+        Implementación específica de ejecución del agente de enrutamiento.
         
         Args:
-            input_data: Diccionario con los datos de entrada, que debe incluir 'query' y 
-                      opcionalmente 'context' y 'agent_preference'
-        
+            input_data: Datos de entrada con la consulta y contexto
+            
         Returns:
-            Diccionario con el agente seleccionado, la consulta original y confianza
+            Decisión sobre qué agente debe procesar la consulta
         """
-        start_time = time.time()
+        # Iniciar temporizador para métricas
+        self.start_time = time.time()
+        
         try:
-            # Extraer la consulta y el contexto
+            # Obtener la consulta para poder analizarla
             query = input_data.get("query", "")
+            # Obtener el contexto
             context = input_data.get("context", {})
-            agent_preference = input_data.get("agent_preference")
             
-            # Logueamos solo los primeros 50 caracteres de la consulta
-            query_preview = query[:50] + "..." if len(query) > 50 else query
-            logger.info(f"RouterAgent analizando consulta: {query_preview}")
-            
-            # Si hay una preferencia de agente, respetarla si el agente existe
-            if agent_preference and agent_preference in self.available_agents:
-                logger.info(f"Usando agente preferido por el usuario: {agent_preference}")
+            if not query:
+                logger.warning("Consulta vacía proporcionada al RouterAgent")
                 return {
-                    "agent": agent_preference,
+                    "agent": "analysis_agent",  # Por defecto para consultas vacías
                     "input": input_data,
-                    "confidence": 1.0,
-                    "reasoning": "Seleccionado por preferencia explícita del usuario"
+                    "confidence": 0.5
                 }
+            
+            # Variable para almacenar la decisión sobre qué agente usar
+            agent_type = None
+            # Nivel de confianza en la decisión (0-1)
+            confidence = 0.0
+            
+            # Si hay una preferencia de agente especificada, usarla
+            agent_preference = input_data.get("agent_preference")
+            if agent_preference and isinstance(agent_preference, str):
+                agent_preference = agent_preference.lower()
+                if agent_preference in self.available_agents:
+                    agent_type = agent_preference
+                    logger.info(f"Usando agente preferido: {agent_type}")
+                    confidence = 1.0  # Máxima confianza para preferencia explícita
+                    
+                    # Crear la decisión para el agente preferido
+                    decision = {
+                        "agent": agent_type,
+                        "input": input_data,
+                        "confidence": confidence,
+                        "reasoning": "Preferencia de agente explícita"
+                    }
+                    
+                    # Registrar métricas de ejecución
+                    from app.core.metrics import MetricsCollector
+                    execution_time = time.time() - self.start_time
+                    MetricsCollector.record_agent_execution(
+                        agent_name="router_agent",
+                        status=True,
+                        execution_time=execution_time
+                    )
+                    
+                    return decision
             
             # Determinar el agente adecuado para la consulta
             agent_type = "analysis_agent"  # Valor por defecto en caso de fallos
@@ -340,8 +372,12 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                 logger.warning("No se pudo determinar un tipo de agente. Usando 'analysis_agent' por defecto.")
                 agent_type = "analysis_agent"
             
-            # Imprimir para depuración
-            print(f"*** AGENT_TYPE FINAL: {agent_type} ***")
+            # Usar logger.debug en lugar de print para depuración
+            logger.debug(f"AGENT_TYPE FINAL: {agent_type}", extra={"agent_type": agent_type, "confidence": confidence})
+            
+            # Registrar métrica de confianza para este agente
+            from app.core.metrics import MetricsCollector
+            MetricsCollector.record_agent_confidence("router_agent", confidence)
             
             # Crear la decisión
             decision = {
@@ -351,13 +387,30 @@ Responde SOLO con el nombre exacto del agente elegido: "finance_agent", "marketi
                 "reasoning": "Clasificado por análisis de la consulta"
             }
             
-            # Imprimir para depuración
-            print(f"*** DECISION FINAL: {decision} ***")
+            # Usar logger.debug en lugar de print para depuración
+            logger.debug(f"DECISION FINAL: {decision}", extra={"decision": str(decision)})
+            
+            # Registrar métricas de ejecución
+            MetricsCollector.record_agent_execution(
+                agent_name="router_agent",
+                status=True,
+                execution_time=time.time() - self.start_time
+            )
             
             return decision
             
         except Exception as e:
             logger.error(f"Error en RouterAgent: {str(e)}")
+            
+            # Registrar métricas de error
+            from app.core.metrics import MetricsCollector
+            MetricsCollector.record_error("router_agent", str(e))
+            MetricsCollector.record_agent_execution(
+                agent_name="router_agent",
+                status=False,
+                execution_time=time.time() - self.start_time if hasattr(self, 'start_time') else 0.0
+            )
+            
             return {
                 "error": f"Error en enrutamiento: {str(e)}",
                 "agent": "analysis_agent",  # Valor por defecto en caso de error
