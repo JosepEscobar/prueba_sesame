@@ -1,62 +1,49 @@
 version: '3.8'
 
 services:
-  app:
-    build: .
-    container_name: sesame_api
-    restart: always
+  mcp_server:
+    build:
+      context: ./mcp_server
+    container_name: mcp_server
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+    volumes:
+      - ./mcp_server/logs:/app/logs
+    restart: unless-stopped
+
+  api_server:
+    build:
+      context: ./api_server
+    container_name: api_server
     ports:
       - "8000:8000"
     environment:
-      - ENVIRONMENT=dev
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=False
+      - MCP_CLIENT_URL=http://mcp_server:4000
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - SENTRY_DSN=${SENTRY_DSN}
-      - LOG_LEVEL=INFO
-      - API_V1_STR=/api/v1
-    volumes:
-      - ./app:/app/app
+      - OPENAI_MODEL=${OPENAI_MODEL}
+      - TEMPERATURE=${TEMPERATURE}
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY}
+      - NEWS_API_KEY=${NEWS_API_KEY}
+      - BING_SEARCH_API_KEY=${BING_SEARCH_API_KEY}
     depends_on:
-      - prometheus
-    networks:
-      - sesame_network
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    ports:
-      - "9090:9090"
+      - mcp_server
     volumes:
-      - ./prometheus:/etc/prometheus
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
-    networks:
-      - sesame_network
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    depends_on:
-      - prometheus
-    networks:
-      - sesame_network
+      - ./api_server/logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
-  sesame_network:
+  default:
     driver: bridge
 
 volumes:

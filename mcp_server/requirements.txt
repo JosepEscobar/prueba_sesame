@@ -1,0 +1,40 @@
+# Dependencias MCP principales
+mcp>=1.6.0
+fastmcp>=2.0.0
+mcp-python>=0.1.4
+mcp-client>=0.1.0
+langchain-mcp-adapters>=0.0.9
+
+# Framework web y utilidades
+fastapi>=0.104.1
+uvicorn>=0.24.0
+pydantic>=2.4.2
+pydantic-settings>=2.0.0
+requests>=2.32.0
+
+# Integración de LangChain 
+langchain>=0.3.0
+langchain-openai>=0.1.0
+langchain-mcp-adapters>=0.0.9
+
+# Herramientas de desarrollo
+pytest>=7.4.0
+black>=23.7.0
+isort>=5.12.0
+mypy>=1.5.0
+
+# Otras herramientas
+sse-starlette>=1.6.5
+
+# Utilidades
+python-dotenv>=1.0.0
+numpy>=1.26.0
+pandas>=2.1.2
+matplotlib>=3.8.1
+scikit-learn>=1.3.2
+statsmodels>=0.14.0
+psutil>=5.9.6
+jsonschema>=4.19.1
+httpx>=0.25.1
+python-dateutil>=2.8.2
+pytz>=2023.3 
