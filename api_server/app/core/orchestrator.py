@@ -146,6 +146,11 @@ class Orchestrator:
                 "name": "Summary Agent",
                 "description": "Especialista en síntesis de información y generación de resúmenes",
             },
+            {
+                "id": "system_info",
+                "name": "System Info Agent",
+                "description": "Especialista en proporcionar información sobre las capacidades del sistema y su estado",
+            },
         ]
 
     def get_agent_info(self, agent_id: str) -> dict[str, Any] | None:
@@ -188,10 +193,11 @@ class Orchestrator:
             "success_rate": 0.95,
             "average_response_time": 2.3,
             "agent_distribution": {
-                "analysis_agent": 0.45,
-                "action_agent": 0.25,
+                "analysis_agent": 0.40,
+                "action_agent": 0.20,
                 "summary_agent": 0.15,
                 "finance_agent": 0.10,
                 "marketing_agent": 0.05,
+                "system_info_agent": 0.10,
             },
         }

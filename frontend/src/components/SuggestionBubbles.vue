@@ -89,7 +89,7 @@ const suggestions = [
   {
     title: 'Guarda rail',
     text: '¿Por que la tierra es esférica?',
-    icon: Globe,
+    icon: ShieldAlert,
     jsonQuery: '{"query": "¿Por que la tierra es esférica?"}'
   }
 ];
