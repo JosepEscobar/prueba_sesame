@@ -4,7 +4,7 @@
       <h2 class="text-xl font-semibold mb-4">Estado del Sistema</h2>
       
       <!-- Estado general de la API -->
-      <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+      <div style="background-color: var(--message-surface);" class="shadow rounded-lg p-6 mb-6">
         <h3 class="text-lg font-medium mb-4">Estado General</h3>
         
         <div class="flex items-center mb-4">
@@ -15,7 +15,7 @@
           </div>
           <button 
             @click="fetchHealthStatus" 
-            class="ml-auto p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            class="ml-auto p-2 text-gray-300 hover:text-white"
             title="Refrescar"
           >
             <RefreshCw class="w-5 h-5" />
@@ -34,12 +34,12 @@
       </div>
       
       <!-- MCP Status -->
-      <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+      <div style="background-color: var(--message-surface);" class="shadow rounded-lg p-6 mb-6">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-medium">MCP</h3>
           <button 
             @click="fetchMcpStatus" 
-            class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            class="p-2 text-gray-300 hover:text-white"
             title="Refrescar"
           >
             <RefreshCw class="w-5 h-5" />
@@ -58,12 +58,12 @@
         
         <div v-else-if="mcpStatus" class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+            <div style="background-color: #292929;" class="p-4 rounded-lg">
               <div class="text-sm font-medium mb-1">URL</div>
-              <div class="text-gray-800 dark:text-gray-200">{{ mcpStatus.mcp_url || 'No disponible' }}</div>
+              <div class="text-gray-200">{{ mcpStatus.mcp_url || 'No disponible' }}</div>
             </div>
             
-            <div class="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+            <div style="background-color: #292929;" class="p-4 rounded-lg">
               <div class="text-sm font-medium mb-1">Estado</div>
               <div class="flex items-center">
                 <div 
@@ -81,9 +81,10 @@
               <div 
                 v-for="tool in mcpStatus.tools" 
                 :key="tool"
-                class="flex items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
+                style="background-color: #292929;"
+                class="flex items-center p-3 rounded-lg"
               >
-                <Wrench class="w-4 h-4 text-primary-600 mr-2 flex-shrink-0" />
+                <Wrench class="w-4 h-4 text-gray-300 mr-2 flex-shrink-0" />
                 <div class="min-w-0">
                   <div class="font-medium text-sm truncate">{{ tool }}</div>
                 </div>
@@ -98,7 +99,7 @@
       </div>
       
       <!-- Endpoints disponibles -->
-      <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+      <div style="background-color: var(--message-surface);" class="shadow rounded-lg p-6">
         <h3 class="text-lg font-medium mb-4">Endpoints Disponibles</h3>
         
         <div class="space-y-4">
@@ -108,7 +109,8 @@
               <div 
                 v-for="endpoint in endpoints" 
                 :key="endpoint.path"
-                class="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg"
+                style="background-color: #292929;"
+                class="p-3 rounded-lg"
               >
                 <div class="flex items-center">
                   <span 
@@ -124,7 +126,7 @@
                   </span>
                   <span class="font-mono text-sm">{{ endpoint.path }}</span>
                 </div>
-                <p v-if="endpoint.description" class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                <p v-if="endpoint.description" class="text-sm text-gray-400 mt-1">
                   {{ endpoint.description }}
                 </p>
               </div>

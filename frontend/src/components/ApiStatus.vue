@@ -9,7 +9,7 @@
       <div class="mx-2 text-gray-500">|</div>
       <div class="flex items-center">
         <div 
-          :class="mcpStatus.status === 'connected' ? 'bg-green-500' : 'bg-red-500'" 
+          :style="mcpStatus.status === 'connected' ? 'background-color: #22c55e' : 'background-color: #ef4444'" 
           class="w-2 h-2 rounded-full mr-2"
         ></div>
         <span class="text-gray-300">MCP</span>

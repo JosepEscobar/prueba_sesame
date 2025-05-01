@@ -156,7 +156,7 @@ const formatTime = (timestamp) => {
 <style>
 /* Estilos básicos para los mensajes */
 .user-bubble {
-  background-color: var(--composer-blue-bg);
+  background-color: var(--message-surface);
   color: var(--text-primary);
   border-radius: 0.75rem;
   padding: 0.75rem 1rem;
@@ -167,7 +167,7 @@ const formatTime = (timestamp) => {
 }
 
 .api-bubble {
-  background-color: var(--message-surface);
+  background-color: transparent;
   color: var(--text-primary);
   border-radius: 0.75rem;
   padding: 0.75rem 1rem;

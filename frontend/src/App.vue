@@ -31,7 +31,7 @@
 
     <!-- Main content -->
     <div class="flex-1 flex flex-col overflow-hidden">
-      <header class="h-16 flex items-center justify-between px-6 header">
+      <header class="flex items-center justify-between px-6 header h-16">
         <h2 class="text-lg font-medium header-title">{{ currentRoute }}</h2>
         <ApiStatus class="w-auto" />
       </header>
@@ -122,5 +122,9 @@ const newChat = () => {
 
 .main-content {
   background-color: var(--main-surface-background);
+}
+
+.h-16 {
+  height: 3.8rem;
 }
 </style> 

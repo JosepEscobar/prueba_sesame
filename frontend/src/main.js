@@ -5,6 +5,7 @@ import App from './App.vue';
 import router from './router';
 import './assets/main.css';
 import './assets/colors.css';
+import './assets/tailwind-custom.css';
 
 // Configuración de Markdown Editor
 import { MdPreview, config } from 'md-editor-v3';

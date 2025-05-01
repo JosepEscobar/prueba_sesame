@@ -5,35 +5,37 @@
       
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div 
-          class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 hover:shadow-md transition cursor-pointer"
+          style="background-color: var(--message-surface);"
+          class="shadow rounded-lg p-4 hover:shadow-md transition cursor-pointer"
           @click="activeTab = 'analyze'"
           :class="{ 'ring-2 ring-primary-500': activeTab === 'analyze' }"
         >
           <div class="flex items-center mb-2">
-            <BarChart class="w-5 h-5 text-primary-600 mr-2" />
+            <BarChart class="w-5 h-5 text-gray-300 mr-2" />
             <h3 class="font-medium">Análisis</h3>
           </div>
-          <p class="text-sm text-gray-600 dark:text-gray-400">
+          <p class="text-sm text-gray-400">
             Analiza el rendimiento de campañas de marketing existentes.
           </p>
         </div>
         
         <div 
-          class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 hover:shadow-md transition cursor-pointer"
+          style="background-color: var(--message-surface);"
+          class="shadow rounded-lg p-4 hover:shadow-md transition cursor-pointer"
           @click="activeTab = 'campaign'"
           :class="{ 'ring-2 ring-primary-500': activeTab === 'campaign' }"
         >
           <div class="flex items-center mb-2">
-            <Megaphone class="w-5 h-5 text-primary-600 mr-2" />
+            <Megaphone class="w-5 h-5 text-gray-300 mr-2" />
             <h3 class="font-medium">Campañas</h3>
           </div>
-          <p class="text-sm text-gray-600 dark:text-gray-400">
+          <p class="text-sm text-gray-400">
             Desarrolla nuevas estrategias y campañas de marketing.
           </p>
         </div>
       </div>
       
-      <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+      <div style="background-color: var(--message-surface);" class="shadow rounded-lg p-6">
         <h3 class="text-lg font-medium mb-4">
           {{ activeTab === 'analyze' ? 'Análisis de Marketing' : 'Generación de Campañas' }}
         </h3>
@@ -43,7 +45,8 @@
           <textarea
             v-model="query"
             rows="3"
-            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2"
+            class="w-full rounded-lg border border-gray-300 dark:border-gray-600" 
+            style="background-color: #292929;"
             :placeholder="activeTab === 'analyze' 
               ? 'Ej: Analiza el rendimiento de nuestra última campaña en redes sociales' 
               : 'Ej: Diseña una campaña para aumentar la conversión de visitantes a clientes'"
@@ -53,7 +56,7 @@
         <div class="flex justify-end mb-6">
           <button 
             @click="submitQuery" 
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-4 py-2 bg-gray-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="!query.trim() || isLoading"
           >
             <span v-if="isLoading" class="flex items-center">
@@ -74,9 +77,10 @@
               <div 
                 v-for="(metric, index) in resultData.metrics" 
                 :key="index"
-                class="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg text-center"
+                style="background-color: #292929;"
+                class="p-4 rounded-lg text-center"
               >
-                <div class="text-gray-500 dark:text-gray-400 text-sm mb-1">{{ metric.name }}</div>
+                <div class="text-gray-400 text-sm mb-1">{{ metric.name }}</div>
                 <div class="font-bold text-xl">{{ metric.value }}</div>
                 <div 
                   v-if="metric.change" 
@@ -94,7 +98,7 @@
                 <thead>
                   <tr>
                     <th v-for="(header, i) in resultData.table.headers" :key="i" 
-                        class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        class="px-3 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       {{ header }}
                     </th>
                   </tr>
@@ -111,7 +115,7 @@
             </div>
             
             <!-- Texto o descripción (si existe) -->
-            <div v-if="resultData.text" class="text-gray-800 dark:text-gray-200 whitespace-pre-line">
+            <div v-if="resultData.text" class="text-gray-200 whitespace-pre-line">
               {{ resultData.text }}
             </div>
             

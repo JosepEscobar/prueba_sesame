@@ -5,35 +5,37 @@
       
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div 
-          class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 hover:shadow-md transition cursor-pointer"
+          style="background-color: var(--message-surface);"
+          class="shadow rounded-lg p-4 hover:shadow-md transition cursor-pointer"
           @click="activeTab = 'analyze'"
           :class="{ 'ring-2 ring-primary-500': activeTab === 'analyze' }"
         >
           <div class="flex items-center mb-2">
-            <BarChart2 class="w-5 h-5 text-primary-600 mr-2" />
+            <BarChart2 class="w-5 h-5 text-gray-300 mr-2" />
             <h3 class="font-medium">Análisis</h3>
           </div>
-          <p class="text-sm text-gray-600 dark:text-gray-400">
+          <p class="text-sm text-gray-400">
             Analiza datos financieros históricos y obtén insights.
           </p>
         </div>
         
         <div 
-          class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 hover:shadow-md transition cursor-pointer"
+          style="background-color: var(--message-surface);"
+          class="shadow rounded-lg p-4 hover:shadow-md transition cursor-pointer"
           @click="activeTab = 'forecast'"
           :class="{ 'ring-2 ring-primary-500': activeTab === 'forecast' }"
         >
           <div class="flex items-center mb-2">
-            <TrendingUp class="w-5 h-5 text-primary-600 mr-2" />
+            <TrendingUp class="w-5 h-5 text-gray-300 mr-2" />
             <h3 class="font-medium">Pronóstico</h3>
           </div>
-          <p class="text-sm text-gray-600 dark:text-gray-400">
+          <p class="text-sm text-gray-400">
             Genera pronósticos financieros basados en datos históricos.
           </p>
         </div>
       </div>
       
-      <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+      <div style="background-color: var(--message-surface);" class="shadow rounded-lg p-6">
         <h3 class="text-lg font-medium mb-4">
           {{ activeTab === 'analyze' ? 'Análisis Financiero' : 'Pronóstico Financiero' }}
         </h3>
@@ -43,7 +45,8 @@
           <textarea
             v-model="query"
             rows="3"
-            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2"
+            class="w-full rounded-lg border border-gray-300 dark:border-gray-600" 
+            style="background-color: #292929;"
             :placeholder="activeTab === 'analyze' 
               ? 'Ej: Analiza el rendimiento financiero del último trimestre' 
               : 'Ej: Genera un pronóstico de ingresos para los próximos 3 meses'"
@@ -53,7 +56,7 @@
         <div class="flex justify-end mb-6">
           <button 
             @click="submitQuery" 
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-4 py-2 bg-gray-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="!query.trim() || isLoading"
           >
             <span v-if="isLoading" class="flex items-center">
@@ -73,7 +76,7 @@
               <thead>
                 <tr>
                   <th v-for="(header, i) in resultData.table.headers" :key="i" 
-                      class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      class="px-3 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                     {{ header }}
                   </th>
                 </tr>
@@ -89,7 +92,7 @@
             </table>
           </div>
           
-          <div v-if="resultData.text" class="mt-4 text-gray-800 dark:text-gray-200">
+          <div v-if="resultData.text" class="mt-4 text-gray-200">
             {{ resultData.text }}
           </div>
         </div>

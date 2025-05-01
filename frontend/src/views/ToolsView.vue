@@ -3,12 +3,13 @@
     <div class="max-w-4xl mx-auto">
       <h2 class="text-xl font-semibold mb-4">Herramientas MCP</h2>
       
-      <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+      <div style="background-color: var(--message-surface);" class="shadow rounded-lg p-6 mb-6">
         <div class="mb-4">
           <label class="block text-sm font-medium mb-2">Seleccionar Herramienta</label>
           <select 
             v-model="selectedTool" 
-            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2"
+            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white" 
+            style="background-color: #292929;"
           >
             <option value="" disabled>Seleccione una herramienta</option>
             <option v-for="tool in tools" :key="tool.name" :value="tool.name">
@@ -24,7 +25,8 @@
             <input 
               v-model="paramValues[param.name]" 
               type="text" 
-              class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2"
+              class="w-full rounded-lg border border-gray-300 dark:border-gray-600" 
+              style="background-color: #292929;"
               :placeholder="param.description || param.name"
             />
             <p v-if="param.description" class="text-xs text-gray-500">{{ param.description }}</p>
@@ -34,7 +36,7 @@
         <div class="flex justify-end">
           <button 
             @click="runTool" 
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-4 py-2 bg-gray-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="!selectedTool || isLoading"
           >
             <span v-if="isLoading" class="flex items-center">
@@ -45,12 +47,12 @@
         </div>
       </div>
       
-      <div v-if="result" class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+      <div v-if="result" style="background-color: var(--message-surface);" class="shadow rounded-lg p-6">
         <h3 class="text-lg font-medium mb-3">Resultado</h3>
         
         <div v-if="error" class="text-red-500 mb-2">{{ error }}</div>
         
-        <pre v-else class="bg-gray-100 dark:bg-gray-900 p-4 rounded overflow-x-auto text-sm">{{ formattedResult }}</pre>
+        <pre v-else style="background-color: #292929;" class="p-4 rounded overflow-x-auto text-sm">{{ formattedResult }}</pre>
       </div>
     </div>
   </div>
