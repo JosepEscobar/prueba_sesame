@@ -40,7 +40,7 @@ class ToolResponse(BaseModel):
 async def list_tools():
     """
     Lista todas las herramientas disponibles en el sistema.
-    
+
     Returns:
         Lista de herramientas disponibles con detalles
     """
@@ -67,13 +67,13 @@ async def list_tools():
 async def get_tool_info(tool_name: str):
     """
     Obtiene información detallada sobre una herramienta específica.
-    
+
     Args:
         tool_name: Nombre de la herramienta
-        
+
     Returns:
         Detalles de la herramienta
-        
+
     Raises:
         HTTPException: Si la herramienta no existe
     """
@@ -95,14 +95,14 @@ async def get_tool_info(tool_name: str):
 async def execute_tool(request: ToolRequest, background_tasks: BackgroundTasks):
     """
     Ejecuta una herramienta específica con los parámetros proporcionados.
-    
+
     Args:
         request: Solicitud con el nombre de la herramienta y los parámetros
         background_tasks: Tareas en segundo plano para métricas
-        
+
     Returns:
         Resultado de la ejecución de la herramienta
-        
+
     Raises:
         HTTPException: Si la herramienta no existe o no tiene implementación
     """

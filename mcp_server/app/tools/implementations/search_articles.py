@@ -1,7 +1,7 @@
 """
 Implementación de herramientas para búsqueda de artículos.
 
-Este módulo contiene herramientas para buscar artículos y 
+Este módulo contiene herramientas para buscar artículos y
 contenido relacionado con diversos temas utilizando APIs externas.
 """
 
@@ -24,14 +24,14 @@ async def search_articles(
 ) -> dict[str, Any]:
     """
     Busca artículos y noticias relacionados con un tema específico mediante APIs públicas.
-    
+
     Args:
         tema: Tema o palabra clave para buscar (alternativa a query)
         query: Tema o palabra clave para buscar (alternativa a tema)
         max_resultados: Número máximo de resultados a devolver
         incluir_resumen: Si se debe incluir un resumen de cada artículo
         fuentes: Lista de fuentes específicas donde buscar (opcional)
-    
+
     Returns:
         Lista de artículos encontrados con metadatos
     """

@@ -22,19 +22,16 @@ from app.tools.stdio_client import StdioClientSession
 class MCPClient:
     """
     Cliente MCP con métodos sincronos para interactuar con el servidor MCP.
-    
+
     Esta implementación soporta tanto comunicación HTTP como stdio con el servidor MCP.
     """
 
     def __init__(
-        self,
-        base_url: str = "http://localhost:4000",
-        use_stdio: bool = False,
-        mcp_server_path: str | None = None
+        self, base_url: str = "http://localhost:4000", use_stdio: bool = False, mcp_server_path: str | None = None
     ):
         """
         Inicializa el cliente MCP.
-        
+
         Args:
             base_url: URL base del servidor MCP para llamadas HTTP
             use_stdio: Si es True, utiliza comunicación por stdio con subprocess
@@ -52,7 +49,7 @@ class MCPClient:
         """
         Implementación puramente síncrona del método de inicialización.
         No intenta usar el loop de eventos en absoluto.
-        
+
         Returns:
             bool: True si se inicializó con éxito, False en caso contrario
         """
@@ -73,7 +70,7 @@ class MCPClient:
     def list_tools_sync(self) -> list[dict[str, Any]]:
         """
         Implementación puramente síncrona para listar herramientas.
-        
+
         Returns:
             Lista de herramientas disponibles
         """
@@ -109,11 +106,11 @@ class MCPClient:
     def call_tool_sync(self, tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
         """
         Implementación puramente síncrona para llamar a una herramienta.
-        
+
         Args:
             tool_name: Nombre de la herramienta a llamar
             params: Parámetros para la herramienta
-            
+
         Returns:
             Resultado de la ejecución de la herramienta
         """
@@ -153,7 +150,28 @@ class MCPClient:
             logger.error(f"Error al llamar a herramienta MCP {tool_name}: {str(e)}")
             return {"error": f"Error en la llamada a la herramienta: {str(e)}"}
 
-    def close(self):
+    async def close_async(self):
+        """Cierra la conexión con el servidor MCP de forma asíncrona."""
+        try:
+            if self.use_stdio and self._stdio_session is not None:
+                await self._stdio_session.close()
+                self._stdio_session = None
+                logger.info("Conexión stdio con servidor MCP cerrada correctamente")
+            elif self._client is not None:
+                # ¿Hay método de cierre en el cliente original?
+                if hasattr(self._client, "close") and callable(self._client.close):
+                    close_method = self._client.close
+                    # Verificar si es corutina o método normal
+                    if asyncio.iscoroutinefunction(close_method):
+                        await close_method()
+                    else:
+                        close_method()
+                self._client = None
+                logger.info("Conexión con servidor MCP cerrada correctamente")
+        except Exception as e:
+            logger.error(f"Error al cerrar la conexión con servidor MCP: {str(e)}")
+
+    def close_mcp_server(self):
         """
         Cierra conexiones y finaliza el servidor MCP si fue iniciado por este cliente.
         """
@@ -169,10 +187,10 @@ class MCPClient:
         self.initialized = False
         self.tools_cache = None
 
-    async def initialize(self):
+    async def initialize(self) -> bool:
         """
         Inicializa la conexión y carga las herramientas disponibles.
-        
+
         Esta función debe ser llamada antes de usar cualquier operación del cliente.
         """
         max_retries = 3
@@ -182,7 +200,9 @@ class MCPClient:
             try:
                 if self.use_stdio:
                     # Usar transporte stdin/stdout
-                    logger.info(f"Intento {attempt}/{max_retries} de conexión al servidor MCP vía stdio: {self.mcp_server_path}")
+                    logger.info(
+                        f"Intento {attempt}/{max_retries} de conexión al servidor MCP vía stdio: {self.mcp_server_path}"
+                    )
 
                     if not os.path.exists(self.mcp_server_path):
                         logger.error(f"No se encontró el archivo del servidor MCP en {self.mcp_server_path}")
@@ -199,7 +219,9 @@ class MCPClient:
                     try:
                         tools = await asyncio.wait_for(self._stdio_session.list_tools(), timeout=5.0)
                         tool_count = len(tools)
-                        logger.info(f"Conexión exitosa al servidor MCP vía stdio. Herramientas disponibles: {tool_count}")
+                        logger.info(
+                            f"Conexión exitosa al servidor MCP vía stdio. Herramientas disponibles: {tool_count}"
+                        )
                         return True
                     except TimeoutError:
                         logger.warning("Timeout al conectar con el servidor MCP vía stdio")
@@ -213,12 +235,14 @@ class MCPClient:
                 else:
                     # Usar transporte HTTP/SSE original
                     # Crear el cliente MultiServerMCP
-                    self._client = MultiServerMCPClient({
-                        "default": {
-                            "transport": "sse",
-                            "url": self.base_url,
+                    self._client = MultiServerMCPClient(
+                        {
+                            "default": {
+                                "transport": "sse",
+                                "url": self.base_url,
+                            }
                         }
-                    })
+                    )
 
                     # Intentar cargar herramientas para verificar la conexión
                     logger.info(f"Intento {attempt}/{max_retries} de conexión al servidor MCP en {self.base_url}")
@@ -263,7 +287,7 @@ class MCPClient:
     async def list_tools_async(self) -> list[dict[str, Any]]:
         """
         Lista las herramientas disponibles en el servidor MCP (versión asíncrona).
-        
+
         Returns:
             Lista de herramientas disponibles con sus esquemas
         """
@@ -298,7 +322,7 @@ class MCPClient:
                     # Manejar diferentes tipos de respuesta de get_tools
                     try:
                         # Verificar primero si el cliente tiene el método get_tools
-                        if not hasattr(self._client, 'get_tools'):
+                        if not hasattr(self._client, "get_tools"):
                             logger.error("El cliente MCP no tiene el método get_tools")
                             return []
 
@@ -309,7 +333,7 @@ class MCPClient:
                         if isinstance(get_tools_result, list):
                             tools = get_tools_result
                         # Si es una corutina, esperarla
-                        elif hasattr(get_tools_result, '__await__'):
+                        elif hasattr(get_tools_result, "__await__"):
                             tools = await get_tools_result
                         # Otro tipo inesperado
                         else:
@@ -330,13 +354,17 @@ class MCPClient:
                     for tool in tools:
                         try:
                             # Verificar que herramientas tienen la estructura esperada
-                            if hasattr(tool, 'name') and hasattr(tool, 'description') and hasattr(tool, 'args'):
-                                self._tools_cache.append({
-                                    "name": tool.name,
-                                    "description": tool.description,
-                                    "inputs": {k: v for k, v in tool.args.items()},
-                                    "outputs": {"result": {"type": "any", "description": "Resultado de la operación"}}
-                                })
+                            if hasattr(tool, "name") and hasattr(tool, "description") and hasattr(tool, "args"):
+                                self._tools_cache.append(
+                                    {
+                                        "name": tool.name,
+                                        "description": tool.description,
+                                        "inputs": {k: v for k, v in tool.args.items()},
+                                        "outputs": {
+                                            "result": {"type": "any", "description": "Resultado de la operación"}
+                                        },
+                                    }
+                                )
                             else:
                                 logger.warning(f"Herramienta con formato inesperado: {tool}")
                         except Exception as e:
@@ -357,7 +385,7 @@ class MCPClient:
         """
         Lista las herramientas disponibles en el servidor MCP (versión no asíncrona).
         Usa el caché si está disponible para evitar llamadas asíncronas.
-        
+
         Returns:
             Lista de herramientas disponibles con sus esquemas
         """
@@ -402,11 +430,11 @@ class MCPClient:
     async def call_tool(self, tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
         """
         Llama a una herramienta específica en el servidor MCP.
-        
+
         Args:
             tool_name: Nombre de la herramienta a llamar
             params: Parámetros para la herramienta
-            
+
         Returns:
             Resultado de la llamada a la herramienta
         """
@@ -419,7 +447,9 @@ class MCPClient:
                 if self._stdio_session is None:
                     success = await self.initialize()
                     if not success:
-                        logger.error(f"No se pudo inicializar el cliente MCP (stdio) para llamar a la herramienta {tool_name}")
+                        logger.error(
+                            f"No se pudo inicializar el cliente MCP (stdio) para llamar a la herramienta {tool_name}"
+                        )
                         return {"error": "No se pudo inicializar la conexión con el servidor MCP"}
 
                 # Llamar a la herramienta mediante la sesión stdio
@@ -427,11 +457,7 @@ class MCPClient:
 
                 # Registrar métricas
                 execution_time = asyncio.get_event_loop().time() - start_time
-                self.metrics.record_tool_execution(
-                    tool_name=tool_name,
-                    execution_time=execution_time,
-                    status="success"
-                )
+                self.metrics.record_tool_execution(tool_name=tool_name, execution_time=execution_time, status="success")
 
                 logger.info(f"Herramienta {tool_name} ejecutada vía stdio en {execution_time:.2f} segundos")
                 return result
@@ -461,7 +487,7 @@ class MCPClient:
                     mcp_tools = self._client.get_tools()
 
                     # Manejar diferentes tipos de respuesta
-                    if hasattr(mcp_tools, '__await__'):
+                    if hasattr(mcp_tools, "__await__"):
                         available_tools = await mcp_tools
                     else:
                         available_tools = mcp_tools
@@ -477,7 +503,7 @@ class MCPClient:
                     invoke_result = tool.ainvoke(params)
 
                     # Manejar diferentes tipos de respuesta
-                    if hasattr(invoke_result, '__await__'):
+                    if hasattr(invoke_result, "__await__"):
                         result = await invoke_result
                     else:
                         result = invoke_result
@@ -487,9 +513,7 @@ class MCPClient:
 
                     # Registrar métricas
                     self.metrics.record_execution(
-                        service_name="mcp_client",
-                        operation=tool_name,
-                        execution_time=execution_time
+                        service_name="mcp_client", operation=tool_name, execution_time=execution_time
                     )
 
                     logger.info(f"Herramienta MCP '{tool_name}' ejecutada exitosamente en {execution_time:.4f}s")
@@ -507,19 +531,13 @@ class MCPClient:
 
                 except Exception as e:
                     logger.error(f"Error al ejecutar herramienta MCP '{tool_name}': {str(e)}")
-                    self.metrics.record_error(
-                        agent_name=f"mcp_client.{tool_name}",
-                        error_type=str(e)
-                    )
+                    self.metrics.record_error(agent_name=f"mcp_client.{tool_name}", error_type=str(e))
                     return {"error": f"Error al ejecutar herramienta: {str(e)}"}
 
         except Exception as e:
             # Registrar el error
             logger.error(f"Error al llamar a herramienta MCP {tool_name}: {str(e)}")
-            self.metrics.record_error(
-                agent_name=f"mcp_client.{tool_name}",
-                error_type=str(e)
-            )
+            self.metrics.record_error(agent_name=f"mcp_client.{tool_name}", error_type=str(e))
 
             return {"error": f"Error en la llamada a la herramienta: {str(e)}"}
 
@@ -532,10 +550,10 @@ class MCPClient:
     async def get_tool_wrapper(self, tool_name: str) -> Callable[[dict[str, Any]], Awaitable[dict[str, Any]]] | None:
         """
         Obtiene una función wrapper para una herramienta específica.
-        
+
         Args:
             tool_name: Nombre de la herramienta
-            
+
         Returns:
             Función wrapper que puede ser llamada con los parámetros de la herramienta
         """
@@ -552,24 +570,3 @@ class MCPClient:
             return await self.call_tool(tool_name, params)
 
         return tool_wrapper
-
-    async def close(self):
-        """Cierra la conexión con el servidor MCP."""
-        try:
-            if self.use_stdio and self._stdio_session is not None:
-                await self._stdio_session.close()
-                self._stdio_session = None
-                logger.info("Conexión stdio con servidor MCP cerrada correctamente")
-            elif self._client is not None:
-                # ¿Hay método de cierre en el cliente original?
-                if hasattr(self._client, 'close') and callable(self._client.close):
-                    close_method = self._client.close
-                    # Verificar si es corutina o método normal
-                    if asyncio.iscoroutinefunction(close_method):
-                        await close_method()
-                    else:
-                        close_method()
-                self._client = None
-                logger.info("Conexión HTTP/SSE con servidor MCP cerrada correctamente")
-        except Exception as e:
-            logger.error(f"Error al cerrar cliente MCP: {str(e)}")

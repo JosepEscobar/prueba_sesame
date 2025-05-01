@@ -18,7 +18,7 @@ from app.core.logging import logger
 class StdioTransport:
     """
     Transporte para comunicarse con un servidor MCP a través de la entrada/salida estándar.
-    
+
     Implementación basada en la documentación de MCP, permite interactuar con el servidor
     mediante un proceso hijo y comunicación por stdin/stdout.
     """
@@ -26,7 +26,7 @@ class StdioTransport:
     def __init__(self, command: list[str]):
         """
         Inicializa el transporte.
-        
+
         Args:
             command: Comando para iniciar el servidor MCP
         """
@@ -104,14 +104,14 @@ class StdioTransport:
 class StdioClientSession:
     """
     Sesión del cliente para interactuar con un servidor MCP mediante StdioTransport.
-    
+
     Implementación adaptada para ser compatible con el resto del sistema.
     """
 
     def __init__(self, mcp_server_path: str):
         """
         Inicializa la sesión del cliente.
-        
+
         Args:
             mcp_server_path: Ruta al script del servidor MCP
         """
@@ -124,7 +124,7 @@ class StdioClientSession:
         self.read_task = None
         self._tools_cache = None
 
-    async def open(self):
+    async def open(self) -> bool | None:
         """Abre la conexión con el servidor."""
         try:
             logger.info(f"Abriendo conexión MCP (StdioTransport) con servidor: {self.mcp_server_path}")
@@ -157,11 +157,11 @@ class StdioClientSession:
     async def _send_request(self, method: str, params: dict[str, Any] = None) -> dict[str, Any]:
         """
         Envía una solicitud al servidor y espera la respuesta.
-        
+
         Args:
             method: Método a llamar
             params: Parámetros para el método
-            
+
         Returns:
             Respuesta del servidor
         """
@@ -213,7 +213,7 @@ class StdioClientSession:
     async def list_tools(self) -> list[dict[str, Any]]:
         """
         Lista las herramientas disponibles en el servidor.
-        
+
         Returns:
             Lista de herramientas disponibles
         """
@@ -266,11 +266,11 @@ class StdioClientSession:
     async def call_tool(self, tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
         """
         Llama a una herramienta específica en el servidor.
-        
+
         Args:
             tool_name: Nombre de la herramienta
             params: Parámetros para la herramienta
-            
+
         Returns:
             Resultado de la ejecución de la herramienta
         """

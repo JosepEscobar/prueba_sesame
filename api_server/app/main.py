@@ -51,35 +51,25 @@ mcp_process = None
 class TimeoutMiddleware(BaseHTTPMiddleware):
     """Middleware para agregar un timeout a todas las solicitudes."""
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         try:
             # Establecer un timeout de 10 segundos para todas las solicitudes
             return await asyncio.wait_for(call_next(request), timeout=10.0)
         except TimeoutError:
-            logger.error(
-                f"Timeout en la solicitud: {request.method} {request.url.path}"
-            )
+            logger.error(f"Timeout en la solicitud: {request.method} {request.url.path}")
             return JSONResponse(
                 status_code=504,
-                content={
-                    "detail": "La solicitud excedió el tiempo límite de 10 segundos"
-                },
+                content={"detail": "La solicitud excedió el tiempo límite de 10 segundos"},
             )
         except Exception as e:
             logger.error(f"Error inesperado en el middleware: {str(e)}")
-            return JSONResponse(
-                status_code=500, content={"detail": "Error interno del servidor"}
-            )
+            return JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware para registrar solicitudes HTTP."""
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         start_time = time.time()
         request_id = request.headers.get("X-Request-ID", "unknown")
 
@@ -128,17 +118,13 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             )
 
             # En caso de error no controlado, devolver respuesta de error 500
-            return JSONResponse(
-                status_code=500, content={"detail": "Error interno del servidor"}
-            )
+            return JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
 
 
 class ResponseLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware para registrar todas las respuestas HTTP con su contenido."""
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         start_time = time.time()
         request_id = request.headers.get("X-Request-ID", "unknown")
 
@@ -170,9 +156,7 @@ class ResponseLoggingMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         # Si es una respuesta JSON de la API, capturar y loguear el contenido completo
-        if "/api/" in path and "application/json" in response.headers.get(
-            "content-type", ""
-        ):
+        if "/api/" in path and "application/json" in response.headers.get("content-type", ""):
             try:
                 # Necesitamos leer el cuerpo de la respuesta
                 original_body = b""
@@ -232,9 +216,7 @@ async def lifespan(app: FastAPI):
     try:
         # Iniciar el servidor MCP en un proceso separado
         logger.info("Iniciando servidor MCP en un proceso separado...")
-        mcp_process = start_mcp_server_process(
-            host=settings.MCP_HOST, port=settings.MCP_PORT
-        )
+        mcp_process = start_mcp_server_process(host=settings.MCP_HOST, port=settings.MCP_PORT)
 
         if mcp_process is None:
             logger.error(
@@ -245,17 +227,13 @@ async def lifespan(app: FastAPI):
 
             # Esperar más tiempo para asegurar que el servidor MCP esté completamente iniciado
             # y haya cargado todas las herramientas
-            logger.info(
-                "Esperando a que el servidor MCP esté completamente iniciado..."
-            )
+            logger.info("Esperando a que el servidor MCP esté completamente iniciado...")
             time.sleep(5)
 
             # Verificar que el proceso sigue en ejecución
             if mcp_process.poll() is not None:
                 exit_code = mcp_process.poll()
-                logger.error(
-                    f"El proceso del servidor MCP se detuvo con código de salida {exit_code}"
-                )
+                logger.error(f"El proceso del servidor MCP se detuvo con código de salida {exit_code}")
                 # Intentar leer los logs de error
                 stdout, stderr = mcp_process.communicate()
                 if stderr:
@@ -265,24 +243,18 @@ async def lifespan(app: FastAPI):
                 logger.info("Servidor MCP en ejecución correctamente")
     except Exception as e:
         logger.error(f"Error al iniciar el servidor MCP: {str(e)}")
-        logger.warning(
-            "La aplicación continuará pero las herramientas MCP no estarán disponibles."
-        )
+        logger.warning("La aplicación continuará pero las herramientas MCP no estarán disponibles.")
 
     # Continuar con la inicialización de la aplicación
     logger.info("Iniciando aplicación FastAPI...")
 
     # Registrar herramientas disponibles para los agentes
     tool_stats = register_all_tools()
-    logger.info(
-        f"Herramientas registradas: {tool_stats['implemented_tools']}/{tool_stats['total_tools']}"
-    )
+    logger.info(f"Herramientas registradas: {tool_stats['implemented_tools']}/{tool_stats['total_tools']}")
 
     # Cargar herramientas MCP adaptadas
     tools = get_mcp_tools()
-    logger.info(
-        f"Herramientas MCP adaptadas cargadas: {len(tools)} herramientas disponibles"
-    )
+    logger.info(f"Herramientas MCP adaptadas cargadas: {len(tools)} herramientas disponibles")
 
     yield
 
@@ -388,9 +360,7 @@ async def health_check() -> dict:
         # Si el proceso ha terminado (poll() devuelve código de salida)
         if mcp_process.poll() is not None:
             exit_code = mcp_process.poll()
-            health_status["services"]["mcp_server"] = (
-                f"error: proceso terminado con código {exit_code}"
-            )
+            health_status["services"]["mcp_server"] = f"error: proceso terminado con código {exit_code}"
         else:
             health_status["services"]["mcp_server"] = "ok"
     else:
@@ -451,6 +421,4 @@ async def list_mcp_tools() -> list[dict[str, str]]:
 
 # Punto de entrada para ejecución directa
 if __name__ == "__main__":
-    uvicorn.run(
-        "app.main:app", host=settings.HOST, port=settings.PORT, reload=settings.DEBUG
-    )
+    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=settings.DEBUG)
