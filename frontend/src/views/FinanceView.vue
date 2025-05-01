@@ -96,10 +96,8 @@
             {{ resultData.text }}
           </div>
           
-          <!-- Fallback para mostrar resultado en texto plano si no se reconoce ningún formato -->
-          <div v-else class="mt-4 p-4 rounded-lg" style="background-color: #292929;">
-            <pre class="text-gray-200 whitespace-pre-wrap overflow-x-auto">{{ formatResult() }}</pre>
-          </div>
+          <!-- Renderizado de Markdown -->
+          <div v-else class="markdown-body" v-html="renderedMarkdown"></div>
         </div>
       </div>
     </div>
@@ -107,9 +105,36 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
 import { BarChart2, TrendingUp } from 'lucide-vue-next';
+import MarkdownIt from 'markdown-it';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/github-dark.css';
+
+// Inicializar markdown-it
+let md;
+onMounted(() => {
+  // Inicializar markdown-it con opciones de GitHub style
+  md = new MarkdownIt({
+    html: false,        // No permitir HTML en la entrada
+    xhtmlOut: false,    // No usar XHTML
+    breaks: true,       // Convertir \n en <br>
+    linkify: true,      // Autoconvertir URLs en enlaces
+    typographer: true,  // Sustituir (c) (tm) etc.
+    highlight: function (str, lang) {
+      if (lang && hljs.getLanguage(lang)) {
+        try {
+          return '<pre class="hljs"><code>' +
+                 hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+                 '</code></pre>';
+        } catch (__) {}
+      }
+      
+      return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
+    }
+  });
+});
 
 const activeTab = ref('analyze'); // 'analyze' o 'forecast'
 const query = ref('');
@@ -193,4 +218,173 @@ const formatResult = () => {
     return String(result.value);
   }
 };
-</script> 
+
+// Renderizar Markdown del contenido
+const renderedMarkdown = computed(() => {
+  if (!md || !result.value) {
+    return '';
+  }
+  
+  try {
+    // Si el resultado contiene 'content', usar ese campo para markdown
+    const content = getResultContent();
+    if (!content) return '';
+    
+    return md.render(content);
+  } catch (e) {
+    console.error('Error al renderizar Markdown:', e);
+    return `<div class="text-red-500">Error al renderizar: ${e.message}</div>
+            <div class="whitespace-pre-wrap">${getResultContent()}</div>`;
+  }
+});
+
+// Obtener el contenido del resultado
+const getResultContent = () => {
+  if (!result.value) return '';
+  
+  // Si es un objeto y tiene un campo content, usar ese
+  if (typeof result.value === 'object' && result.value !== null) {
+    if (result.value.content) return result.value.content;
+    
+    // Intentar otras propiedades comunes donde podría estar el contenido
+    if (result.value.text) return result.value.text;
+  }
+  
+  // Si es string, devolver directamente
+  if (typeof result.value === 'string') return result.value;
+  
+  // Último recurso: convertir a JSON
+  try {
+    return JSON.stringify(result.value, null, 2);
+  } catch (e) {
+    return String(result.value);
+  }
+};
+</script>
+
+<style>
+/* Estilos para Markdown GitHub style */
+.markdown-body {
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.markdown-body a {
+  color: #58a6ff;
+  text-decoration: underline;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
+  color: #79c0ff;
+}
+
+.markdown-body strong {
+  font-weight: 600;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.markdown-body h1 {
+  font-size: 2em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-body h2 {
+  font-size: 1.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid #30363d;
+}
+
+.markdown-body h3 {
+  font-size: 1.25em;
+}
+
+.markdown-body h4 {
+  font-size: 1em;
+}
+
+.markdown-body code {
+  padding: 0.2em 0.4em;
+  margin: 0;
+  font-size: 85%;
+  background-color: #2d333b;
+  border-radius: 3px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.markdown-body pre {
+  margin-top: 0.5em;
+  margin-bottom: 1em;
+  padding: 16px;
+  overflow: auto;
+  background-color: #2d333b;
+  border-radius: 3px;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  margin: 0;
+  font-size: 0.9em;
+  word-break: normal;
+  white-space: pre;
+  background: transparent;
+  border: 0;
+  display: inline;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 2em;
+  margin-top: 0;
+  margin-bottom: 1em;
+}
+
+.markdown-body ul {
+  list-style-type: disc;
+}
+
+.markdown-body ol {
+  list-style-type: decimal;
+}
+
+.markdown-body li {
+  margin-bottom: 0.25em;
+}
+
+.markdown-body li + li {
+  margin-top: 0.25em;
+}
+
+.markdown-body blockquote {
+  margin: 1em 0;
+  padding: 0 1em;
+  color: #8b949e;
+  border-left: 0.25em solid #30363d;
+}
+
+.markdown-body img {
+  max-width: 100%;
+  box-sizing: content-box;
+  background-color: #0d1117;
+}
+
+.markdown-body hr {
+  height: 0.25em;
+  padding: 0;
+  margin: 24px 0;
+  background-color: #30363d;
+  border: 0;
+}
+</style> 
