@@ -38,10 +38,7 @@ class StdioTransport:
         # Iniciar el proceso del servidor
         logger.info(f"Iniciando proceso MCP con comando: {' '.join(self.command)}")
         self.process = await asyncio.create_subprocess_exec(
-            *self.command,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            *self.command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
 
         # Leer mensajes de stderr en segundo plano
@@ -55,7 +52,7 @@ class StdioTransport:
                     if not line:
                         break
                     try:
-                        message = json.loads(line.decode('utf-8'))
+                        message = json.loads(line.decode("utf-8"))
                         logger.debug(f"Mensaje recibido: {str(message)[:100]}...")
                         yield message
                     except json.JSONDecodeError as e:
@@ -65,7 +62,7 @@ class StdioTransport:
         async def writer(message: dict[str, Any]) -> None:
             if self.process.stdin:
                 logger.debug(f"Enviando mensaje: {str(message)[:100]}...")
-                data = json.dumps(message).encode('utf-8') + b'\n'
+                data = json.dumps(message).encode("utf-8") + b"\n"
                 self.process.stdin.write(data)
                 await self.process.stdin.drain()
 
@@ -100,6 +97,7 @@ class StdioTransport:
                     await self.process.wait()
             except Exception as e:
                 logger.error(f"Error al cerrar proceso MCP: {str(e)}")
+
 
 class StdioClientSession:
     """
@@ -143,8 +141,8 @@ class StdioClientSession:
             async for message in self.reader():
                 # Procesar mensajes del servidor
                 logger.debug(f"Mensaje recibido del servidor MCP: {str(message)[:200]}...")
-                if 'id' in message and message['id'] in self.pending_requests:
-                    req_id = message['id']
+                if "id" in message and message["id"] in self.pending_requests:
+                    req_id = message["id"]
                     future = self.pending_requests[req_id]
                     future.set_result(message)
                     del self.pending_requests[req_id]
@@ -169,12 +167,7 @@ class StdioClientSession:
         req_id = str(self.request_id)
 
         # Crear la solicitud
-        request = {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "method": method,
-            "params": params or {}
-        }
+        request = {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params or {}}
 
         # Crear una future para esperar la respuesta
         future = asyncio.Future()
@@ -238,16 +231,18 @@ class StdioClientSession:
                         inputs[arg.get("name", "")] = {
                             "type": arg.get("type", "string"),
                             "description": arg.get("description", ""),
-                            "required": arg.get("required", True)
+                            "required": arg.get("required", True),
                         }
 
-                    formatted_tools.append({
-                        "name": tool.get("name", ""),
-                        "description": tool.get("description", ""),
-                        "inputs": inputs,
-                        "outputs": {"result": {"type": "any", "description": "Resultado de la operación"}},
-                        "args": args  # Mantener args original para compatibilidad
-                    })
+                    formatted_tools.append(
+                        {
+                            "name": tool.get("name", ""),
+                            "description": tool.get("description", ""),
+                            "inputs": inputs,
+                            "outputs": {"result": {"type": "any", "description": "Resultado de la operación"}},
+                            "args": args,  # Mantener args original para compatibilidad
+                        }
+                    )
                 except Exception as e:
                     logger.error(f"Error al formatear herramienta: {str(e)}")
 
@@ -278,10 +273,7 @@ class StdioClientSession:
             logger.info(f"Llamando a herramienta MCP: {tool_name} con parámetros: {params}")
             start_time = asyncio.get_event_loop().time()
 
-            response = await self._send_request("callTool", {
-                "name": tool_name,
-                "params": params
-            })
+            response = await self._send_request("callTool", {"name": tool_name, "params": params})
 
             execution_time = asyncio.get_event_loop().time() - start_time
 

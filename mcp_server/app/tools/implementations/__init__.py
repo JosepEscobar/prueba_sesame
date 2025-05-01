@@ -26,5 +26,5 @@ AVAILABLE_TOOLS = [
     predecir_valores,
     search_articles,
     financial_models,
-    analizar_rendimiento_campania
+    analizar_rendimiento_campania,
 ]

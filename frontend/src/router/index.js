@@ -9,11 +9,6 @@ const router = createRouter({
             component: () => import('../views/ChatView.vue')
         },
         {
-            path: '/tools',
-            name: 'tools',
-            component: () => import('../views/ToolsView.vue')
-        },
-        {
             path: '/finance',
             name: 'finance',
             component: () => import('../views/FinanceView.vue')

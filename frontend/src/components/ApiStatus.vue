@@ -9,7 +9,7 @@
       <div class="mx-2 text-gray-500">|</div>
       <div class="flex items-center">
         <div 
-          :style="mcpStatus.status === 'connected' ? 'background-color: #22c55e' : 'background-color: #ef4444'" 
+          :style="mcpStatus === 'connected' ? 'background-color: #22c55e' : 'background-color: #ef4444'" 
           class="w-2 h-2 rounded-full mr-2"
         ></div>
         <span class="text-gray-300">MCP</span>
@@ -24,17 +24,19 @@ import axios from 'axios';
 
 const health = ref('loading');
 const mcpStatus = ref(null);
+const mcpToolsCount = ref(0);
+const mcpConnError = ref(null);
 
 // Obtener estados al montar
 onMounted(async () => {
   try {
     await fetchHealthStatus();
-    await fetchMcpStatus();
+    await checkMCPStatus();
     
     // Actualizar cada 30 segundos
     setInterval(async () => {
       await fetchHealthStatus();
-      await fetchMcpStatus();
+      await checkMCPStatus();
     }, 30000);
   } catch (error) {
     console.error('Error al obtener estado inicial:', error);
@@ -52,14 +54,20 @@ const fetchHealthStatus = async () => {
   }
 };
 
-const fetchMcpStatus = async () => {
+const checkMCPStatus = async () => {
   try {
-    console.log('Consultando estado MCP en http://localhost:8000/mcp/status');
+    console.log('Consultando estado MCP a través del API server');
     const response = await axios.get('/mcp/status');
-    mcpStatus.value = response.data;
+    
+    if (response && response.data) {
+      mcpToolsCount.value = response.data.tools_available || 0;
+      mcpStatus.value = response.data.status || 'disconnected';
+      mcpConnError.value = null;
+    }
   } catch (error) {
-    mcpStatus.value = null;
-    console.error('Error al obtener estado de MCP:', error);
+    console.error('Error al consultar estado MCP:', error);
+    mcpStatus.value = 'disconnected';
+    mcpConnError.value = error.message || 'Error desconocido';
   }
 };
 

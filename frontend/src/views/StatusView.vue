@@ -86,7 +86,7 @@
               >
                 <Wrench class="w-4 h-4 text-gray-300 mr-2 flex-shrink-0" />
                 <div class="min-w-0">
-                  <div class="font-medium text-sm truncate">{{ tool }}</div>
+                  <div class="font-medium text-sm truncate">{{ typeof tool === 'string' ? tool : tool.name }}</div>
                 </div>
               </div>
             </div>
@@ -199,10 +199,24 @@ const fetchMcpStatus = async () => {
   
   try {
     const response = await axios.get('/mcp/status');
-    mcpStatus.value = response.data;
+    
+    if (response && response.data) {
+      mcpStatus.value = {
+        status: response.data.status || 'disconnected',
+        mcp_url: response.data.mcp_url || '',
+        tools_available: response.data.tools_available || 0
+      };
+    }
   } catch (error) {
     mcpError.value = 'No se pudo obtener el estado del MCP: ' + (error.response?.data?.message || error.message);
     console.error('Error al obtener estado de MCP:', error);
+    
+    // En caso de error, marcar como desconectado pero no nulo
+    mcpStatus.value = {
+      status: 'disconnected',
+      mcp_url: '',
+      tools_available: 0
+    };
   } finally {
     isLoadingMcp.value = false;
   }
@@ -255,26 +269,17 @@ const formatUptime = (uptime) => {
   return parts.join(' ');
 };
 
-// Lista de endpoints de la API
-const apiEndpoints = {
-  "General": [
-    { method: "GET", path: "/", description: "Mensaje de bienvenida" },
-    { method: "GET", path: "/health", description: "Verificar estado del servicio" }
-  ],
-  "MCP": [
-    { method: "GET", path: "/mcp/status", description: "Estado de conexión con el servidor MCP" },
-    { method: "POST", path: "/api/v1/tools/{tool_name}", description: "Ejecutar una herramienta específica" }
-  ],
-  "Agentes": [
-    { method: "POST", path: "/api/v1/query", description: "Consulta en lenguaje natural" }
-  ],
-  "Finanzas": [
-    { method: "POST", path: "/api/v1/finance/analyze", description: "Análisis financiero" },
-    { method: "POST", path: "/api/v1/finance/forecast", description: "Pronóstico financiero" }
-  ],
-  "Marketing": [
-    { method: "POST", path: "/api/v1/marketing/analyze", description: "Análisis de marketing" },
-    { method: "POST", path: "/api/v1/marketing/campaign", description: "Generación de campañas" }
-  ]
-};
+// Ejemplos de endpoints disponibles
+const apiEndpoints = [
+  { method: "GET", path: "/health", description: "Verificar estado general" },
+  { method: "GET", path: "/api/v1/agents", description: "Listar agentes disponibles" },
+  { method: "POST", path: "/api/v1/query", description: "Enviar una consulta general" },
+  { method: "GET", path: "/mcp/status", description: "Verificar estado MCP" },
+  { method: "GET", path: "/metrics", description: "Métricas Prometheus" }
+];
+
+// Ejemplos adicionales
+const mcpEndpoints = [
+  { method: "GET", path: "/mcp/status", description: "Obtener estado de conexión MCP y herramientas disponibles" }
+];
 </script> 

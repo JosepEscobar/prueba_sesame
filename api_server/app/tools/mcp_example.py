@@ -32,6 +32,7 @@ async def list_tools(client: MCPClient) -> list[dict[str, Any]]:
     """
     return await client.list_tools()
 
+
 async def call_tool(client: MCPClient, tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
     """
     Llama a una herramienta específica en el servidor MCP.
@@ -46,6 +47,7 @@ async def call_tool(client: MCPClient, tool_name: str, params: dict[str, Any]) -
     """
     return await client.call_tool(tool_name, params)
 
+
 async def main():
     """Función principal del script de ejemplo."""
     # Configurar argumentos de línea de comandos
@@ -59,9 +61,7 @@ async def main():
     settings = get_settings()
 
     # Inicializar el cliente MCP
-    client = MCPClient(
-        base_url=args.url if args.url else settings.MCP_CLIENT_URL
-    )
+    client = MCPClient(base_url=args.url if args.url else settings.MCP_CLIENT_URL)
 
     # Inicializar el cliente
     initialized = await client.initialize()
@@ -115,6 +115,7 @@ async def main():
 
     # Cerrar el cliente MCP
     await client.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

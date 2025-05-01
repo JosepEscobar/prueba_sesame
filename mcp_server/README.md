@@ -73,6 +73,37 @@ Para que los agentes puedan acceder a las herramientas MCP, asegúrate de:
 
 Los agentes finance_agent y marketing_agent invocan automáticamente herramientas externas como `analizar_tendencia`, `recomendar_estrategia_marketing` y `calcular_ratios_financieros` cuando es apropiado.
 
+## Relación con los Agentes API Server
+
+El MCP Server funciona como un proveedor de capacidades extendidas para los agentes del API Server:
+
+- **Finance Agent**: Utiliza herramientas como `buscar_datos_financieros` y `calcular_ratios_financieros` para análisis detallados.
+- **Marketing Agent**: Accede a `analizar_rendimiento_campania` y `recomendar_estrategia_marketing` para ofrecer insights de marketing.
+- **Analysis Agent**: Emplea `analizar_tendencia` y `predecir_valores` para procesar datos complejos.
+
+Esta separación de responsabilidades permite:
+- Mantener el código de los agentes limpio y enfocado en la lógica de decisión
+- Implementar herramientas complejas y computacionalmente intensivas de forma independiente
+- Escalar cada componente según sus necesidades específicas de recursos
+
+## Monitoreo y Métricas
+
+El MCP Server expone métricas de Prometheus en `/metrics` para facilitar el monitoreo:
+
+- **mcp_tool_calls_total**: Contador de llamadas a cada herramienta
+- **mcp_tool_execution_time_seconds**: Histograma de tiempos de ejecución
+- **mcp_tool_errors_total**: Contador de errores por herramienta
+
+Para ver estas métricas:
+1. Asegúrate de que el servidor esté en funcionamiento
+2. Visita `http://localhost:4000/metrics`
+3. Configura Prometheus para scrapear estas métricas
+
+En el dashboard de Grafana "Sesame System Overview", hay un panel dedicado al rendimiento del MCP Server, mostrando:
+- Herramientas más utilizadas
+- Tiempos de respuesta promedio
+- Tasa de éxito/error
+
 ### Conectar con Claude
 
 Para usar este servidor con Claude, puedes especificar la siguiente configuración en la API de Claude:

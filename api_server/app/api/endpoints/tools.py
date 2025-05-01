@@ -12,29 +12,36 @@ from app.tools.tool_registry import tool_registry
 router = APIRouter()
 metrics = MetricsCollector()
 
+
 # Modelos para el endpoint
 class ToolDetail(BaseModel):
     """Información detallada sobre una herramienta."""
+
     name: str
     description: str
     has_implementation: bool
     inputs: dict[str, Any] | None = None
     outputs: dict[str, Any] | None = None
 
+
 class ToolRequest(BaseModel):
     """Solicitud para ejecutar una herramienta."""
+
     tool_name: str
     params: dict[str, Any]
     request_id: str | None = None
 
+
 class ToolResponse(BaseModel):
     """Respuesta de la ejecución de una herramienta."""
+
     tool_name: str
     request_id: str
     result: dict[str, Any]
     success: bool
     error: str | None = None
     execution_time: float
+
 
 @router.get("/", response_model=list[ToolDetail])
 async def list_tools():
@@ -57,11 +64,12 @@ async def list_tools():
                     description=tool["description"],
                     has_implementation=tool["has_implementation"],
                     inputs=schema.get("inputs"),
-                    outputs=schema.get("outputs")
+                    outputs=schema.get("outputs"),
                 )
             )
 
     return detailed_tools
+
 
 @router.get("/{tool_name}", response_model=ToolDetail)
 async def get_tool_info(tool_name: str):
@@ -88,8 +96,9 @@ async def get_tool_info(tool_name: str):
         description=schema.get("description", ""),
         has_implementation=has_implementation,
         inputs=schema.get("inputs"),
-        outputs=schema.get("outputs")
+        outputs=schema.get("outputs"),
     )
+
 
 @router.post("/execute", response_model=ToolResponse)
 async def execute_tool(request: ToolRequest, background_tasks: BackgroundTasks):
@@ -118,10 +127,7 @@ async def execute_tool(request: ToolRequest, background_tasks: BackgroundTasks):
     # Verificar que la herramienta tiene implementación
     implementation = tool_registry.get_tool_implementation(tool_name)
     if not implementation:
-        raise HTTPException(
-            status_code=501,
-            detail=f"La herramienta '{tool_name}' no tiene implementación"
-        )
+        raise HTTPException(status_code=501, detail=f"La herramienta '{tool_name}' no tiene implementación")
 
     # Ejecutar la herramienta
     start_time = time.time()
@@ -136,20 +142,15 @@ async def execute_tool(request: ToolRequest, background_tasks: BackgroundTasks):
 
         # Registrar métricas en segundo plano
         background_tasks.add_task(
-            metrics.record_tool_execution,
-            tool_name=tool_name,
-            success=True,
-            execution_time=execution_time
+            metrics.record_tool_execution, tool_name=tool_name, success=True, execution_time=execution_time
         )
 
-        logger.info(f"Herramienta '{tool_name}' ejecutada con éxito en {execution_time:.4f}s (request_id: {request_id})")
+        logger.info(
+            f"Herramienta '{tool_name}' ejecutada con éxito en {execution_time:.4f}s (request_id: {request_id})"
+        )
 
         return ToolResponse(
-            tool_name=tool_name,
-            request_id=request_id,
-            result=result,
-            success=True,
-            execution_time=execution_time
+            tool_name=tool_name, request_id=request_id, result=result, success=True, execution_time=execution_time
         )
 
     except Exception as e:
@@ -163,7 +164,7 @@ async def execute_tool(request: ToolRequest, background_tasks: BackgroundTasks):
             tool_name=tool_name,
             success=False,
             execution_time=execution_time,
-            error=str(e)
+            error=str(e),
         )
 
         logger.error(f"{error_msg} (request_id: {request_id})")
@@ -174,5 +175,5 @@ async def execute_tool(request: ToolRequest, background_tasks: BackgroundTasks):
             result={},
             success=False,
             error=str(e),
-            execution_time=execution_time
+            execution_time=execution_time,
         )

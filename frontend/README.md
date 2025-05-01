@@ -12,6 +12,34 @@ Interfaz de usuario tipo ChatGPT para la API de Sesame, desarrollada con Vue.js.
   - Marketing (análisis y generación de campañas)
   - Exploración de herramientas MCP
 
+## Interacción con Agentes del Sistema
+
+La interfaz permite interactuar con los diferentes agentes de Sesame de forma transparente:
+
+- **Consultas generales**: El sistema automáticamente enruta la consulta al agente más adecuado.
+- **Consultas financieras**: Dirigidas al Finance Agent para análisis financiero.
+- **Consultas de marketing**: Procesadas por el Marketing Agent para estrategias y análisis.
+- **Análisis de datos**: Manejadas por el Analysis Agent para tendencias y patrones.
+- **Información del sistema**: El System Info Agent proporciona detalles sobre capacidades y estado.
+
+### Ejemplos de Consultas
+
+- "¿Cuáles son las capacidades de la API de Sesame?" → System Info Agent
+- "Analiza los ratios financieros de Apple" → Finance Agent
+- "Recomienda una estrategia de marketing para una startup" → Marketing Agent
+- "Identifica tendencias en este conjunto de datos" → Analysis Agent
+
+## Panel de Estado del Sistema
+
+El frontend incluye un panel dedicado a mostrar el estado del sistema con:
+
+- Estado de los servicios (API Server, MCP Server)
+- Distribución de consultas por agente
+- Métricas de rendimiento en tiempo real
+- Alertas y notificaciones
+
+La información se actualiza en tiempo real gracias a la integración con las métricas de Prometheus.
+
 ## Tecnologías
 
 - Vue.js 3
@@ -80,3 +108,4 @@ npm run preview
 ## Conexión con la API de Sesame
 
 La aplicación se comunica con la API de Sesame a través de endpoints definidos. Asegúrate de que la API esté en funcionamiento y accesible. La configuración del proxy está en `vite.config.js` y apunta a `http://localhost:8000` por defecto. 
+
