@@ -46,7 +46,46 @@ jobs:
     - name: Run tests
       run: |
         pip install pytest pytest-cov python-json-logger>=2.0.0 prometheus_client
+        export OPENAI_API_KEY=sk-test-dummy-key
         pytest --cov=app --cov-report=xml
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const { execSync } = require('child_process');
+          execSync('npm install xml2js');
+          
+          const fs = require('fs');
+          const xml2js = require('xml2js');
+          
+          try {
+            const xmlContent = fs.readFileSync('./api_server/coverage.xml', 'utf8');
+            const parser = new xml2js.Parser();
+            
+            parser.parseString(xmlContent, (err, result) => {
+              if (err) throw err;
+              
+              const coverage = result.coverage;
+              const lineRate = parseFloat(coverage.$.line-rate) * 100;
+              
+              const body = `## API Server Test Coverage: ${lineRate.toFixed(2)}%
+              
+              Cobertura de pruebas para api_server generada por la ejecución de CI.
+              `;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            });
+          } catch (error) {
+            console.error('Error al procesar el informe de cobertura:', error);
+          }
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
@@ -95,7 +134,46 @@ jobs:
     - name: Run tests
       run: |
         pip install pytest pytest-cov python-json-logger>=2.0.0 prometheus_client
+        export OPENAI_API_KEY=sk-test-dummy-key
         pytest --cov=app --cov-report=xml
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const { execSync } = require('child_process');
+          execSync('npm install xml2js');
+          
+          const fs = require('fs');
+          const xml2js = require('xml2js');
+          
+          try {
+            const xmlContent = fs.readFileSync('./mcp_server/coverage.xml', 'utf8');
+            const parser = new xml2js.Parser();
+            
+            parser.parseString(xmlContent, (err, result) => {
+              if (err) throw err;
+              
+              const coverage = result.coverage;
+              const lineRate = parseFloat(coverage.$.line-rate) * 100;
+              
+              const body = `## MCP Server Test Coverage: ${lineRate.toFixed(2)}%
+              
+              Cobertura de pruebas para mcp_server generada por la ejecución de CI.
+              `;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            });
+          } catch (error) {
+            console.error('Error al procesar el informe de cobertura:', error);
+          }
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
