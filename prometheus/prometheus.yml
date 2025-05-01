@@ -3,6 +3,9 @@ global:
   scrape_timeout: 10s
   evaluation_interval: 15s
 
+rule_files:
+  - "alert_rules.yml"
+
 alerting:
   alertmanagers:
     - static_configs:
@@ -17,8 +20,24 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets: ["api_server:8000"]
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'api_server.*'
+        action: keep
 
   - job_name: "mcp_server"
     metrics_path: /metrics
     static_configs:
-      - targets: ["mcp_server:4000"] 
+      - targets: ["mcp_server:4000"]
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'mcp.*'
+        action: keep
+        
+  - job_name: "node_exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+    
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"] 

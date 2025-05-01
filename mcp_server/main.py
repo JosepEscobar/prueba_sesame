@@ -15,6 +15,7 @@ import logging
 import os
 import socket
 import sys
+import time
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +23,19 @@ from typing import Any
 
 # Importar FastAPI
 import uvicorn
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+
+# Importar Prometheus para métricas
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Importar implementaciones desde módulos correspondientes
 from app.tools.implementations import AVAILABLE_TOOLS
@@ -41,12 +54,76 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp_server")
 
+# Inicializar métricas Prometheus
+registry = CollectorRegistry()
+
+# Contador de llamadas a herramientas
+TOOL_CALLS = Counter(
+    "mcp_tool_calls_total", "Número total de llamadas a herramientas", ["tool_name", "status"], registry=registry
+)
+
+# Histograma de tiempos de ejecución de herramientas
+TOOL_EXECUTION_TIME = Histogram(
+    "mcp_tool_execution_time_seconds",
+    "Tiempo de ejecución de herramientas en segundos",
+    ["tool_name"],
+    registry=registry,
+)
+
+# Gauge para estado del servidor
+SERVER_STATUS = Gauge("mcp_server_status", "Estado del servidor MCP (1=healthy, 0=unhealthy)", registry=registry)
+
+# Contador de errores
+ERROR_COUNT = Counter(
+    "mcp_error_count_total", "Número total de errores", ["tool_name", "error_type"], registry=registry
+)
+
+
+# Middleware para métricas Prometheus
+class PrometheusMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+
+        # Procesar la petición
+        try:
+            response = await call_next(request)
+            return response
+        except Exception as e:
+            # Registrar error en métricas
+            error_type = type(e).__name__
+            tool_name = request.url.path.split("/")[-1] if "/tools/" in request.url.path else "unknown"
+            ERROR_COUNT.labels(tool_name=tool_name, error_type=error_type).inc()
+            raise e
+        finally:
+            # Actualizar estado del servidor
+            SERVER_STATUS.set(1)
+
+
 # Crear la aplicación FastAPI
 app = FastAPI(
     title="Sesame MCP Server",
     description="Servidor MCP para herramientas financieras, análisis y marketing",
     version="1.0.0",
 )
+
+# Añadir middleware CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Añadir middleware para métricas
+app.add_middleware(PrometheusMiddleware)
+
+
+# Endpoint para métricas Prometheus
+@app.get("/metrics")
+async def metrics():
+    """Expone métricas para Prometheus"""
+    return Response(generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
 
 
 # Middleware para registrar todas las solicitudes
@@ -130,13 +207,24 @@ async def execute_tool(tool_name: str, request: Request):
         # Obtener parámetros de la solicitud
         params = await request.json()
 
+        # Iniciar timer para métricas
+        start_time = time.time()
+
         # Ejecutar la herramienta
         tool_func = tools_registry[tool_name]
         result = await tool_func(**params)
 
+        # Registrar métricas de ejecución exitosa
+        TOOL_CALLS.labels(tool_name=tool_name, status="success").inc()
+        TOOL_EXECUTION_TIME.labels(tool_name=tool_name).observe(time.time() - start_time)
+
         # Devolver el resultado
         return {"result": result}
     except Exception as e:
+        # Registrar métricas de ejecución fallida
+        TOOL_CALLS.labels(tool_name=tool_name, status="error").inc()
+        ERROR_COUNT.labels(tool_name=tool_name, error_type=type(e).__name__).inc()
+
         logger.error(f"Error al ejecutar herramienta {tool_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error en la ejecución: {str(e)}")
 

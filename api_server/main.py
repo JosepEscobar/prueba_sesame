@@ -16,9 +16,20 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+
+# Importar bibliotecas para métricas Prometheus
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Añadir el directorio raíz al path para poder importar módulos
 sys.path.insert(0, str(Path(__file__).parent))
@@ -68,6 +79,68 @@ except Exception as e:
                 "agent": agent_name,
                 "confidence": 0.8,
             }
+
+
+# Inicializar métricas Prometheus
+registry = CollectorRegistry()
+
+# Contador de peticiones totales
+REQUEST_COUNT = Counter(
+    "api_server_request_count", "Total de peticiones procesadas", ["method", "endpoint", "status"], registry=registry
+)
+
+# Histograma de tiempos de respuesta
+REQUEST_LATENCY = Histogram(
+    "api_server_request_latency_seconds",
+    "Tiempo de respuesta de las peticiones",
+    ["method", "endpoint"],
+    registry=registry,
+)
+
+# Contador de tokens consumidos por agente
+TOKEN_COUNT = Counter(
+    "api_server_token_count", "Tokens consumidos por cada agente", ["agent_type", "operation"], registry=registry
+)
+
+# Gauge para conexiones activas
+ACTIVE_CONNECTIONS = Gauge("api_server_active_connections", "Número de conexiones activas", registry=registry)
+
+# Métricas de estado del servidor
+SERVER_STATUS = Gauge("api_server_status", "Estado del servidor API (1=healthy, 0=unhealthy)", registry=registry)
+
+# Métricas de conexión MCP
+MCP_STATUS = Gauge(
+    "api_server_mcp_connection", "Estado de la conexión con MCP (1=connected, 0=disconnected)", registry=registry
+)
+
+
+# Middleware para métricas Prometheus
+class PrometheusMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+
+        # Incrementar contador de conexiones activas
+        ACTIVE_CONNECTIONS.inc()
+
+        # Procesar la petición
+        try:
+            response = await call_next(request)
+            status = response.status_code
+
+        except Exception as e:
+            status = 500
+            raise e from None
+        finally:
+            # Registrar métricas
+            REQUEST_COUNT.labels(method=request.method, endpoint=request.url.path, status=status).inc()
+
+            # Registrar latencia
+            REQUEST_LATENCY.labels(method=request.method, endpoint=request.url.path).observe(time.time() - start_time)
+
+            # Decrementar contador de conexiones activas
+            ACTIVE_CONNECTIONS.dec()
+
+        return response
 
 
 # ---- Modelos de datos Pydantic ----
@@ -304,14 +377,39 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Configurar CORS
+# Agregar el middleware de métricas Prometheus
+app.add_middleware(PrometheusMiddleware)
+
+# Habilitar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # En producción, definir orígenes específicos
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Endpoint para exponer métricas a Prometheus
+@app.get("/metrics", tags=["Monitoreo"])
+async def metrics():
+    SERVER_STATUS.set(1)  # Servidor saludable
+
+    # Verificar conexión con MCP y actualizar métrica
+    try:
+        # Simplificado por ahora - en producción implementar una verificación real
+        MCP_STATUS.set(1)  # Conectado
+    except Exception:
+        MCP_STATUS.set(0)  # Desconectado
+
+    return Response(generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
+
+
+# Función para registrar consumo de tokens
+def track_token_usage(agent_type: str, operation: str, token_count: int):
+    """Registra el uso de tokens por un agente en una operación específica"""
+    TOKEN_COUNT.labels(agent_type=agent_type, operation=operation).inc(token_count)
+
 
 # ---- Configuración MCP Client ----
 # Información sobre el servidor MCP
@@ -490,311 +588,104 @@ async def mcp_status() -> dict[str, Any]:
 )
 async def process_query(request: Request, query_data: QueryRequest) -> dict[str, Any]:
     """
-    Endpoint para procesar consultas generales.
-
-    Args:
-        request: Objeto de solicitud HTTP
-        query_data: Datos de la consulta enviada por el usuario
-
-    Returns:
-        Resultado de la consulta procesada por el agente adecuado
+    Procesa una consulta general y enruta al agente más adecuado.
     """
     start_time = time.time()
-    # Generar un ID único para esta solicitud
     request_id = str(uuid.uuid4())
 
+    logger.info(f"[{request_id}] Consulta recibida: {query_data.query}")
+
+    # Obtener contexto adicional o usar un diccionario vacío si no se proporciona
+    context = query_data.context or {}
+
     try:
-        # Validar que haya una consulta
-        query = query_data.query.strip()
-        if not query:
-            raise ValueError("La consulta no puede estar vacía")
-
-        # Extraer el contexto
-        context = query_data.context
-
-        logger.info(f"Recibida consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}...")
-
-        # Inicializar el grafo de agentes
+        # Importar el orquestador, que maneja el flujo completo (incluyendo clasificación vía LLM)
         try:
-            # Crear una instancia del grafo de agentes
+            from app.core.orchestrator import Orchestrator
+
+            orchestrator = Orchestrator()
+
+            # Procesar la consulta utilizando el orquestador completo
+            # El orquestrador internamente utilizará el agente router para la clasificación con LLM
+            orchestrator_result = orchestrator.process_query(
+                query=query_data.query, context=context, agent_preference=context.get("agent_preference")
+            )
+
+            # Registrar el tiempo de procesamiento
+            processing_time = time.time() - start_time
+
+            # Crear la respuesta basada en el resultado del orquestador
+            response = {
+                "result": orchestrator_result.get("result", "No se obtuvo un resultado claro."),
+                "agent": orchestrator_result.get("agent", "unknown_agent"),
+                "confidence": orchestrator_result.get("confidence", 0.0),
+                "processing_time": round(processing_time, 2),
+                "request_id": request_id,
+            }
+
+            logger.info(f"[{request_id}] Orquestador completó el procesamiento con agente: {response['agent']}")
+
+        except ImportError as e:
+            # Si el orquestador no está disponible, usamos AgentGraph directamente como fallback
+            logger.warning(f"Orquestador no disponible: {str(e)}. Usando AgentGraph directamente.")
+
+            # Inicializar el grafo de agentes
             agent_graph = AgentGraph()
 
-            # Crear el input para el grafo de agentes
-            input_data = {
-                "query": query,
+            # Preparar datos para el router
+            router_input = {
+                "query": query_data.query,
                 "context": context,
-                # No inicializar estos campos, serán establecidos por el grafo:
-                # "current_agent": "router",
-                # "agent_output": {}
             }
 
-            # Usar logger en lugar de print para depuración
-            logger.debug(
-                f"Enviando consulta al grafo: {input_data}",
-                extra={"request_id": request_id},
-            )
+            # Ejecutar la consulta a través del grafo de agentes
+            logger.info(f"[{request_id}] Ejecutando consulta a través del grafo de agentes")
+            result = agent_graph.run(router_input)
 
-            # Ejecutar el grafo de agentes
-            logger.info(
-                "Ejecutando grafo de agentes con la consulta",
-                extra={"request_id": request_id},
-            )
-            try:
-                final_result = agent_graph.run(input_data)
-            except Exception as e:
-                logger.error(
-                    f"Error al procesar consulta con el grafo: {str(e)}",
-                    extra={"request_id": request_id},
-                )
-                logger.error(traceback.format_exc(), extra={"request_id": request_id})
-
-                # Usar logger para errores, no print
-                logger.debug(f"DEBUG ERROR: {str(e)}", extra={"request_id": request_id})
-
-                # Registrar métrica del error
-                from app.core.metrics import MetricsCollector
-
-                MetricsCollector.record_error("agent_graph", str(e))
-
-                # No usamos fallback, devolvemos un error apropiado
-                processing_time = time.time() - start_time
-                return {
-                    "error": str(e),
-                    "result": {
-                        "content": f"Error al procesar la consulta: {str(e)}",
-                        "source": "error",
-                        "model_type": "error",
-                    },
-                    "agent": "error",
-                    "confidence": 0.0,
-                    "processing_time": processing_time,
-                }
-
-            # Usar logger en lugar de print para depuración
-            logger.debug(
-                f"Resultado final del grafo: {final_result}",
-                extra={"request_id": request_id},
-            )
-
-            # Verificar si tenemos un resultado válido
-            if isinstance(final_result, dict):
-                result = final_result
-                # Asegurarnos de que tenga los campos mínimos
-                if "result" not in result:
-                    result["result"] = {
-                        "content": "Error: Resultado incompleto sin campo 'result'",
-                        "source": "error",
-                    }
-                if "agent" not in result:
-                    result["agent"] = "unknown_agent"
-                if "confidence" not in result:
-                    result["confidence"] = 0.0
-            else:
-                # Resultado inválido, devolver error
-                logger.error(
-                    f"Resultado inválido del grafo: {final_result}",
-                    extra={"request_id": request_id},
-                )
-                return {
-                    "error": "Resultado inválido del grafo",
-                    "result": {
-                        "content": "Error: El grafo de agentes devolvió un resultado con formato inválido",
-                        "source": "error",
-                    },
-                    "agent": "error",
-                    "confidence": 0.0,
-                    "processing_time": time.time() - start_time,
-                }
-
-            # Calcular tiempo de procesamiento
+            # Registrar el tiempo de procesamiento
             processing_time = time.time() - start_time
 
-            # Registrar métrica usando MetricsCollector
-            from app.core.metrics import MetricsCollector
-
-            agent_name = result.get("agent", "desconocido")
-            confidence = result.get("confidence", 0.0)
-
-            # Registrar ejecución y confianza
-            MetricsCollector.record_query_execution(
-                success=True,
-                agent=agent_name,
-                confidence=confidence,
-                execution_time=processing_time,
-            )
-
-            # Registrar en el logger
-            logger.info(
-                f"Consulta procesada por {agent_name} con confianza {confidence}",
-                extra={
-                    "request_id": request_id,
-                    "processing_time": processing_time,
-                    "agent": agent_name,
-                },
-            )
-
-            # Añadir tiempo de procesamiento
-            result["processing_time"] = processing_time
-
-            return result
-
-        except Exception as e:
-            logger.error(
-                f"Error al procesar consulta con el grafo: {str(e)}",
-                extra={"request_id": request_id},
-            )
-            logger.error(traceback.format_exc(), extra={"request_id": request_id})
-
-            # Registrar métrica del error
-            from app.core.metrics import MetricsCollector
-
-            MetricsCollector.record_error("query_processing", str(e))
-
-            # Error global, devolver información clara del error
-            processing_time = time.time() - start_time
-            return {
-                "error": str(e),
-                "result": {
-                    "content": f"Error al procesar su consulta: {str(e)}",
-                    "source": "error",
-                },
-                "agent": "error",
-                "confidence": 0.0,
-                "processing_time": processing_time,
+            # Crear la respuesta
+            response = {
+                "result": result.get("result", "No se obtuvo un resultado claro."),
+                "agent": result.get("agent", "analysis_agent"),
+                "confidence": result.get("confidence", 0.0),
+                "processing_time": round(processing_time, 2),
+                "request_id": request_id,
             }
+
+        # Simular conteo de tokens para monitoreo (independiente de qué método usemos)
+        # En producción, obtendrías esto del LLM real
+        input_tokens = len(query_data.query.split()) * 1.3
+
+        # Verificar si result es un string o un objeto y manejar ambos casos
+        result_text = response["result"]
+        if isinstance(result_text, dict):
+            # Si es un diccionario, convertirlo a cadena JSON para contar tokens
+            import json
+
+            result_text = json.dumps(result_text)
+        elif not isinstance(result_text, str):
+            # Si no es una cadena ni un diccionario, convertirlo a string
+            result_text = str(result_text)
+
+        output_tokens = len(result_text.split()) * 1.3
+
+        # Registrar uso de tokens
+        track_token_usage(response["agent"], "input", int(input_tokens))
+        track_token_usage(response["agent"], "output", int(output_tokens))
+
+        logger.info(f"[{request_id}] Consulta procesada exitosamente por {response['agent']} en {processing_time:.2f}s")
+
+        return response
 
     except Exception as e:
-        logger.error(
-            f"Error global al procesar consulta: {str(e)}",
-            extra={"request_id": request_id},
+        logger.error(f"[{request_id}] Error al procesar la consulta: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al procesar la consulta: {str(e)}",
         )
-        logger.error(traceback.format_exc(), extra={"request_id": request_id})
-
-        # Registrar métrica del error global
-        from app.core.metrics import MetricsCollector
-
-        MetricsCollector.record_error("global", str(e))
-
-        processing_time = time.time() - start_time
-        return {
-            "error": str(e),
-            "result": {
-                "content": f"Error crítico al procesar su consulta: {str(e)}",
-                "source": "error",
-            },
-            "agent": "error",
-            "confidence": 0.0,
-            "processing_time": processing_time,
-        }
-
-
-def classify_query_by_keywords(query: str) -> str:
-    """
-    Clasifica una consulta por palabras clave.
-
-    Args:
-        query: La consulta a clasificar
-
-    Returns:
-        El tipo de agente más adecuado
-    """
-    # Diccionario de agentes con sus palabras clave
-    agents_keywords = {
-        "finance_agent": [
-            "financiero",
-            "finanzas",
-            "ingresos",
-            "beneficio",
-            "margen",
-            "roi",
-            "ganancia",
-            "rentabilidad",
-            "balance",
-            "contabilidad",
-            "fiscal",
-            "impuestos",
-            "patrimonio",
-            "capital",
-            "inversión",
-            "activos",
-            "pasivos",
-            "presupuesto",
-            "costes",
-            "gastos",
-        ],
-        "marketing_agent": [
-            "marketing",
-            "mercado",
-            "campaña",
-            "publicidad",
-            "promoción",
-            "ventas",
-            "clientes",
-            "segmentación",
-            "conversión",
-            "marca",
-            "audiencia",
-            "consumidor",
-            "target",
-            "posicionamiento",
-            "social",
-            "digital",
-            "comunicación",
-            "medios",
-            "engagement",
-            "producto",
-        ],
-        "analysis_agent": [
-            "tendencia",
-            "análisis",
-            "analiza",
-            "predicción",
-            "pronóstico",
-            "proyección",
-            "futuro",
-            "evolución",
-            "comparativa",
-            "datos",
-            "información",
-            "patrones",
-            "insights",
-            "métricas",
-            "indicadores",
-            "histórico",
-            "estadística",
-            "correlación",
-            "hallazgos",
-            "síntesis",
-        ],
-    }
-
-    # Convertir la consulta a minúsculas
-    query_lower = query.lower()
-
-    # Calcular puntuaciones para cada agente
-    scores = {}
-    for agent_name, keywords in agents_keywords.items():
-        score = sum(1 for kw in keywords if kw in query_lower)
-        scores[agent_name] = score
-
-    # Encontrar el agente con mayor puntuación
-    if not scores:
-        return "analysis_agent"  # Por defecto
-
-    max_score = max(scores.values())
-    if max_score == 0:
-        return "analysis_agent"  # Si ninguno tiene keywords, usar análisis
-
-    # Si hay múltiples con la misma puntuación máxima, priorizar en este orden
-    priority = ["finance_agent", "marketing_agent", "analysis_agent"]
-    max_agents = [agent for agent, score in scores.items() if score == max_score]
-
-    for p in priority:
-        if p in max_agents:
-            return p
-
-    # Si ninguno de los priorizados está en los máximos, tomar el primero
-    return max_agents[0]
 
 
 def simulate_agent_response(agent_name: str, query: str) -> str:

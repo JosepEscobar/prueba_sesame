@@ -31,7 +31,9 @@ class Orchestrator:
 
         logger.info("Orchestrator inicializado con grafo de agentes y servicio de búsqueda de datos")
 
-    def process_query(self, query: str, context: dict[str, Any] | None = None, agent_preference: str | None = None) -> dict[str, Any]:
+    def process_query(
+        self, query: str, context: dict[str, Any] | None = None, agent_preference: str | None = None
+    ) -> dict[str, Any]:
         """
         Procesa una consulta utilizando el sistema multi-agente.
 
@@ -44,10 +46,7 @@ class Orchestrator:
             Resultado del procesamiento incluyendo agente utilizado, resultado y nivel de confianza
         """
         # Crear diccionario de solicitud
-        request = {
-            "query": query,
-            "context": context or {}
-        }
+        request = {"query": query, "context": context or {}}
 
         if agent_preference:
             request["context"]["agent_preference"] = agent_preference
@@ -62,7 +61,7 @@ class Orchestrator:
                 "agent": result["selected_agent"],
                 "confidence": result.get("confidence", 0.0),
                 "processed_by": "summary_agent",  # Indicar que siempre pasa por el summary agent
-                "processing_time": result.get("processing_time", 0.0)
+                "processing_time": result.get("processing_time", 0.0),
             }
         else:
             # En caso de error, lanzar una excepción que será capturada en el router de la API
@@ -83,24 +82,16 @@ class Orchestrator:
         self.request_id = request_id or str(uuid.uuid4())
 
         start_time = time.time()
-        query = request.get('query', '')
+        query = request.get("query", "")
         query_preview = query[:50] + "..." if len(query) > 50 else query
         logger.info(f"Procesando solicitud {self.request_id}: {query_preview}...")
 
         try:
             # Configurar contexto de ejecución con ID de solicitud para rastreo
-            config = RunnableConfig(
-                metadata={
-                    "request_id": self.request_id,
-                    "timestamp": time.time()
-                }
-            )
+            config = RunnableConfig(metadata={"request_id": self.request_id, "timestamp": time.time()})
 
             # Ejecutar el flujo completo usando el grafo de agentes
-            graph_result = self.agent_graph.run(
-                query=query,
-                context=request.get("context", {})
-            )
+            graph_result = self.agent_graph.run(query=query, context=request.get("context", {}))
 
             # Añadir metadatos al resultado
             processing_time = time.time() - start_time
@@ -110,10 +101,12 @@ class Orchestrator:
                 "request_id": self.request_id,
                 "processing_time": processing_time,
                 "selected_agent": graph_result["agent"],
-                "confidence": graph_result.get("confidence", 0.0)
+                "confidence": graph_result.get("confidence", 0.0),
             }
 
-            logger.info(f"Solicitud {self.request_id} procesada exitosamente en {processing_time:.2f} segundos por {graph_result['agent']} y resumida por summary_agent")
+            logger.info(
+                f"Solicitud {self.request_id} procesada exitosamente en {processing_time:.2f} segundos por {graph_result['agent']} y resumida por summary_agent"
+            )
             return result
 
         except Exception as e:
@@ -126,7 +119,7 @@ class Orchestrator:
                 "status": "error",
                 "error": error_msg,
                 "request_id": self.request_id,
-                "processing_time": processing_time
+                "processing_time": processing_time,
             }
 
     def get_available_agents(self) -> list[dict[str, Any]]:
@@ -140,23 +133,23 @@ class Orchestrator:
             {
                 "id": "analysis",
                 "name": "Analysis Agent",
-                "description": "Agente especializado en análisis detallado de datos y textos"
+                "description": "Agente especializado en análisis detallado de datos y textos",
             },
             {
                 "id": "finance",
                 "name": "Finance Agent",
-                "description": "Especialista en finanzas, análisis financiero y estrategias de inversión"
+                "description": "Especialista en finanzas, análisis financiero y estrategias de inversión",
             },
             {
                 "id": "marketing",
                 "name": "Marketing Agent",
-                "description": "Especialista en marketing, análisis de mercado y estrategias comerciales"
+                "description": "Especialista en marketing, análisis de mercado y estrategias comerciales",
             },
             {
                 "id": "summary",
                 "name": "Summary Agent",
-                "description": "Especialista en síntesis de información y generación de resúmenes"
-            }
+                "description": "Especialista en síntesis de información y generación de resúmenes",
+            },
         ]
 
     def get_agent_info(self, agent_id: str) -> dict[str, Any] | None:
@@ -180,8 +173,8 @@ class Orchestrator:
             "capabilities": getattr(agent, "capabilities", ["Procesamiento de consultas especializadas"]),
             "configuration": {
                 "model": getattr(agent, "model_name", "default_model"),
-                "tools": list(getattr(agent, "tools", {}).keys())
-            }
+                "tools": list(getattr(agent, "tools", {}).keys()),
+            },
         }
 
     def get_system_stats(self) -> dict[str, Any]:
@@ -203,6 +196,6 @@ class Orchestrator:
                 "action_agent": 0.25,
                 "summary_agent": 0.15,
                 "finance_agent": 0.10,
-                "marketing_agent": 0.05
-            }
+                "marketing_agent": 0.05,
+            },
         }

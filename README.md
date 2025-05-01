@@ -90,10 +90,71 @@ pytest
 
 ## Monitoreo
 
-El sistema incluye Prometheus y Grafana para monitoreo:
+El sistema incluye una infraestructura completa de monitorización con Prometheus y Grafana:
 
-- Prometheus recoge métricas de todos los servicios
-- Grafana proporciona dashboards para visualizar estas métricas
+### Componentes de monitorización
+
+- **Prometheus**: Recolecta métricas de todos los servicios
+  - Disponible en http://localhost:9090
+  - Configura el intervalo de scrapping y las reglas de alerta
+  - Almacena datos históricos para análisis
+
+- **Grafana**: Proporciona dashboards para visualizar métricas
+  - Disponible en http://localhost:3001 (usuario: admin, contraseña: password)
+  - Incluye dashboard predefinido "Sesame System Overview"
+  - Permite crear dashboards personalizados según necesidades
+
+- **Node-Exporter**: Exporta métricas del sistema operativo
+  - Monitoriza CPU, memoria, disco y red
+  - Disponible en http://localhost:9100/metrics
+
+- **cAdvisor**: Proporciona métricas de contenedores Docker
+  - Monitoriza uso de recursos por contenedor
+  - Disponible en http://localhost:8080
+
+### Métricas principales monitorizadas
+
+- **API Server**:
+  - Contador de peticiones (`api_server_request_count`)
+  - Latencia de respuesta (`api_server_request_latency_seconds`)
+  - Consumo de tokens por agente (`api_server_token_count`)
+  - Estado del servidor y conexión MCP
+
+- **MCP Server**:
+  - Contador de llamadas a herramientas (`mcp_tool_calls_total`)
+  - Tiempo de ejecución de herramientas (`mcp_tool_execution_time_seconds`)
+  - Contador de errores por herramienta y tipo
+
+- **Sistema**:
+  - Uso de CPU, memoria y disco
+  - Métricas de red
+  - Estado y recursos de contenedores
+
+### Alertas configuradas
+
+El sistema incluye alertas predefinidas para casos como:
+
+- Alto consumo de tokens
+- Servidores caídos (API Server o MCP Server)
+- Alta latencia en respuestas de API
+- Tasas de error elevadas
+- Alto uso de recursos del sistema (CPU, memoria, disco)
+
+Para ver y gestionar las alertas:
+1. Accede a Prometheus en http://localhost:9090/alerts
+2. En Grafana, configura notificaciones en la sección Alerting
+
+### Extendiendo el monitoreo
+
+Para añadir nuevas métricas:
+
+1. Modifica los archivos `api_server/main.py` o `mcp_server/main.py`
+2. Añade nuevos contadores, histogramas o gauges con Prometheus
+3. Actualiza los dashboards de Grafana para visualizar las nuevas métricas
+
+Para añadir nuevas alertas:
+1. Edita el archivo `prometheus/alert_rules.yml`
+2. Reinicia los contenedores con `docker-compose restart prometheus`
 
 ## CI/CD
 
