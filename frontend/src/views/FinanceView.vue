@@ -122,7 +122,8 @@ const submitQuery = async () => {
   
   try {
     const response = await axios.post(endpoint, {
-      query: query.value
+      query: query.value,
+      context: {}
     });
     
     result.value = response.data;

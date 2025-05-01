@@ -79,7 +79,16 @@ onMounted(async () => {
 const fetchTools = async () => {
   try {
     const response = await axios.get('/mcp/status');
-    tools.value = response.data?.tools || [];
+    // Formato esperado: { tools: ["nombre1", "nombre2", ...] }
+    if (Array.isArray(response.data.tools)) {
+      // Transformar los nombres de herramientas en objetos con estructura { name, parameters }
+      tools.value = response.data.tools.map(toolName => ({
+        name: toolName,
+        parameters: []  // Parámetros vacíos por defecto
+      }));
+    } else {
+      tools.value = [];
+    }
   } catch (e) {
     console.error('Error fetching tools:', e);
     tools.value = [];

@@ -75,14 +75,26 @@ const sendMessage = async () => {
     
     // Llamar a la API
     const response = await axios.post('/api/v1/query', {
-      prompt: tempInput
+      query: tempInput,
+      context: {
+        previous_messages: messages.value
+          .filter(msg => !msg.isLoading)
+          .map(msg => ({
+            role: msg.isUser ? 'user' : 'assistant',
+            content: msg.content
+          }))
+      }
     });
     
     // Reemplazar mensaje de carga con respuesta
     const apiResponseIndex = messages.value.findIndex(msg => msg.isLoading);
     if (apiResponseIndex !== -1) {
       messages.value[apiResponseIndex] = {
-        content: response.data,
+        content: response.data.result && typeof response.data.result === 'object' ? 
+                 response.data.result.content || JSON.stringify(response.data.result) : 
+                 response.data.result || response.data,
+        agent: response.data.agent,
+        confidence: response.data.confidence,
         isUser: false,
         timestamp: new Date()
       };
@@ -91,8 +103,30 @@ const sendMessage = async () => {
     // Mostrar error
     const errorIndex = messages.value.findIndex(msg => msg.isLoading);
     if (errorIndex !== -1) {
+      let errorMessage = 'No se pudo conectar con el backend';
+      
+      if (error.response) {
+        // El servidor respondió con un código de error
+        const statusCode = error.response.status;
+        const data = error.response.data;
+        
+        if (statusCode === 422) {
+          errorMessage = 'Error 422: Formato de consulta inválido. Revise la estructura de datos enviada.';
+          console.error('Datos enviados:', { query: tempInput });
+          console.error('Respuesta del servidor:', data);
+        } else {
+          errorMessage = `Error ${statusCode}: ${data.detail || data.message || JSON.stringify(data)}`;
+        }
+      } else if (error.request) {
+        // La solicitud se realizó pero no se recibió respuesta
+        errorMessage = 'No se recibió respuesta del servidor. Verifique que el backend esté funcionando en localhost:8000.';
+      } else {
+        // Error al configurar la solicitud
+        errorMessage = `Error al configurar la solicitud: ${error.message}`;
+      }
+      
       messages.value[errorIndex] = {
-        content: `Error: ${error.response?.data?.message || 'No se pudo conectar con el backend en localhost:8000'}`,
+        content: `Error: ${errorMessage}`,
         isUser: false,
         isError: true,
         timestamp: new Date()
