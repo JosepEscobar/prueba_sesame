@@ -11,6 +11,7 @@ from typing import Any
 from langchain_openai import ChatOpenAI
 
 from app.agents.base import BaseAgent
+from app.core.ai_prompt_builder import AIPromptBuilder
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.tools.mcp_client import MCPClient
@@ -138,28 +139,23 @@ class SummaryAgent(BaseAgent):
                 except Exception as e:
                     logger.warning(f"Error al buscar artículos: {str(e)}")
 
-            # Preparar el prompt para el resumen
-            prompt = f"""
-            Eres un experto en crear resúmenes claros, concisos y estructurados. Tu tarea es generar un resumen
-            completo de la siguiente información, preservando todos los detalles importantes.
+            # Usar AIPromptBuilder para crear el prompt de resumen
+            prompt_builder = AIPromptBuilder(
+                role="experto en crear resúmenes claros, concisos y estructurados",
+                task="Generar un resumen completo de la información proporcionada, preservando todos los detalles importantes.",
+                input_data=f"CONSULTA ORIGINAL: {query}\n\nRESULTADO COMPLETO DEL ANÁLISIS:\n{context_text}",
+                format_hint="""Tu respuesta debe estar bien estructurada, con títulos de sección, párrafos coherentes
+                y formato que facilite la lectura y comprensión.""",
+                criteria="""1. Mantén todas las ideas principales y conclusiones clave.
+                2. Organiza la información en una estructura lógica con secciones claras.
+                3. Incluye todas las cifras, métricas y datos específicos importantes.
+                4. Preserva recomendaciones y pasos a seguir.
+                5. Usa lenguaje claro y profesional.
+                6. Debes mantener todo el valor informativo del texto original.
+                7. El resumen debe ser tan completo que pueda sustituir al original.""",
+            )
 
-            CONSULTA ORIGINAL: {query}
-
-            RESULTADO COMPLETO DEL ANÁLISIS:
-            {context_text}
-
-            Instrucciones para el resumen:
-            1. Mantén todas las ideas principales y conclusiones clave.
-            2. Organiza la información en una estructura lógica con secciones claras.
-            3. Incluye todas las cifras, métricas y datos específicos importantes.
-            4. Preserva recomendaciones y pasos a seguir.
-            5. Usa lenguaje claro y profesional.
-            6. Debes mantener todo el valor informativo del texto original.
-            7. El resumen debe ser tan completo que pueda sustituir al original.
-
-            Tu respuesta debe estar bien estructurada, con títulos de sección, párrafos coherentes
-            y formato que facilite la lectura y comprensión.
-            """
+            prompt = prompt_builder.build()
 
             # Si no hay LLM, usar una respuesta básica
             if not self.llm:
@@ -193,28 +189,23 @@ class SummaryAgent(BaseAgent):
                     f"Resumen generado demasiado breve ({len(summary_content)} caracteres) para un contexto de {len(context_text)} caracteres"
                 )
                 # Intentar nuevamente con un prompt más específico
-                retry_prompt = f"""
-                IMPORTANTE: Necesito un resumen COMPLETO y DETALLADO. El resumen anterior era demasiado breve.
+                retry_prompt_builder = AIPromptBuilder(
+                    role="experto en crear resúmenes detallados",
+                    task="IMPORTANTE: Necesito un resumen COMPLETO y DETALLADO. El resumen anterior era demasiado breve.",
+                    input_data=f"CONSULTA ORIGINAL: {query}\n\nRESULTADO COMPLETO DEL ANÁLISIS:\n{context_text}",
+                    format_hint="Tu respuesta debe ser extensa y completa, con todos los detalles relevantes.",
+                    criteria="Debes incluir TODOS los puntos clave, datos, métricas y conclusiones sin omitir información importante.",
+                )
 
-                CONSULTA ORIGINAL: {query}
+                retry_prompt = retry_prompt_builder.build()
 
-                CONTENIDO COMPLETO A RESUMIR:
-                {context_text}
-
-                Por favor, genera un resumen extenso y completo que conserve TODOS los detalles importantes,
-                cifras, recomendaciones y estructura. El resumen debe tener suficiente detalle para reemplazar 
-                al texto original.
-                """
-
-                retry_messages = [
-                    SystemMessage(
-                        content="Eres un especialista en generar resúmenes DETALLADOS y COMPLETOS que preservan toda la información importante."
-                    ),
+                messages = [
+                    SystemMessage(content="Eres un especialista en generar resúmenes exhaustivos y detallados."),
                     HumanMessage(content=retry_prompt),
                 ]
 
-                retry_response = self.invoke_llm(retry_messages, prompt_type="langchain")
-                summary_content = retry_response.content
+                response = self.invoke_llm(messages, prompt_type="langchain")
+                summary_content = response.content
 
             # También intentar obtener artículos relevantes
             try:

@@ -129,7 +129,7 @@ class DataLookupAgent(BaseAgent):
                         - marketing: para campañas, métricas de marketing, etc.
                         - trends: para análisis de tendencias, predicciones, etc.
                         - general: para consultas generales no específicas
-                        
+
                         Incluye solo los parámetros relevantes para la categoría identificada.
                         """,
                         examples=[example_json],

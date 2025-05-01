@@ -4,6 +4,7 @@ from typing import Any
 
 from app.agents.base import BaseAgent
 from app.agents.mcp_integration import configure_agent_with_mcp, get_mcp_tools_sync
+from app.core.ai_prompt_builder import AIPromptBuilder
 from app.core.config import get_settings
 from app.core.logging import logger
 
@@ -223,49 +224,34 @@ class FinanceAgent(BaseAgent):
         context = input_data.get("context", {})
         financial_data = input_data.get("financial_data", {})
 
-        prompt = f"""
-        Eres un experto financiero actuando como parte de un sistema de asistencia 
-        empresarial. Debes proporcionar un análisis financiero detallado y 
-        recomendaciones prácticas basadas en la siguiente consulta y datos disponibles.
+        # Crear el prompt usando AIPromptBuilder
+        prompt_builder = AIPromptBuilder(
+            role="experto financiero",
+            task="Proporciona un análisis financiero detallado y recomendaciones prácticas basadas en la consulta y datos disponibles.",
+            input_data=f"## Consulta del cliente:\n{query}\n\n## Contexto adicional:\n{context}\n\n## Datos financieros disponibles:\n{financial_data}",
+            format_hint="""Tu análisis debe estar bien estructurado con:
+            - Introducción al contexto financiero
+            - Análisis de la situación actual
+            - Proyecciones justificadas
+            - Recomendaciones concretas
+            - Consideración de riesgos
+            - Conclusiones""",
+            context="""Tus áreas de especialización:
+            - Análisis financiero sectorial
+            - Valoración de empresas y proyectos
+            - Proyecciones de crecimiento y rentabilidad
+            - Métricas financieras clave (KPIs)
+            - Modelos financieros para distintas industrias
+            - Estrategias de inversión y financiamiento""",
+            criteria="""1. Proporciona un análisis financiero detallado y estructurado
+            2. Incluye métricas relevantes y proyecciones numéricas cuando sea posible
+            3. Basa tus recomendaciones en datos objetivos y tendencias actuales
+            4. Considera el contexto específico de la industria mencionada
+            5. Organiza tu respuesta en secciones claras con títulos
+            6. Incluye elementos visuales como tablas cuando sea útil""",
+        )
 
-        ## Consulta del cliente:
-        {query}
-
-        ## Contexto adicional:
-        {context}
-
-        ## Datos financieros disponibles:
-        {financial_data}
-
-        ## Tus áreas de especialización:
-        - Análisis financiero sectorial
-        - Valoración de empresas y proyectos
-        - Proyecciones de crecimiento y rentabilidad
-        - Métricas financieras clave (KPIs)
-        - Modelos financieros para distintas industrias
-        - Estrategias de inversión y financiamiento
-
-        ## Instrucciones:
-        1. Proporciona un análisis financiero detallado y estructurado
-        2. Incluye métricas relevantes y proyecciones numéricas cuando sea posible
-        3. Basa tus recomendaciones en datos objetivos y tendencias actuales
-        4. Considera el contexto específico de la industria mencionada
-        5. Organiza tu respuesta en secciones claras con títulos
-        6. Incluye elementos visuales como tablas cuando sea útil
-
-        ## Formato de respuesta:
-        Tu análisis debe estar bien estructurado con:
-        - Introducción al contexto financiero
-        - Análisis de la situación actual
-        - Proyecciones justificadas
-        - Recomendaciones concretas
-        - Consideración de riesgos
-        - Conclusiones
-
-        Proporciona un análisis completo y útil que permita tomar decisiones informadas.
-        """
-
-        return prompt
+        return prompt_builder.build()
 
     def _extract_industry(self, query: str) -> str | None:
         """

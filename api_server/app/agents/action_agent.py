@@ -3,10 +3,10 @@ import time
 from pathlib import Path
 from typing import Any
 
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
 from app.agents.base import BaseAgent
+from app.core.ai_prompt_builder import AIPromptBuilder
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.tools.mcp_client import MCPClient
@@ -33,28 +33,7 @@ class ActionAgent(BaseAgent):
         super().__init__(name="action_agent", description="Agente especializado en realizar acciones específicas")
         # Asignar el LLM importado a la propiedad de la instancia
         self.llm = llm
-        self.prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    """Eres un agente especializado en realizar acciones específicas.
-            Tu objetivo es ejecutar tareas concretas y proporcionar resultados tangibles.
 
-            Debes:
-            1. Identificar la acción requerida
-            2. Planificar los pasos necesarios
-            3. Ejecutar la acción de manera eficiente
-            4. Proporcionar un reporte detallado del resultado
-
-            Formatea tu respuesta incluyendo:
-            - Acción realizada
-            - Pasos ejecutados
-            - Resultado obtenido
-            - Recomendaciones posteriores""",
-                ),
-                ("human", "{input}"),
-            ]
-        )
         # Inicializar cliente MCP
         mcp_path = str(Path(os.path.abspath(__file__)).parents[3] / "mcp_server" / "main.py")
         self.mcp_client = MCPClient(base_url=settings.MCP_CLIENT_URL, use_stdio=True, mcp_server_path=mcp_path)
@@ -70,8 +49,24 @@ class ActionAgent(BaseAgent):
         query_preview = query[:50] + "..." if len(query) > 50 else query
         logger.info(f"ActionAgent procesando consulta: {query_preview}")
 
-        # Formatear el prompt correctamente
-        formatted_prompt = self.prompt.format(input=query)
+        # Usar AIPromptBuilder para crear el prompt
+        prompt_builder = AIPromptBuilder(
+            role="agente especializado en realizar acciones específicas",
+            task="Ejecutar tareas concretas y proporcionar resultados tangibles",
+            input_data=query,
+            format_hint="""Formatea tu respuesta incluyendo:
+            - Acción realizada
+            - Pasos ejecutados
+            - Resultado obtenido
+            - Recomendaciones posteriores""",
+            criteria="""Debes:
+            1. Identificar la acción requerida
+            2. Planificar los pasos necesarios
+            3. Ejecutar la acción de manera eficiente
+            4. Proporcionar un reporte detallado del resultado""",
+        )
+
+        formatted_prompt = prompt_builder.build()
 
         # Llamar a la herramienta MCP 'query_kb'
         mcp_result = self.mcp_client.call_tool_sync("query_kb", {"query": query})

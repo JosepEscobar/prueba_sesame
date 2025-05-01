@@ -70,7 +70,7 @@ jobs:
               if (err) throw err;
               
               const coverage = result.coverage;
-              const lineRate = parseFloat(coverage.$.line-rate) * 100;
+              const lineRate = parseFloat(coverage.$["line-rate"]) * 100;
               
               const body = `## API Server Test Coverage: ${lineRate.toFixed(2)}%
               
@@ -87,14 +87,6 @@ jobs:
           } catch (error) {
             console.error('Error al procesar el informe de cobertura:', error);
           }
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./api_server/coverage.xml
-        flags: api-server
-        fail_ci_if_error: true
 
   test-mcp-server:
     runs-on: ubuntu-latest
@@ -159,7 +151,7 @@ jobs:
               if (err) throw err;
               
               const coverage = result.coverage;
-              const lineRate = parseFloat(coverage.$.line-rate) * 100;
+              const lineRate = parseFloat(coverage.$["line-rate"]) * 100;
               
               const body = `## MCP Server Test Coverage: ${lineRate.toFixed(2)}%
               
@@ -176,14 +168,6 @@ jobs:
           } catch (error) {
             console.error('Error al procesar el informe de cobertura:', error);
           }
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./mcp_server/coverage.xml
-        flags: mcp-server
-        fail_ci_if_error: true
 
   test-frontend:
     runs-on: ubuntu-latest

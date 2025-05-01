@@ -8,14 +8,14 @@ modelos de lenguaje, incluyendo OpenAI, y gestionar respuestas.
 import json
 import time
 import traceback
-from typing import Any, Dict, TypeVar
+from typing import Any, TypeVar
 
 from app.core.config import get_settings
 from app.core.logging import logger
 
 settings = get_settings()
 
-T = TypeVar("T", bound=Dict[str, Any])
+T = TypeVar("T", bound=dict[str, Any])
 
 
 class LLMClient:
@@ -129,8 +129,8 @@ def get_llm_client() -> LLMClient:
 
 
 def parse_llm_json_response(
-    response: Any, default_value: Dict[str, Any], response_field: str = "content"
-) -> Dict[str, Any]:
+    response: Any, default_value: dict[str, Any], response_field: str = "content"
+) -> dict[str, Any]:
     """
     Parsea de manera segura una respuesta JSON de un LLM.
 
@@ -182,9 +182,9 @@ def parse_llm_json_response(
                             result = json.loads(potential_json)
                             logger.info("JSON extraído y parseado correctamente después de limpieza adicional")
                             return result
-                    except Exception:
+                    except Exception as ex:
                         # Si la extracción adicional falla, usar el valor por defecto
-                        pass
+                        logger.error(f"Error en extracción adicional de JSON: {str(ex)}")
                     return default_value
 
         # Si la respuesta está vacía o no tiene el campo esperado

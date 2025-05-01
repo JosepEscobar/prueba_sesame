@@ -6,7 +6,7 @@ y estandarizados para interactuar con modelos de lenguaje.
 """
 
 import json
-from typing import Any, Dict
+from typing import Any
 
 
 class AIPromptBuilder:
@@ -26,7 +26,7 @@ class AIPromptBuilder:
         examples: list = None,
         constraints: str = "",
         input_data: str = "",
-        schema: Dict[str, Any] = None,
+        schema: dict[str, Any] = None,
         criteria: str = "",
     ):
         """
@@ -55,7 +55,7 @@ class AIPromptBuilder:
 
     @staticmethod
     def create_json_extraction_prompt(
-        query: str, json_structure: Dict[str, Any], instructions: str = "", examples: Dict[str, Any] = None
+        query: str, json_structure: dict[str, Any], instructions: str = "", examples: dict[str, Any] = None
     ) -> str:
         """
         Crea un prompt estandarizado para pedir al LLM que responda en formato JSON.

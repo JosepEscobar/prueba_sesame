@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 from app.agents.base import BaseAgent
+from app.core.ai_prompt_builder import AIPromptBuilder
 from app.core.config import get_settings
 from app.core.llm import get_llm_client
 from app.core.logging import logger
@@ -133,28 +134,29 @@ class GuardrailAgent(BaseAgent):
         Returns:
             Resultado de la evaluación
         """
-        prompt = f"""
-        # Tarea: Evaluación de consulta para determinar si está dentro del ámbito de servicios
+        # Crear un esquema JSON para la respuesta esperada
+        json_schema = {
+            "in_scope": True,  # boolean
+            "domain": "domain_name",  # string
+            "confidence": 0.9,  # float 0.0-1.0
+            "reasoning": "detailed reasoning",  # string
+            "explanation": "explanation for user",  # string
+        }
 
-        ## Ámbito del sistema
-        {self.scope_definition}
+        # Usar AIPromptBuilder para crear el prompt
+        prompt_builder = AIPromptBuilder(
+            role="evaluador de consultas",
+            task="Evaluar si la consulta está dentro del ámbito de servicios ofrecidos por la aplicación",
+            input_data=f'Consulta a evaluar: "{query}"',
+            context=f"Ámbito del sistema:\n{self.scope_definition}",
+            schema=json_schema,
+            criteria="""1. Determina si la consulta está relacionada con alguno de los dominios de la aplicación.
+            2. Si está en el ámbito, identifica el dominio más relevante y explica por qué.
+            3. Si no está en el ámbito, explica claramente por qué y sugiere cómo reformular la consulta para que esté dentro del ámbito.""",
+            constraints="Proporciona tu respuesta en formato JSON según el esquema proporcionado.",
+        )
 
-        ## Consulta a evaluar
-        "{query}"
-
-        ## Instrucciones
-        1. Determina si la consulta está relacionada con alguno de los dominios de la aplicación.
-        2. Si está en el ámbito, identifica el dominio más relevante y explica por qué.
-        3. Si no está en el ámbito, explica claramente por qué y sugiere cómo reformular la consulta para que esté dentro del ámbito.
-
-        ## Formato de respuesta
-        Proporciona tu respuesta en formato JSON con los siguientes campos:
-        - "in_scope": boolean (true/false)
-        - "domain": string (el dominio más relevante si está en el ámbito)
-        - "confidence": float (0.0-1.0, tu nivel de confianza en la evaluación)
-        - "reasoning": string (tu razonamiento detallado)
-        - "explanation": string (explicación para el usuario)
-        """
+        prompt = prompt_builder.build()
 
         try:
             response = self.llm_client.generate_text(prompt)

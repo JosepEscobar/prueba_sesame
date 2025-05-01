@@ -80,6 +80,7 @@ ignore = [
     "ANN401", # Permitir uso de 'Any' en anotaciones de tipo
     "ANN003", # Permitir **kwargs sin anotación de tipo
     "S105",   # Permitir posibles contraseñas codificadas (para desarrollo)
+    "W293",   # Permitir lineas en blanco
 ]
 
 [tool.ruff.lint.isort]
