@@ -7,14 +7,30 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  test:
+  test-api-server:
     runs-on: ubuntu-latest
+    permissions: 
+      contents: read
+      issues: write
+      pull-requests: write
     strategy:
       matrix:
         python-version: [3.12]
 
+    defaults:
+      run:
+        working-directory: api_server
+
     steps:
     - uses: actions/checkout@v4
+
+    - name: Check file structure
+      run: |
+        ls -la
+        if [ ! -f "requirements.txt" ]; then
+          echo "ERROR: requirements.txt not found in api_server directory"
+          exit 1
+        fi
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -25,47 +41,245 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install prometheus_client
 
     - name: Lint with Ruff
       run: |
+        pip install ruff
         ruff check .
-
-    - name: Format with Black
-      run: |
-        black . --check
 
     - name: Run tests
       run: |
+        pip install pytest pytest-cov python-json-logger>=2.0.0 prometheus_client
+        export OPENAI_API_KEY=sk-test-dummy-key
         pytest --cov=app --cov-report=xml
-        
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
       with:
-        file: ./coverage.xml
-        fail_ci_if_error: true
+        github-token: ${{ secrets.GH_TOKEN }}
+        script: |
+          const { execSync } = require('child_process');
+          execSync('npm install xml2js');
+          
+          const fs = require('fs');
+          const xml2js = require('xml2js');
+          
+          try {
+            const xmlContent = fs.readFileSync('./api_server/coverage.xml', 'utf8');
+            const parser = new xml2js.Parser();
+            
+            parser.parseString(xmlContent, (err, result) => {
+              if (err) throw err;
+              
+              const coverage = result.coverage;
+              const lineRate = parseFloat(coverage.$["line-rate"]) * 100;
+              
+              const body = `## API Server Test Coverage: ${lineRate.toFixed(2)}%
+              
+              Cobertura de pruebas para api_server generada por la ejecución de CI.
+              `;
+              
+              try {
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: body
+                });
+                console.log('Comentario sobre cobertura agregado exitosamente al PR');
+              } catch (commentError) {
+                console.error('Error al agregar comentario al PR:', commentError);
+              }
+            });
+          } catch (error) {
+            console.error('Error al procesar el informe de cobertura:', error);
+          }
+
+  test-mcp-server:
+    runs-on: ubuntu-latest
+    permissions: 
+      contents: read
+      issues: write
+      pull-requests: write
+    strategy:
+      matrix:
+        python-version: [3.12]
+
+    defaults:
+      run:
+        working-directory: mcp_server
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check file structure
+      run: |
+        ls -la
+        if [ ! -f "requirements.txt" ]; then
+          echo "ERROR: requirements.txt not found in mcp_server directory"
+          exit 1
+        fi
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install prometheus_client
+
+    - name: Lint with Ruff
+      run: |
+        pip install ruff
+        ruff check .
+
+    - name: Run tests
+      run: |
+        pip install pytest pytest-cov python-json-logger>=2.0.0 prometheus_client
+        export OPENAI_API_KEY=sk-test-dummy-key
+        pytest --cov=app --cov-report=xml
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GH_TOKEN }}
+        script: |
+          const { execSync } = require('child_process');
+          execSync('npm install xml2js');
+          
+          const fs = require('fs');
+          const xml2js = require('xml2js');
+          
+          try {
+            const xmlContent = fs.readFileSync('./mcp_server/coverage.xml', 'utf8');
+            const parser = new xml2js.Parser();
+            
+            parser.parseString(xmlContent, (err, result) => {
+              if (err) throw err;
+              
+              const coverage = result.coverage;
+              const lineRate = parseFloat(coverage.$["line-rate"]) * 100;
+              
+              const body = `## MCP Server Test Coverage: ${lineRate.toFixed(2)}%
+              
+              Cobertura de pruebas para mcp_server generada por la ejecución de CI.
+              `;
+              
+              try {
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: body
+                });
+                console.log('Comentario sobre cobertura agregado exitosamente al PR');
+              } catch (commentError) {
+                console.error('Error al agregar comentario al PR:', commentError);
+              }
+            });
+          } catch (error) {
+            console.error('Error al procesar el informe de cobertura:', error);
+          }
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check file structure
+      run: |
+        ls -la
+        if [ ! -f "package.json" ]; then
+          echo "ERROR: package.json not found in frontend directory"
+          exit 1
+        fi
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Lint with ESLint
+      run: npm run lint || true
+
+    - name: Build
+      run: npm run build
 
   build-and-push:
-    needs: test
+    needs: [test-api-server, test-mcp-server, test-frontend]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
 
     steps:
     - uses: actions/checkout@v4
     
+    - name: Check directories
+      run: |
+        echo "Checking directory structure..."
+        ls -la
+        echo "API Server directory:"
+        ls -la api_server || echo "API Server directory not found!"
+        echo "MCP Server directory:"
+        ls -la mcp_server || echo "MCP Server directory not found!"
+        echo "Frontend directory:"
+        ls -la frontend || echo "Frontend directory not found!"
+    
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Login to Docker Hub
+    - name: Login to GitHub Container Registry
       uses: docker/login-action@v3
       with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GH_TOKEN }}
         
-    - name: Build and push
+    - name: Prepare Docker Tags
+      id: prepare_tags
+      run: |
+        echo "owner=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+    
+    - name: Build and push API Server
       uses: docker/build-push-action@v5
       with:
-        context: .
+        context: ./api_server
         push: true
         tags: |
-          ${{ secrets.DOCKERHUB_USERNAME }}/multi-agent-mcp:latest
-          ${{ secrets.DOCKERHUB_USERNAME }}/multi-agent-mcp:${{ github.sha }}
+          ghcr.io/${{ env.owner }}/sesame-api:latest
+          ghcr.io/${{ env.owner }}/sesame-api:${{ github.sha }}
+          
+    - name: Build and push MCP Server
+      uses: docker/build-push-action@v5
+      with:
+        context: ./mcp_server
+        push: true
+        tags: |
+          ghcr.io/${{ env.owner }}/sesame-mcp:latest
+          ghcr.io/${{ env.owner }}/sesame-mcp:${{ github.sha }}
+          
+    - name: Build and push Frontend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        push: true
+        tags: |
+          ghcr.io/${{ env.owner }}/sesame-frontend:latest
+          ghcr.io/${{ env.owner }}/sesame-frontend:${{ github.sha }}

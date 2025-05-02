@@ -11,12 +11,14 @@ from typing import Any
 from langchain_openai import ChatOpenAI
 
 from app.agents.base import BaseAgent
+from app.core.ai_prompt_builder import AIPromptBuilder
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.tools.mcp_client import MCPClient
 
 # Obtener la configuración
 settings = get_settings()
+
 
 # Función para crear un LLM que puede ser reemplazado en los tests
 def create_llm():
@@ -26,8 +28,10 @@ def create_llm():
         api_key=settings.OPENAI_API_KEY,
     )
 
+
 # LLM global que puede ser sustituido desde los tests
 llm = create_llm()
+
 
 class SummaryAgent(BaseAgent):
     """
@@ -38,29 +42,22 @@ class SummaryAgent(BaseAgent):
 
     def __init__(self, model=None):
         """Inicializa el SummaryAgent"""
-        super().__init__(
-            name="summary_agent",
-            description="Especialista en síntesis de información."
-        )
+        super().__init__(name="summary_agent", description="Especialista en síntesis de información.")
         # Asignar el LLM importado a la propiedad de la instancia
         self.llm = llm
         # Inicializar cliente MCP
         mcp_path = str(Path(os.path.abspath(__file__)).parents[3] / "mcp_server" / "main.py")
-        self.mcp_client = MCPClient(
-            base_url=get_settings().MCP_CLIENT_URL,
-            use_stdio=True,
-            mcp_server_path=mcp_path
-        )
+        self.mcp_client = MCPClient(base_url=get_settings().MCP_CLIENT_URL, use_stdio=True, mcp_server_path=mcp_path)
         logger.info("SummaryAgent inicializado")
 
     def _execute_impl(self, input_data: dict[Any, Any]) -> dict[Any, Any]:
         """
         Ejecuta la operación de resumen basada en los datos de entrada.
-        
+
         Args:
             input_data: Diccionario que contiene la consulta y cualquier contexto adicional.
                 Debe incluir 'query' y opcionalmente 'context'.
-                
+
         Returns:
             Dict con los resultados del resumen, la consulta original y un nivel de confianza.
         """
@@ -92,7 +89,7 @@ class SummaryAgent(BaseAgent):
                 elif "raw_response" in context and context["raw_response"]:
                     # Manejar caso donde raw_response es un objeto AIMessage
                     raw_response = context["raw_response"]
-                    if hasattr(raw_response, 'content'):  # Es un objeto tipo AIMessage
+                    if hasattr(raw_response, "content"):  # Es un objeto tipo AIMessage
                         context_text = raw_response.content
                     else:
                         context_text = str(raw_response)
@@ -101,7 +98,7 @@ class SummaryAgent(BaseAgent):
                     context_text = json.dumps(context, indent=2, ensure_ascii=False)
             elif isinstance(context, str):
                 context_text = context
-            elif hasattr(context, 'content'):  # Manejo directo de AIMessage u objetos similares
+            elif hasattr(context, "content"):  # Manejo directo de AIMessage u objetos similares
                 context_text = context.content
             else:
                 context_text = str(context)
@@ -130,10 +127,7 @@ class SummaryAgent(BaseAgent):
 
                 try:
                     # Intentar obtener artículos relacionados mediante el cliente MCP
-                    articles_data = self.mcp_client.call_tool_sync(
-                        "search_articles",
-                        {"query": query}
-                    )
+                    articles_data = self.mcp_client.call_tool_sync("search_articles", {"query": query})
 
                     if articles_data and "result" in articles_data:
                         articles = articles_data["result"]
@@ -145,28 +139,23 @@ class SummaryAgent(BaseAgent):
                 except Exception as e:
                     logger.warning(f"Error al buscar artículos: {str(e)}")
 
-            # Preparar el prompt para el resumen
-            prompt = f"""
-            Eres un experto en crear resúmenes claros, concisos y estructurados. Tu tarea es generar un resumen
-            completo de la siguiente información, preservando todos los detalles importantes.
-            
-            CONSULTA ORIGINAL: {query}
-            
-            RESULTADO COMPLETO DEL ANÁLISIS:
-            {context_text}
-            
-            Instrucciones para el resumen:
-            1. Mantén todas las ideas principales y conclusiones clave.
-            2. Organiza la información en una estructura lógica con secciones claras.
-            3. Incluye todas las cifras, métricas y datos específicos importantes.
-            4. Preserva recomendaciones y pasos a seguir.
-            5. Usa lenguaje claro y profesional.
-            6. Debes mantener todo el valor informativo del texto original.
-            7. El resumen debe ser tan completo que pueda sustituir al original.
-            
-            Tu respuesta debe estar bien estructurada, con títulos de sección, párrafos coherentes
-            y formato que facilite la lectura y comprensión.
-            """
+            # Usar AIPromptBuilder para crear el prompt de resumen
+            prompt_builder = AIPromptBuilder(
+                role="experto en crear resúmenes claros, concisos y estructurados",
+                task="Generar un resumen completo de la información proporcionada, preservando todos los detalles importantes.",
+                input_data=f"CONSULTA ORIGINAL: {query}\n\nRESULTADO COMPLETO DEL ANÁLISIS:\n{context_text}",
+                format_hint="""Tu respuesta debe estar bien estructurada, con títulos de sección, párrafos coherentes
+                y formato que facilite la lectura y comprensión.""",
+                criteria="""1. Mantén todas las ideas principales y conclusiones clave.
+                2. Organiza la información en una estructura lógica con secciones claras.
+                3. Incluye todas las cifras, métricas y datos específicos importantes.
+                4. Preserva recomendaciones y pasos a seguir.
+                5. Usa lenguaje claro y profesional.
+                6. Debes mantener todo el valor informativo del texto original.
+                7. El resumen debe ser tan completo que pueda sustituir al original.""",
+            )
+
+            prompt = prompt_builder.build()
 
             # Si no hay LLM, usar una respuesta básica
             if not self.llm:
@@ -176,11 +165,11 @@ class SummaryAgent(BaseAgent):
                     "result": {
                         "content": "No se pudo generar un resumen detallado. Por favor, revise el resultado completo.",
                         "source": "summary_agent",
-                        "success": False
+                        "success": False,
                     },
                     "input": input_data,
                     "confidence": 0.5,
-                    "processing_time": processing_time
+                    "processing_time": processing_time,
                 }
 
             # Generar el resumen usando el LLM
@@ -188,7 +177,7 @@ class SummaryAgent(BaseAgent):
 
             messages = [
                 SystemMessage(content="Eres un especialista en generar resúmenes concisos, claros y completos."),
-                HumanMessage(content=prompt)
+                HumanMessage(content=prompt),
             ]
 
             response = self.invoke_llm(messages, prompt_type="langchain")
@@ -196,28 +185,27 @@ class SummaryAgent(BaseAgent):
 
             # Verificar que el resumen no sea demasiado breve (lo que podría indicar un problema)
             if len(summary_content) < 100 and len(context_text) > 500:
-                logger.warning(f"Resumen generado demasiado breve ({len(summary_content)} caracteres) para un contexto de {len(context_text)} caracteres")
+                logger.warning(
+                    f"Resumen generado demasiado breve ({len(summary_content)} caracteres) para un contexto de {len(context_text)} caracteres"
+                )
                 # Intentar nuevamente con un prompt más específico
-                retry_prompt = f"""
-                IMPORTANTE: Necesito un resumen COMPLETO y DETALLADO. El resumen anterior era demasiado breve.
-                
-                CONSULTA ORIGINAL: {query}
-                
-                CONTENIDO COMPLETO A RESUMIR:
-                {context_text}
-                
-                Por favor, genera un resumen extenso y completo que conserve TODOS los detalles importantes,
-                cifras, recomendaciones y estructura. El resumen debe tener suficiente detalle para reemplazar 
-                al texto original.
-                """
+                retry_prompt_builder = AIPromptBuilder(
+                    role="experto en crear resúmenes detallados",
+                    task="IMPORTANTE: Necesito un resumen COMPLETO y DETALLADO. El resumen anterior era demasiado breve.",
+                    input_data=f"CONSULTA ORIGINAL: {query}\n\nRESULTADO COMPLETO DEL ANÁLISIS:\n{context_text}",
+                    format_hint="Tu respuesta debe ser extensa y completa, con todos los detalles relevantes.",
+                    criteria="Debes incluir TODOS los puntos clave, datos, métricas y conclusiones sin omitir información importante.",
+                )
 
-                retry_messages = [
-                    SystemMessage(content="Eres un especialista en generar resúmenes DETALLADOS y COMPLETOS que preservan toda la información importante."),
-                    HumanMessage(content=retry_prompt)
+                retry_prompt = retry_prompt_builder.build()
+
+                messages = [
+                    SystemMessage(content="Eres un especialista en generar resúmenes exhaustivos y detallados."),
+                    HumanMessage(content=retry_prompt),
                 ]
 
-                retry_response = self.invoke_llm(retry_messages, prompt_type="langchain")
-                summary_content = retry_response.content
+                response = self.invoke_llm(messages, prompt_type="langchain")
+                summary_content = response.content
 
             # También intentar obtener artículos relevantes
             try:
@@ -254,17 +242,12 @@ class SummaryAgent(BaseAgent):
                     "source": source,
                     "summarized_by": "summary_agent",
                     "processing_time": processing_time,
-                    "query": query
+                    "query": query,
                 },
                 "confidence": 0.9,
-                "processing_time": processing_time
+                "processing_time": processing_time,
             }
 
         except Exception as e:
             logger.error(f"Error en SummaryAgent: {str(e)}")
-            return {
-                "error": str(e),
-                "input": input_data,
-                "confidence": 0.0,
-                "processing_time": 0.0
-            }
+            return {"error": str(e), "input": input_data, "confidence": 0.0, "processing_time": 0.0}

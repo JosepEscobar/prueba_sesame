@@ -55,9 +55,7 @@ api_router.include_router(tools.router, prefix="/tools", tags=["tools"])
     así como una preferencia de agente específico para el procesamiento.
     """,
 )
-async def process_query(
-    request: dict[str, Any], background_tasks: BackgroundTasks, req: Request
-):
+async def process_query(request: dict[str, Any], background_tasks: BackgroundTasks, req: Request):
     """
     Procesa una consulta utilizando el sistema multi-agente.
 
@@ -143,14 +141,14 @@ async def process_query(
     summary="Obtener lista de agentes disponibles",
     description="""
     Devuelve información sobre todos los agentes disponibles en el sistema multi-agente.
-    
+
     Para cada agente, se incluye:
     - Identificador único
     - Nombre descriptivo
     - Tipo de agente
     - Descripción de capacidades
     - Métricas de rendimiento (tasa de éxito, tiempo promedio de respuesta)
-    
+
     Esta información es útil para entender las capacidades del sistema y para decidir
     qué agente especificar en las solicitudes de consulta si se desea uno en particular.
     """,
@@ -179,14 +177,14 @@ async def get_available_agents():
     summary="Obtener información detallada de un agente específico",
     description="""
     Devuelve información detallada sobre un agente específico identificado por su ID.
-    
+
     La respuesta incluye:
     - Información básica (nombre, tipo, descripción)
     - Capacidades detalladas del agente
     - Métricas de rendimiento (tasa de éxito, tiempo promedio, precisión)
     - Estadísticas de uso (número de consultas procesadas, tendencias)
     - Configuración técnica (modelo utilizado, parámetros)
-    
+
     Esta información es útil para comprender en profundidad las capacidades
     y el rendimiento de un agente específico antes de utilizarlo.
     """,
@@ -218,7 +216,7 @@ async def get_agent_info(agent_id: str):
     summary="Obtener estadísticas del sistema multi-agente",
     description="""
     Devuelve estadísticas detalladas sobre el rendimiento y uso del sistema multi-agente.
-    
+
     Las estadísticas incluyen:
     - Métricas de rendimiento global (tasa de éxito, tiempo promedio de respuesta)
     - Distribución de consultas por tipo de agente
@@ -226,7 +224,7 @@ async def get_agent_info(agent_id: str):
     - Tendencias de uso a lo largo del tiempo
     - Estadísticas de errores y excepciones
     - Métricas de recursos (uso de CPU, memoria, tokens)
-    
+
     Esta información es valiosa para monitorear la salud y rendimiento del sistema,
     identificar áreas de mejora, y entender patrones de uso.
     """,
@@ -261,17 +259,17 @@ async def get_system_stats():
     summary="Buscar información en fuentes de datos externas",
     description="""
     Realiza búsquedas de información en diversas fuentes de datos externas.
-    
+
     Tipos de búsqueda disponibles:
     - **market**: Datos de mercado y análisis económicos
     - **news**: Noticias recientes y artículos
     - **industry**: Informes y estadísticas de industrias específicas
     - **web**: Búsqueda general en internet
     - **company**: Información detallada sobre empresas específicas
-    
+
     La solicitud debe especificar el tipo de búsqueda y los parámetros de consulta
     relevantes, como términos de búsqueda, filtros y límites.
-    
+
     Los resultados incluirán la información obtenida, metadatos sobre la búsqueda
     y detalles sobre las fuentes utilizadas.
     """,
@@ -294,9 +292,7 @@ async def lookup_data(request: dict[str, Any], background_tasks: BackgroundTasks
     lookup_type = request.get("type", "")
     query = request.get("query", "")
 
-    logger.info(
-        f"Realizando búsqueda de tipo '{lookup_type}': '{query}' (request_id: {request_id})"
-    )
+    logger.info(f"Realizando búsqueda de tipo '{lookup_type}': '{query}' (request_id: {request_id})")
 
     start_time = time.time()
 
@@ -320,9 +316,7 @@ async def lookup_data(request: dict[str, Any], background_tasks: BackgroundTasks
             company = request.get("company", "")
             result = data_lookup.lookup_company_data(company)
         else:
-            raise HTTPException(
-                status_code=400, detail=f"Tipo de búsqueda no válido: {lookup_type}"
-            )
+            raise HTTPException(status_code=400, detail=f"Tipo de búsqueda no válido: {lookup_type}")
 
         # Calcular tiempo de procesamiento
         processing_time = time.time() - start_time
@@ -335,9 +329,7 @@ async def lookup_data(request: dict[str, Any], background_tasks: BackgroundTasks
             execution_time=processing_time,
         )
 
-        logger.info(
-            f"Búsqueda '{lookup_type}' completada en {processing_time:.4f}s (request_id: {request_id})"
-        )
+        logger.info(f"Búsqueda '{lookup_type}' completada en {processing_time:.4f}s (request_id: {request_id})")
 
         # Formatear la respuesta según el modelo DataLookupResponse
         response = {
@@ -367,9 +359,7 @@ async def lookup_data(request: dict[str, Any], background_tasks: BackgroundTasks
             error=str(e),
         )
 
-        logger.error(
-            f"Error en búsqueda '{lookup_type}': {str(e)} (request_id: {request_id})"
-        )
+        logger.error(f"Error en búsqueda '{lookup_type}': {str(e)} (request_id: {request_id})")
 
         return {
             "success": False,

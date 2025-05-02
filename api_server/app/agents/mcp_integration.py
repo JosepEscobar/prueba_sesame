@@ -12,10 +12,11 @@ from app.tools.mcp_client import MCPClient
 # Mantener una referencia global al cliente MCP para reutilizarlo
 _mcp_client = None
 
+
 def get_mcp_tools_sync() -> list[dict[str, Any]]:
     """
     Versión sincrónica para obtener herramientas MCP disponibles.
-    
+
     Returns:
         Lista de herramientas MCP adaptadas para uso con LangChain
     """
@@ -25,6 +26,7 @@ def get_mcp_tools_sync() -> list[dict[str, Any]]:
         # Deducir la ruta del servidor MCP relativa al proyecto
         import os
         from pathlib import Path
+
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = Path(current_dir).parent.parent.parent.parent
         mcp_server_path = os.path.join(project_root, "mcp_server", "main.py")
@@ -35,9 +37,9 @@ def get_mcp_tools_sync() -> list[dict[str, Any]]:
         if _mcp_client is None:
             logger.info("Creando nuevo cliente MCP global")
             _mcp_client = MCPClient(
-                base_url="http://localhost:4000",
+                base_url="http://mcp_server:4000",
                 use_stdio=False,  # No usar stdio para evitar problemas con loop de eventos
-                mcp_server_path=mcp_server_path
+                mcp_server_path=mcp_server_path,
             )
 
         # Inicializar de manera sincrónica y obtener herramientas
@@ -64,13 +66,16 @@ def get_mcp_tools_sync() -> list[dict[str, Any]]:
                         logger.error(f"Error: cliente MCP no disponible para herramienta {tool_name}")
                         return {"error": "Cliente MCP no inicializado"}
                     return _mcp_client.call_tool_sync(tool_name, kwargs)
+
                 return tool_function
 
-            langchain_tools.append({
-                "name": tool_name,
-                "description": tool.get("description", f"Herramienta {tool_name} del servidor MCP"),
-                "func": create_tool_function(tool_name)
-            })
+            langchain_tools.append(
+                {
+                    "name": tool_name,
+                    "description": tool.get("description", f"Herramienta {tool_name} del servidor MCP"),
+                    "func": create_tool_function(tool_name),
+                }
+            )
 
         logger.info(f"Herramientas MCP cargadas: {len(langchain_tools)}")
         return langchain_tools
@@ -79,19 +84,21 @@ def get_mcp_tools_sync() -> list[dict[str, Any]]:
         logger.error(f"Error al cargar herramientas MCP: {str(e)}")
         return []
 
+
 async def get_mcp_tools() -> list[dict[str, Any]]:
     """
     Obtiene herramientas MCP disponibles y las convierte a formato para LangChain.
-    
+
     Returns:
         Lista de herramientas MCP adaptadas para uso con LangChain
     """
     return get_mcp_tools_sync()
 
+
 def configure_agent_with_mcp(agent, tools):
     """
     Configura un agente con herramientas MCP.
-    
+
     Args:
         agent: El agente a configurar
         tools: Lista de herramientas a añadir
@@ -104,14 +111,16 @@ def configure_agent_with_mcp(agent, tools):
             if isinstance(tools, dict):
                 tools_list = []
                 for name, tool_data in tools.items():
-                    if isinstance(tool_data, dict) and 'func' in tool_data:
+                    if isinstance(tool_data, dict) and "func" in tool_data:
                         tools_list.append(tool_data)
                     else:
-                        tools_list.append({
-                            "name": name,
-                            "description": str(tool_data),
-                            "func": lambda **kwargs: {"error": "Herramienta no disponible"}
-                        })
+                        tools_list.append(
+                            {
+                                "name": name,
+                                "description": str(tool_data),
+                                "func": lambda **kwargs: {"error": "Herramienta no disponible"},
+                            }
+                        )
                 tools = tools_list
                 logger.info(f"Convertidas {len(tools)} herramientas de diccionario a lista")
             else:
@@ -144,3 +153,20 @@ def configure_agent_with_mcp(agent, tools):
 
     except Exception as e:
         logger.error(f"Error al configurar agente con herramientas MCP: {str(e)}")
+
+
+def get_mcp_client() -> MCPClient:
+    """
+    Obtiene un cliente MCP configurado para uso en el sistema de agentes.
+
+    Returns:
+        MCPClient: Cliente MCP configurado
+    """
+    # Para pruebas o desarrollo, puede usarse cualquiera de estos métodos
+    # En producción, probablemente se configurará mediante variables de entorno
+
+    # Opción 1: Usar la conexión HTTP con un servidor MCP ejecutándose localmente
+    return MCPClient(
+        base_url="http://mcp_server:4000",
+        use_stdio=False,
+    )

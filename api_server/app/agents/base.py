@@ -10,10 +10,11 @@ from app.core.metrics import MetricsCollector
 
 settings = get_settings()
 
+
 class BaseAgent(abc.ABC):
     """
     Clase base para todos los agentes del sistema.
-    
+
     Define la interfaz y funcionalidad común que deben implementar
     todos los agentes, incluyendo ejecución, gestión de herramientas y
     manejo de memoria.
@@ -22,7 +23,7 @@ class BaseAgent(abc.ABC):
     def __init__(self, name: str, description: str = ""):
         """
         Inicializa un agente base.
-        
+
         Args:
             name: Nombre único del agente
             description: Descripción breve de la función del agente
@@ -41,10 +42,13 @@ class BaseAgent(abc.ABC):
             try:
                 # Importar el cliente directamente para mayor control
                 from openai import OpenAI
+
                 self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
                 # Log para depuración
-                logger.info(f"Inicializando cliente OpenAI para {name} con API KEY: {settings.OPENAI_API_KEY[:5]}...{settings.OPENAI_API_KEY[-5:] if len(settings.OPENAI_API_KEY) > 10 else ''}")
+                logger.info(
+                    f"Inicializando cliente OpenAI para {name} con API KEY: {settings.OPENAI_API_KEY[:5]}...{settings.OPENAI_API_KEY[-5:] if len(settings.OPENAI_API_KEY) > 10 else ''}"
+                )
 
                 # No hacemos la verificación de conexión aquí para ahorrar llamadas a la API
                 # y evitar errores 429 (Too Many Requests)
@@ -56,7 +60,7 @@ class BaseAgent(abc.ABC):
                         model_name=settings.OPENAI_MODEL,
                         temperature=settings.TEMPERATURE,
                         api_key=settings.OPENAI_API_KEY,
-                        max_tokens=settings.MAX_TOKENS
+                        max_tokens=settings.MAX_TOKENS,
                     )
                     logger.info(f"LLM de LangChain inicializado correctamente para agente {name}")
                 except Exception as e:
@@ -73,7 +77,7 @@ class BaseAgent(abc.ABC):
     def log_llm_call(self, prompt: Any, response: Any, prompt_type: str = "langchain"):
         """
         Registra un prompt enviado al LLM y la respuesta recibida.
-        
+
         Args:
             prompt: El prompt enviado al LLM
             response: La respuesta recibida del LLM
@@ -85,10 +89,13 @@ class BaseAgent(abc.ABC):
                 # Para mensajes de LangChain
                 if hasattr(prompt, "__iter__"):
                     # Si es una lista de mensajes
-                    prompt_str = "\n---\n".join([
-                        f"[{msg.type}]: {msg.content}"
-                        for msg in prompt if hasattr(msg, "type") and hasattr(msg, "content")
-                    ])
+                    prompt_str = "\n---\n".join(
+                        [
+                            f"[{msg.type}]: {msg.content}"
+                            for msg in prompt
+                            if hasattr(msg, "type") and hasattr(msg, "content")
+                        ]
+                    )
                 else:
                     prompt_str = str(prompt)
 
@@ -97,10 +104,9 @@ class BaseAgent(abc.ABC):
             elif prompt_type == "openai_direct":
                 # Para llamadas directas a la API de OpenAI
                 messages = prompt.get("messages", [])
-                prompt_str = "\n---\n".join([
-                    f"[{msg.get('role', 'unknown')}]: {msg.get('content', '')}"
-                    for msg in messages
-                ])
+                prompt_str = "\n---\n".join(
+                    [f"[{msg.get('role', 'unknown')}]: {msg.get('content', '')}" for msg in messages]
+                )
 
                 if hasattr(response, "choices") and len(response.choices) > 0:
                     response_str = response.choices[0].message.content
@@ -133,12 +139,12 @@ class BaseAgent(abc.ABC):
     def invoke_llm(self, prompt: Any, prompt_type: str = "langchain", **kwargs):
         """
         Invoca el LLM y registra la llamada.
-        
+
         Args:
             prompt: El prompt a enviar al LLM
             prompt_type: El tipo de prompt
             **kwargs: Argumentos adicionales para la llamada al LLM
-            
+
         Returns:
             La respuesta del LLM
         """
@@ -164,7 +170,7 @@ class BaseAgent(abc.ABC):
     def add_tool(self, tool_name: str, tool: Any) -> None:
         """
         Añade una herramienta al agente para su uso durante la ejecución.
-        
+
         Args:
             tool_name: Nombre único para la herramienta
             tool: La herramienta (función, clase o objeto) a añadir
@@ -175,10 +181,10 @@ class BaseAgent(abc.ABC):
     def get_tool(self, tool_name: str) -> Any | None:
         """
         Obtiene una herramienta por su nombre.
-        
+
         Args:
             tool_name: Nombre de la herramienta a obtener
-            
+
         Returns:
             La herramienta solicitada o None si no existe
         """
@@ -187,7 +193,7 @@ class BaseAgent(abc.ABC):
     def update_memory(self, key: str, value: Any) -> None:
         """
         Actualiza la memoria del agente con un nuevo valor.
-        
+
         Args:
             key: Clave para acceder al valor en la memoria
             value: Valor a almacenar
@@ -198,11 +204,11 @@ class BaseAgent(abc.ABC):
     def get_memory(self, key: str, default: Any = None) -> Any:
         """
         Obtiene un valor de la memoria del agente.
-        
+
         Args:
             key: Clave del valor a obtener
             default: Valor por defecto si la clave no existe
-            
+
         Returns:
             Valor asociado a la clave o el valor por defecto
         """
@@ -211,13 +217,13 @@ class BaseAgent(abc.ABC):
     def execute(self, input_data: dict[Any, Any]) -> dict[Any, Any]:
         """
         Ejecuta la lógica principal del agente.
-        
-        Esta es una implementación base que gestiona métricas, logging y 
+
+        Esta es una implementación base que gestiona métricas, logging y
         manejo de errores. Cada agente específico debe implementar _execute_impl.
-        
+
         Args:
             input_data: Diccionario con los datos de entrada para el agente
-            
+
         Returns:
             Diccionario con los resultados de la ejecución
         """
@@ -232,24 +238,17 @@ class BaseAgent(abc.ABC):
             # Registrar métricas
             execution_time = time.time() - start_time
             MetricsCollector.record_agent_execution(
-                agent_name=self.name,
-                execution_time=execution_time,
-                status="success"
+                agent_name=self.name, execution_time=execution_time, status="success"
             )
 
             # Registrar confianza si está disponible
             if "confidence" in result:
-                MetricsCollector.record_agent_confidence(
-                    agent_name=self.name,
-                    confidence=result["confidence"]
-                )
+                MetricsCollector.record_agent_confidence(agent_name=self.name, confidence=result["confidence"])
 
             # Registrar uso de tokens si está disponible
             if "token_usage" in result:
                 MetricsCollector.record_token_usage(
-                    agent_name=self.name,
-                    model=result.get("model", "unknown"),
-                    tokens=result["token_usage"]
+                    agent_name=self.name, model=result.get("model", "unknown"), tokens=result["token_usage"]
                 )
 
             logger.info(f"Agente {self.name} completó ejecución en {execution_time:.2f} segundos")
@@ -262,34 +261,23 @@ class BaseAgent(abc.ABC):
             logger.error(f"Error en agente {self.name}: {str(e)}")
 
             # Registrar métricas de error
-            MetricsCollector.record_agent_execution(
-                agent_name=self.name,
-                execution_time=execution_time,
-                status="error"
-            )
+            MetricsCollector.record_agent_execution(agent_name=self.name, execution_time=execution_time, status="error")
 
-            MetricsCollector.record_error(
-                agent_name=self.name,
-                error_type=type(e).__name__
-            )
+            MetricsCollector.record_error(agent_name=self.name, error_type=type(e).__name__)
 
             # Devolver respuesta de error
-            return {
-                "error": str(e),
-                "confidence": 0.0,
-                "input": input_data
-            }
+            return {"error": str(e), "confidence": 0.0, "input": input_data}
 
     @abc.abstractmethod
     def _execute_impl(self, input_data: dict[Any, Any]) -> dict[Any, Any]:
         """
         Implementación específica de la ejecución del agente.
-        
+
         Debe ser implementada por cada agente concreto.
-        
+
         Args:
             input_data: Diccionario con los datos de entrada para el agente
-            
+
         Returns:
             Diccionario con los resultados de la ejecución
         """

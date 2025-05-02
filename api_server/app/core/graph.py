@@ -8,6 +8,7 @@ from app.agents.guardrail_agent import GuardrailAgent
 from app.agents.marketing_agent import MarketingAgent
 from app.agents.router_agent import RouterAgent
 from app.agents.summary_agent import SummaryAgent
+from app.agents.system_info_agent import SystemInfoAgent
 from app.core.logging import logger
 
 
@@ -19,6 +20,7 @@ class AgentState(TypedDict):
     raw_response: str  # Añadimos un campo para la respuesta sin procesar
     in_scope: bool  # Añadimos campo para marcar si está dentro del ámbito
 
+
 class AgentGraph:
     def __init__(self):
         self.guardrail = GuardrailAgent()  # Añadimos el guardrail agent
@@ -27,8 +29,9 @@ class AgentGraph:
         self.marketing = MarketingAgent()
         self.analysis = AnalysisAgent()
         self.summary = SummaryAgent()
+        self.system_info = SystemInfoAgent()  # Añadimos el agente de información del sistema
         self.graph = self._build_graph()
-        logger.info("AgentGraph inicializado con 6 agentes incluyendo GuardrailAgent y SummaryAgent")
+        logger.info("AgentGraph inicializado con 7 agentes incluyendo GuardrailAgent, SummaryAgent y SystemInfoAgent")
 
     def _build_graph(self) -> Graph:
         """Construye el grafo de agentes."""
@@ -40,6 +43,7 @@ class AgentGraph:
         workflow.add_node("finance", self._process_finance)
         workflow.add_node("marketing", self._process_marketing)
         workflow.add_node("analysis", self._process_analysis)
+        workflow.add_node("system_info", self._process_system_info)  # Agente de información del sistema
         workflow.add_node("summary", self._process_summary)  # Nodo para el SummaryAgent
 
         # Definir transiciones desde guardrail
@@ -48,8 +52,9 @@ class AgentGraph:
             self._decide_after_guardrail,
             {
                 "router": "router",  # Si está en ámbito, ir al router
-                END: END  # Si está fuera de ámbito, terminar
-            }
+                "system_info": "system_info",  # Si es consulta de información del sistema, ir directamente
+                END: END,  # Si está fuera de ámbito, terminar
+            },
         )
 
         # Definir transiciones desde router
@@ -60,14 +65,16 @@ class AgentGraph:
                 "finance": "finance",
                 "marketing": "marketing",
                 "analysis": "analysis",
-                END: END
-            }
+                "system_info": "system_info",  # Agregamos el nuevo agente
+                END: END,
+            },
         )
 
         # Todos los agentes especializados van al summary para procesamiento final
         workflow.add_edge("finance", "summary")
         workflow.add_edge("marketing", "summary")
         workflow.add_edge("analysis", "summary")
+        workflow.add_edge("system_info", "summary")  # El agente de sistema también va al summary
 
         # Solo el summary termina el flujo
         workflow.add_edge("summary", END)
@@ -89,14 +96,21 @@ class AgentGraph:
         query = state["query"]
         context = state.get("context", {})
 
-        logger.info(f"GuardrailAgent verificando consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}...")
+        logger.info(
+            f"GuardrailAgent verificando consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}..."
+        )
         guardrail_result = self.guardrail.execute({"query": query, "context": context})
 
         # Por defecto, asumimos que está en ámbito
         state["in_scope"] = guardrail_result.get("in_scope", True)
 
+        # Verificar si es una consulta de información del sistema
+        if state["in_scope"] and guardrail_result.get("domain") == "system_info":
+            logger.info(f"Consulta de información del sistema detectada: {query[:50]}...")
+            state["current_agent"] = "system_info_agent"
+
         # Si está fuera del ámbito, configurar los datos de respuesta
-        if not state["in_scope"]:
+        elif not state["in_scope"]:
             logger.info(f"Consulta fuera del ámbito según GuardrailAgent: {query[:50]}...")
             # Usamos el resultado del guardrail como respuesta final
             state["agent_output"] = guardrail_result.get("result", {})
@@ -115,8 +129,11 @@ class AgentGraph:
         """
         Decide qué hacer después del guardrail.
         """
+        # Si es una consulta de información del sistema, ir directamente al agente correspondiente
+        if state.get("current_agent") == "system_info_agent":
+            return "system_info"
         # Si está en ámbito, ir al router
-        if state.get("in_scope", True):
+        elif state.get("in_scope", True):
             return "router"
         # Si está fuera de ámbito, terminar el flujo
         return END
@@ -145,7 +162,8 @@ class AgentGraph:
         agent_mapping = {
             "finance_agent": "finance",
             "marketing_agent": "marketing",
-            "analysis_agent": "analysis"
+            "analysis_agent": "analysis",
+            "system_info_agent": "system_info",
         }
 
         # Si el nombre contiene _agent, obtener la versión simplificada para el grafo
@@ -153,7 +171,7 @@ class AgentGraph:
             return agent_mapping[agent_name]
 
         # Si el agente ya tiene el nombre correcto para el grafo, devolverlo directamente
-        if agent_name in ["finance", "marketing", "analysis"]:
+        if agent_name in ["finance", "marketing", "analysis", "system_info"]:
             return agent_name
 
         # Por defecto, usar análisis
@@ -166,7 +184,9 @@ class AgentGraph:
         query = state["query"]
         context = state.get("context", {})
 
-        logger.info(f"Agente financiero procesando consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}...")
+        logger.info(
+            f"Agente financiero procesando consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}..."
+        )
         result = self.finance.execute({"query": query, "context": context})
 
         # Guardar la respuesta completa para summary
@@ -187,7 +207,9 @@ class AgentGraph:
         query = state["query"]
         context = state.get("context", {})
 
-        logger.info(f"Agente de marketing procesando consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}...")
+        logger.info(
+            f"Agente de marketing procesando consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}..."
+        )
         result = self.marketing.execute({"query": query, "context": context})
 
         # Guardar la respuesta completa para summary
@@ -208,8 +230,33 @@ class AgentGraph:
         query = state["query"]
         context = state.get("context", {})
 
-        logger.info(f"Agente de análisis procesando consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}...")
+        logger.info(
+            f"Agente de análisis procesando consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}..."
+        )
         result = self.analysis.execute({"query": query, "context": context})
+
+        # Guardar la respuesta completa para summary
+        if isinstance(result.get("result"), dict) and "content" in result["result"]:
+            state["raw_response"] = result["result"]["content"]
+        elif isinstance(result.get("result"), str):
+            state["raw_response"] = result["result"]
+        else:
+            state["raw_response"] = str(result)
+
+        state["agent_output"] = result
+        return state
+
+    def _process_system_info(self, state: AgentState) -> AgentState:
+        """
+        Procesa la consulta con el agente de información del sistema.
+        """
+        query = state["query"]
+        context = state.get("context", {})
+
+        logger.info(
+            f"Agente de información del sistema procesando consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}..."
+        )
+        result = self.system_info.execute({"query": query, "context": context})
 
         # Guardar la respuesta completa para summary
         if isinstance(result.get("result"), dict) and "content" in result["result"]:
@@ -229,21 +276,16 @@ class AgentGraph:
         query = state["query"]
         raw_response = state.get("raw_response", "")
 
-        logger.info(f"Agente de resumen procesando resultado para consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}...")
+        logger.info(
+            f"Agente de resumen procesando resultado para consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}..."
+        )
 
         # Crear contexto con la respuesta completa para el summary
-        summary_context = {
-            "content": raw_response,
-            "source": state["current_agent"],
-            "original_query": query
-        }
+        summary_context = {"content": raw_response, "source": state["current_agent"], "original_query": query}
 
         # Ejecutar el agente de resumen
         try:
-            summary_result = self.summary.execute({
-                "query": query,
-                "context": summary_context
-            })
+            summary_result = self.summary.execute({"query": query, "context": summary_context})
 
             # Actualizar el estado con el resultado procesado
             if isinstance(summary_result.get("result"), dict):
@@ -253,7 +295,7 @@ class AgentGraph:
                     "content": summary_result.get("result", ""),
                     "source": state["current_agent"],
                     "summarized": True,
-                    "original_response": raw_response
+                    "original_response": raw_response,
                 }
         except Exception as e:
             logger.error(f"Error al procesar resumen: {str(e)}")
@@ -262,7 +304,7 @@ class AgentGraph:
                 "content": raw_response,  # Usar la respuesta original
                 "source": state["current_agent"],
                 "summarized": False,
-                "error": str(e)
+                "error": str(e),
             }
 
         return state
@@ -270,10 +312,10 @@ class AgentGraph:
     def run(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """
         Ejecuta el flujo completo para una consulta.
-        
+
         Args:
             input_data: Diccionario con la consulta y contexto
-            
+
         Returns:
             Resultado del procesamiento
         """
@@ -286,10 +328,12 @@ class AgentGraph:
             "agent_output": {},
             "current_agent": "",
             "raw_response": "",
-            "in_scope": True  # Por defecto asumimos que está en ámbito
+            "in_scope": True,  # Por defecto asumimos que está en ámbito
         }
 
-        logger.info(f"Iniciando flujo de procesamiento para consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}...")
+        logger.info(
+            f"Iniciando flujo de procesamiento para consulta: {query[:50] if isinstance(query, str) else str(query)[:50]}..."
+        )
 
         # Ejecutar el grafo
         final_state = self.graph.invoke(initial_state)
@@ -299,7 +343,7 @@ class AgentGraph:
             "result": final_state["agent_output"],
             "agent": final_state["current_agent"],
             "processed_by": "summary_agent" if final_state.get("in_scope", True) else "guardrail_agent",
-            "confidence": 0.9
+            "confidence": 0.9,
         }
 
         return result

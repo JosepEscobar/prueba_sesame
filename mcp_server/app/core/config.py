@@ -70,11 +70,7 @@ class Settings(BaseSettings):
     ORCHESTRATOR_CONFIDENCE_THRESHOLD: float = ORCHESTRATOR_CONFIDENCE_THRESHOLD
     ANTHROPIC_API_KEY: str | None = None
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        case_sensitive=True,
-        env_file_encoding="utf-8"
-    )
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, env_file_encoding="utf-8")
 
     @field_validator("API_PREFIX")
     def validate_api_prefix(cls, v: str) -> str:

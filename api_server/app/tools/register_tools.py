@@ -20,10 +20,11 @@ from app.tools.mcp_client import MCPClient
 # Obtener la configuración
 settings = get_settings()
 
+
 def load_tools_from_schemas():
     """
     Carga herramientas desde esquemas JSON locales y las registra en el sistema.
-    
+
     Esta función puede ser utilizada durante la inicialización para asegurar
     que todas las herramientas estén disponibles para los agentes.
     """
@@ -56,10 +57,11 @@ def load_tools_from_schemas():
     except Exception as e:
         logger.error(f"Error cargando schemas: {str(e)}")
 
+
 def _register_schema_tool(name: str, description: str, schema: dict[str, Any], category: str):
     """
     Registra una herramienta basada en un schema JSON.
-    
+
     Args:
         name: Nombre de la herramienta
         description: Descripción de la herramienta
@@ -92,10 +94,7 @@ def _register_schema_tool(name: str, description: str, schema: dict[str, Any], c
             fields[prop_name] = (Optional[python_type], None)
 
         # Crear el modelo dinámico
-        input_model = create_model(
-            f"{name}Input",
-            **fields
-        )
+        input_model = create_model(f"{name}Input", **fields)
 
         # Función que implementa la herramienta
         def tool_func(**kwargs):
@@ -116,43 +115,23 @@ def _register_schema_tool(name: str, description: str, schema: dict[str, Any], c
                             # Instanciar e invocar
                             impl = impl_class()
                             result = impl.execute(**kwargs)
-                            metrics.tool_calls_total.labels(
-                                tool_name=name,
-                                status="success"
-                            ).inc()
+                            metrics.tool_calls_total.labels(tool_name=name, status="success").inc()
                             return result
                         except Exception as e:
                             logger.error(f"Error en implementación de {name}: {str(e)}")
-                            metrics.tool_calls_total.labels(
-                                tool_name=name,
-                                status="error"
-                            ).inc()
+                            metrics.tool_calls_total.labels(tool_name=name, status="error").inc()
                             return {"error": f"Error en implementación: {str(e)}"}
 
                     # Si no hay implementación, devolvemos datos simulados
-                    metrics.tool_calls_total.labels(
-                        tool_name=name,
-                        status="success"
-                    ).inc()
-                    return {
-                        "result": f"Simulación de resultados para {name}",
-                        "params": kwargs
-                    }
+                    metrics.tool_calls_total.labels(tool_name=name, status="success").inc()
+                    return {"result": f"Simulación de resultados para {name}", "params": kwargs}
             except Exception as e:
-                metrics.tool_calls_total.labels(
-                    tool_name=name,
-                    status="error"
-                ).inc()
+                metrics.tool_calls_total.labels(tool_name=name, status="error").inc()
                 logger.error(f"Error ejecutando herramienta {name}: {str(e)}")
                 return {"error": str(e)}
 
         # Crear una herramienta estructurada
-        tool = StructuredTool.from_function(
-            func=tool_func,
-            name=name,
-            description=description,
-            args_schema=input_model
-        )
+        tool = StructuredTool.from_function(func=tool_func, name=name, description=description, args_schema=input_model)
 
         # Registrar en el sistema global de LangChain
         from langchain.tools import tool as langchain_tool_decorator
@@ -165,10 +144,11 @@ def _register_schema_tool(name: str, description: str, schema: dict[str, Any], c
     except Exception as e:
         logger.error(f"Error registrando herramienta {name}: {str(e)}")
 
+
 def register_all_tools():
     """
     Registra todas las implementaciones de herramientas disponibles en el sistema.
-    
+
     Esta función debe ser llamada durante la inicialización de la aplicación
     para asegurar que todas las herramientas estén disponibles para los agentes.
     """
@@ -185,7 +165,7 @@ def register_all_tools():
         financial_tool = StructuredTool.from_function(
             func=financial_models_impl.get_models,
             name="financial_models",
-            description="Obtiene modelos o plantillas financieras para diferentes industrias"
+            description="Obtiene modelos o plantillas financieras para diferentes industrias",
         )
 
         # Registrar en el sistema global de LangChain
@@ -208,21 +188,17 @@ def register_all_tools():
         return {
             "status": "success",
             "implemented_tools": 3,  # Ajustar según el número real de herramientas implementadas
-            "total_tools": 3         # Ajustar según el número total de herramientas disponibles
+            "total_tools": 3,  # Ajustar según el número total de herramientas disponibles
         }
     except Exception as e:
         logger.error(f"Error en registro de herramientas: {str(e)}")
-        return {
-            "status": "error",
-            "error": str(e),
-            "implemented_tools": 0,
-            "total_tools": 0
-        }
+        return {"status": "error", "error": str(e), "implemented_tools": 0, "total_tools": 0}
+
 
 async def _register_mcp_tools():
     """
     Registra herramientas disponibles a través del cliente MCP.
-    
+
     Esta función asíncrona se ejecuta en segundo plano para no bloquear
     la inicialización de la aplicación.
     """
@@ -265,22 +241,20 @@ async def _register_mcp_tools():
                             try:
                                 # Registrar inicio de ejecución para métricas
                                 with metrics.tool_execution_time.labels(tool_name=specific_tool_name).time():
-                                    logger.info(f"Ejecutando herramienta MCP {specific_tool_name} con parámetros: {kwargs}")
+                                    logger.info(
+                                        f"Ejecutando herramienta MCP {specific_tool_name} con parámetros: {kwargs}"
+                                    )
 
                                     # Llamar a la herramienta en el servidor MCP de forma síncrona
                                     result = mcp_client.call_tool_sync(specific_tool_name, kwargs)
 
                                     metrics.tool_calls_total.labels(
-                                        tool_name=specific_tool_name,
-                                        status="success"
+                                        tool_name=specific_tool_name, status="success"
                                     ).inc()
 
                                     return result
                             except Exception as e:
-                                metrics.tool_calls_total.labels(
-                                    tool_name=specific_tool_name,
-                                    status="error"
-                                ).inc()
+                                metrics.tool_calls_total.labels(tool_name=specific_tool_name, status="error").inc()
                                 logger.error(f"Error ejecutando herramienta MCP {specific_tool_name}: {str(e)}")
                                 return {"error": str(e)}
 
@@ -291,9 +265,7 @@ async def _register_mcp_tools():
 
                     # Usar el decorador sin proporcionar name directamente
                     func = create_tool_func(tool_name)
-                    decorated_tool = langchain_tool_decorator(
-                        description=tool_description
-                    )(func)
+                    decorated_tool = langchain_tool_decorator(description=tool_description)(func)
                     decorated_tool.__name__ = tool_name
 
                     logger.info(f"Herramienta MCP registrada: {tool_name}")

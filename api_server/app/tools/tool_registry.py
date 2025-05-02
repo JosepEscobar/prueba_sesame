@@ -1,127 +1,113 @@
-import glob
-import json
-import os
-from typing import Any
+"""
+Registry para las herramientas MCP.
 
-from app.core.logging import logger
+Este módulo mantiene un registro de las herramientas MCP disponibles
+en el sistema y facilita la obtención de sus esquemas y funciones.
+"""
+
+from collections.abc import Callable
+from typing import Any
 
 
 class ToolRegistry:
     """
-    Registro centralizado de herramientas disponibles para los agentes.
-    
-    Proporciona una interfaz única para registrar, descubrir y acceder
-    a las diferentes herramientas que pueden utilizar los agentes del sistema.
+    Registro centralizado de herramientas MCP.
+
+    Permite registrar herramientas, obtener sus esquemas y funciones,
+    y enumerar las herramientas disponibles en el sistema.
     """
 
     def __init__(self):
-        """Inicializa el registro de herramientas."""
-        # Mapeo de nombre de herramienta -> definición de herramienta
-        self.tools: dict[str, dict[str, Any]] = {}
-        # Mapeo de nombre de herramienta -> implementación
-        self.implementations: dict[str, Any] = {}
-        # Directorio donde se encuentran los esquemas
-        self.schema_dir = os.path.join(os.path.dirname(__file__), "schemas")
-
-        # Cargar esquemas de herramientas automáticamente
-        self._load_tool_schemas()
-
-    def _load_tool_schemas(self) -> None:
-        """Carga los esquemas de herramientas desde el directorio de esquemas."""
-        schema_files = glob.glob(os.path.join(self.schema_dir, "*.json"))
-
-        for schema_file in schema_files:
-            try:
-                with open(schema_file, encoding='utf-8') as f:
-                    schema = json.load(f)
-
-                tool_name = schema.get("name")
-                if not tool_name:
-                    logger.warning(f"Esquema sin nombre en archivo {schema_file}, omitiendo")
-                    continue
-
-                self.tools[tool_name] = schema
-                logger.info(f"Herramienta '{tool_name}' cargada desde {os.path.basename(schema_file)}")
-
-            except Exception as e:
-                logger.error(f"Error al cargar esquema desde {schema_file}: {str(e)}")
-
-    def register_tool_implementation(self, tool_name: str, implementation: Any) -> bool:
         """
-        Registra la implementación de una herramienta.
-        
-        Args:
-            tool_name: Nombre de la herramienta (debe coincidir con el esquema)
-            implementation: Implementación de la herramienta (función, clase, etc.)
-            
-        Returns:
-            True si se registró correctamente, False en caso contrario
+        Inicializa un nuevo registro de herramientas vacío.
         """
-        if tool_name not in self.tools:
-            logger.warning(f"Intento de registrar implementación para herramienta '{tool_name}' sin esquema definido")
-            return False
+        self._schemas = {}  # Esquemas de las herramientas (nombre -> esquema)
+        self._implementations = {}  # Implementaciones (nombre -> función)
 
-        self.implementations[tool_name] = implementation
-        logger.info(f"Implementación para herramienta '{tool_name}' registrada")
-        return True
-
-    def get_tool_schema(self, tool_name: str) -> dict[str, Any] | None:
+    def register_schema(self, tool_name: str, schema: dict[str, Any]) -> None:
         """
-        Obtiene el esquema de una herramienta por su nombre.
-        
+        Registra el esquema de una herramienta.
+
         Args:
             tool_name: Nombre de la herramienta
-            
+            schema: Esquema JSON de la herramienta
+        """
+        self._schemas[tool_name] = schema
+
+    def register_implementation(self, tool_name: str, implementation: Callable) -> None:
+        """
+        Registra la implementación de una herramienta.
+
+        Args:
+            tool_name: Nombre de la herramienta
+            implementation: Función que implementa la herramienta
+        """
+        self._implementations[tool_name] = implementation
+
+    def get_schema(self, tool_name: str) -> dict[str, Any] | None:
+        """
+        Obtiene el esquema de una herramienta por su nombre.
+
+        Args:
+            tool_name: Nombre de la herramienta
+
         Returns:
             Esquema de la herramienta o None si no existe
         """
-        return self.tools.get(tool_name)
+        return self._schemas.get(tool_name)
 
-    def get_tool_implementation(self, tool_name: str) -> Any | None:
+    def get_implementation(self, tool_name: str) -> Callable | None:
         """
         Obtiene la implementación de una herramienta por su nombre.
-        
+
         Args:
             tool_name: Nombre de la herramienta
-            
+
         Returns:
             Implementación de la herramienta o None si no existe
         """
-        return self.implementations.get(tool_name)
+        return self._implementations.get(tool_name)
 
     def list_tools(self) -> list[str]:
         """
         Lista los nombres de todas las herramientas registradas.
-        
+
         Returns:
             Lista de nombres de herramientas
         """
-        return list(self.tools.keys())
+        return list(set(self._schemas.keys()) | set(self._implementations.keys()))
 
-    def list_tools_with_implementations(self) -> list[str]:
+    def list_implemented_tools(self) -> list[str]:
         """
         Lista los nombres de las herramientas que tienen implementación.
-        
+
         Returns:
             Lista de nombres de herramientas con implementación
         """
-        return list(self.implementations.keys())
+        return list(self._implementations.keys())
 
     def get_tool_details(self) -> list[dict[str, Any]]:
         """
         Obtiene detalles de todas las herramientas registradas.
-        
+
         Returns:
-            Lista de detalles de herramientas (nombre, descripción, tiene implementación)
+            Lista de detalles de herramientas (nombre, descripción,
+            tiene implementación)
         """
         details = []
-        for name, schema in self.tools.items():
-            details.append({
-                "name": name,
-                "description": schema.get("description", ""),
-                "has_implementation": name in self.implementations
-            })
+        for tool_name in self.list_tools():
+            schema = self.get_schema(tool_name)
+            has_implementation = tool_name in self._implementations
+
+            detail = {
+                "name": tool_name,
+                "description": schema.get("description", "") if schema else "",
+                "has_implementation": has_implementation,
+            }
+            details.append(detail)
+
         return details
+
 
 # Instancia global del registro de herramientas
 tool_registry = ToolRegistry()

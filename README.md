@@ -1,175 +1,201 @@
-# Proyecto Sesame
+# Sistema Multiagente SESAME
 
-Una plataforma de asistencia empresarial que utiliza inteligencia artificial para proporcionar consultoría financiera, análisis de datos y respuestas a consultas empresariales.
+Este proyecto contiene un sistema multiagente que utiliza varios servicios especializados para procesar y analizar diferentes tipos de datos empresariales.
 
 ## Estructura del proyecto
 
-El proyecto ha sido separado en dos componentes principales:
+El proyecto está dividido en tres componentes principales:
 
-### 1. Servidor API
+- **[api_server](api_server/README.md)**: API REST principal que expone los servicios de agentes.
+- **[mcp_server](mcp_server/README.md)**: Servidor que proporciona herramientas adicionales para los agentes.
+- **[frontend](frontend/README.md)**: Interfaz de usuario para interactuar con el sistema.
 
-Implementa los endpoints RESTful y la lógica de los agentes especializados.
+## Arquitectura de Agentes
 
-```
-api_server/
-├── app/
-│   ├── agents/         # Implementaciones de los agentes especializados
-│   ├── api/            # Rutas y modelos de la API
-│   ├── core/           # Configuración, logging y funcionalidades centrales
-│   ├── services/       # Servicios y conexiones con sistemas externos
-│   └── tools/          # Cliente MCP para consumir herramientas externas
-├── logs/               # Directorio para archivos de log
-├── main.py             # Punto de entrada principal
-└── Dockerfile          # Para ejecutar en Docker
-```
+El sistema SESAME implementa una arquitectura multiagente con los siguientes componentes:
 
-### 2. Servidor MCP
+- **Router Agent**: Analiza las consultas y las dirige al agente especializado más adecuado.
+- **Guardrail Agent**: Verifica que las consultas estén dentro del ámbito permitido por el sistema.
+- **Finance Agent**: Especializado en análisis financiero y datos económicos.
+- **Marketing Agent**: Enfocado en estrategias de marketing y análisis de mercado.
+- **Analysis Agent**: Realiza análisis generales de datos y tendencias.
+- **System Info Agent**: Proporciona información sobre el estado y capacidades del sistema.
+- **Summary Agent**: Genera resúmenes de las respuestas para el usuario.
 
-Proporciona herramientas mediante el protocolo MCP (Model Context Protocol) para que los agentes puedan acceder a funcionalidades externas.
+## Requisitos
 
-```
-mcp_server/
-├── app/
-│   ├── core/           # Configuración, logging y métricas
-│   └── tools/
-│       ├── implementations/ # Implementaciones de herramientas
-│       ├── schemas/         # Esquemas JSON de herramientas
-│       └── server/          # Código del servidor MCP
-├── logs/               # Directorio para archivos de log
-├── main.py             # Punto de entrada principal
-└── Dockerfile          # Para ejecutar en Docker
-```
+- Docker y Docker Compose
+- Python 3.12+ (para desarrollo local)
+- Node.js 18+ (para desarrollo local del frontend)
 
-## Ejecución en desarrollo
+## Variables de entorno
 
-Para ejecutar el proyecto en desarrollo, sigue estos pasos:
+Copia el archivo `docker.env.example` a `.env` y configura las variables necesarias:
 
-1. Configura los archivos `.env` en cada directorio basándote en los archivos `.env-example`
-
-2. Inicia el servidor MCP:
 ```bash
-cd mcp_server
-python main.py
+cp docker.env.example .env
 ```
 
-3. En otra terminal, inicia el servidor API:
-```bash
-cd api_server
-python main.py
-```
+Asegúrate de configurar las siguientes variables:
+
+- `OPENAI_API_KEY`: Clave API de OpenAI
+- `OPENAI_MODEL`: Modelo de OpenAI a utilizar (por defecto: gpt-4.1-mini)
+- `ALPHA_VANTAGE_API_KEY`: Clave API de Alpha Vantage (para datos financieros)
+- `NEWS_API_KEY`: Clave API de News (para noticias)
+- `BING_SEARCH_API_KEY`: Clave API de Bing Search (para búsquedas web)
 
 ## Ejecución con Docker Compose
 
-El proyecto está configurado para ejecutarse con Docker Compose:
+Para ejecutar todo el sistema con Docker Compose:
 
 ```bash
 docker-compose up -d
 ```
 
-Esto iniciará ambos servicios:
-- API: http://localhost:8000
-- MCP: http://localhost:4000
+Los servicios estarán disponibles en:
 
-## Configuración del entorno de desarrollo
+- Frontend: http://localhost:3000
+- API Server: http://localhost:8000
+- MCP Server: http://localhost:4000
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3001 (usuario: admin, contraseña: password)
 
-### Configuración de VS Code
+## API Endpoints
 
-Para configurar VS Code para el desarrollo del proyecto:
+La documentación completa de la API está disponible en:
 
-1. Instala VS Code desde [https://code.visualstudio.com/](https://code.visualstudio.com/)
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
-2. Instala las siguientes extensiones recomendadas:
-   - Python (Microsoft)
-   - Ruff (Astral Software)
-   - TOML Language Support
-   - Pylance
-   - Test Explorer UI
+Endpoints principales:
+- `GET /api/health`: Estado de la API
+- `POST /api/v1/query`: Enviar una consulta general al sistema
+- `GET /api/v1/agents`: Listar agentes disponibles
 
-3. El proyecto ya incluye una carpeta `.vscode` con la configuración necesaria:
-   - `settings.json`: Configuración para Ruff y pytest
-   - `launch.json`: Configuraciones para ejecutar y depurar
+## Desarrollo local
 
-4. Para ejecutar o depurar:
-   - Abre la pestaña "Ejecutar y depurar" (Ctrl+Shift+D o Cmd+Shift+D)
-   - Selecciona la configuración deseada en el menú desplegable superior:
-     - "API Server": Ejecuta el servidor de API
-     - "MCP Server": Ejecuta el servidor MCP
-     - "API Server Tests": Ejecuta todas las pruebas del API Server
-     - "MCP Server Tests": Ejecuta todas las pruebas del MCP Server
-     - "Test File Actual": Ejecuta las pruebas del archivo actual
-   - Presiona F5 o el botón verde de ejecutar
+### API Server
 
-5. Para establecer puntos de interrupción (breakpoints):
-   - Haz clic en el margen izquierdo junto al número de línea donde deseas detener la ejecución
-   - Cuando ejecutes en modo depuración, el programa se detendrá en ese punto
-   - Puedes inspeccionar variables, pasar a la siguiente línea, y más usando la barra de herramientas de depuración
+```bash
+cd api_server
+pip install -r requirements.txt
+python -m app.main
+```
 
-### Configuración de pruebas unitarias
+### MCP Server
 
-El proyecto está configurado para ejecutar pruebas unitarias directamente desde VS Code:
+```bash
+cd mcp_server
+pip install -r requirements.txt
+python -m app.main
+```
 
-1. **Panel de Test Explorer**:
-   - Abre VS Code y ve a la pestaña de pruebas (icono de matraz)
-   - Se mostrarán todos los tests descubiertos automáticamente
-   - Puedes ejecutar tests individuales o grupos completos de tests
+### Frontend
 
-2. **Desde la paleta de comandos**:
-   - Presiona `Ctrl+Shift+P` (o `Cmd+Shift+P` en macOS)
-   - Escribe "Python: Run All Tests"
-   - Selecciona la opción para ejecutar todos los tests
+```bash
+cd frontend
+npm install
+npm start
+```
 
-3. **Configuraciones de ejecución predefinidas**:
-   - Ve a la pestaña "Run and Debug" (`Ctrl+Shift+D` o `Cmd+Shift+D`)
-   - En el selector superior, elige una de las siguientes configuraciones:
-     - "API Server Tests": Ejecuta todos los tests del servidor API
-     - "API Test Current File": Ejecuta los tests del archivo actual (API server)
-     - "MCP Server Tests": Ejecuta todos los tests del servidor MCP
-     - "MCP Test Current File": Ejecuta los tests del archivo actual (MCP server)
+## Tests
 
-4. **Debugging de tests**:
-   - Coloca un punto de interrupción (breakpoint) haciendo clic en el margen izquierdo
-   - Inicia el debugging con una de las configuraciones de test
-   - El código se detendrá en el punto de interrupción permitiéndote inspeccionar variables
+Para ejecutar las pruebas:
 
-El proyecto usa pytest como framework de testing. Los tests están ubicados en:
-- API Server: `api_server/app/tests/`
-- MCP Server: `mcp_server/app/tests/`
+```bash
+# API Server
+cd api_server
+pytest
 
-### Configuración de Ruff para formateo y linting
+# MCP Server
+cd mcp_server
+pytest
+```
 
-Ruff es un formateador y linter para Python. El proyecto ya incluye un archivo `pyproject.toml` con la configuración necesaria y un `settings.json` que activa Ruff.
+## Monitoreo
 
-1. El formateo y corrección de código se aplicarán automáticamente al guardar los archivos
+El sistema incluye una infraestructura completa de monitorización con Prometheus y Grafana:
 
-2. Para formatear manualmente:
-   - Abre la paleta de comandos (Ctrl+Shift+P o Cmd+Shift+P)
-   - Ejecuta "Ruff: Format Document"
+### Componentes de monitorización
 
-3. Para ver problemas detectados por Ruff:
-   - Abre el panel de "Problemas" (Ctrl+Shift+M o Cmd+Shift+M)
+- **Prometheus**: Recolecta métricas de todos los servicios
+  - Disponible en http://localhost:9090
+  - Configura el intervalo de scrapping y las reglas de alerta
+  - Almacena datos históricos para análisis
 
-## Requisitos
+- **Grafana**: Proporciona dashboards para visualizar métricas
+  - Disponible en http://localhost:3001 (usuario: admin, contraseña: password)
+  - Incluye dashboard predefinido "Sesame System Overview"
+  - Permite crear dashboards personalizados según necesidades
 
-- Python 3.10+
-- Dependencias especificadas en los archivos `requirements.txt` de cada componente
-- Visual Studio Code (recomendado para desarrollo)
+- **Node-Exporter**: Exporta métricas del sistema operativo
+  - Monitoriza CPU, memoria, disco y red
+  - Disponible en http://localhost:9100/metrics
 
-## Desarrollo
+- **cAdvisor**: Proporciona métricas de contenedores Docker
+  - Monitoriza uso de recursos por contenedor
+  - Disponible en http://localhost:8080
 
-Para contribuir al proyecto:
+### Configuración de Grafana
 
-1. Clona el repositorio
-2. Crea un entorno virtual
-3. Instala las dependencias
-4. Crea una rama para tu característica (`git checkout -b feature/amazing-feature`)
-5. Realiza tus cambios
-6. Ejecuta las pruebas
-7. Envía tu pull request
+Para configurar correctamente la conexión entre Grafana y Prometheus:
 
-## Configuración de herramientas
+1. Asegúrate de que Prometheus esté en funcionamiento
+2. En Grafana, configura un datasource con las siguientes características:
+   - Nombre: **prometheus** (en minúsculas)
+   - Tipo: Prometheus
+   - URL: http://prometheus:9090
+   - Acceso: Proxy
 
-El proyecto usa configuración centralizada en `pyproject.toml` para herramientas Python como Ruff, siguiendo las mejores prácticas definidas en PEP 518 y PEP 621.
+### Métricas principales monitorizadas
 
-## Licencia
+- **API Server**:
+  - Contador de peticiones (`api_server_request_count`)
+  - Latencia de respuesta (`api_server_request_latency_seconds`)
+  - Consumo de tokens por agente (`api_server_token_count`)
+  - Estado del servidor y conexión MCP
 
-Proyecto bajo licencia MIT. Ver archivo `LICENSE` para más detalles.
+- **MCP Server**:
+  - Contador de llamadas a herramientas (`mcp_tool_calls_total`)
+  - Tiempo de ejecución de herramientas (`mcp_tool_execution_time_seconds`)
+  - Contador de errores por herramienta y tipo
+
+- **Sistema**:
+  - Uso de CPU, memoria y disco
+  - Métricas de red
+  - Estado y recursos de contenedores
+
+### Alertas configuradas
+
+El sistema incluye alertas predefinidas para casos como:
+
+- Alto consumo de tokens
+- Servidores caídos (API Server o MCP Server)
+- Alta latencia en respuestas de API
+- Tasas de error elevadas
+- Alto uso de recursos del sistema (CPU, memoria, disco)
+
+Para ver y gestionar las alertas:
+1. Accede a Prometheus en http://localhost:9090/alerts
+2. En Grafana, configura notificaciones en la sección Alerting
+
+### Extendiendo el monitoreo
+
+Para añadir nuevas métricas:
+
+1. Modifica los archivos `api_server/main.py` o `mcp_server/main.py`
+2. Añade nuevos contadores, histogramas o gauges con Prometheus
+3. Actualiza los dashboards de Grafana para visualizar las nuevas métricas
+
+Para añadir nuevas alertas:
+1. Edita el archivo `prometheus/alert_rules.yml`
+2. Reinicia los contenedores con `docker-compose restart prometheus`
+
+## CI/CD
+
+El proyecto utiliza GitHub Actions para integración continua y despliegue continuo:
+
+- Pruebas automáticas para cada componente
+- Comprobación de estilo y calidad de código
+- Generación de imágenes Docker
+- Publicación automática de imágenes a GitHub Container Registry

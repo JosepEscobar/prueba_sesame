@@ -1,7 +1,7 @@
 """
 Implementación de herramientas para búsqueda de artículos.
 
-Este módulo contiene herramientas para buscar artículos y 
+Este módulo contiene herramientas para buscar artículos y
 contenido relacionado con diversos temas utilizando APIs externas.
 """
 
@@ -15,23 +15,24 @@ import httpx
 # Configurar logging
 logger = logging.getLogger("app")
 
+
 async def search_articles(
     tema: str | None = None,
     query: str | None = None,
     max_resultados: int = 5,
     incluir_resumen: bool = True,
-    fuentes: list[str] | None = None
+    fuentes: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Busca artículos y noticias relacionados con un tema específico mediante APIs públicas.
-    
+
     Args:
         tema: Tema o palabra clave para buscar (alternativa a query)
         query: Tema o palabra clave para buscar (alternativa a tema)
         max_resultados: Número máximo de resultados a devolver
         incluir_resumen: Si se debe incluir un resumen de cada artículo
         fuentes: Lista de fuentes específicas donde buscar (opcional)
-    
+
     Returns:
         Lista de artículos encontrados con metadatos
     """
@@ -39,9 +40,7 @@ async def search_articles(
     tema_busqueda = tema if tema is not None else query
 
     if tema_busqueda is None:
-        return {
-            "error": "Debe proporcionar un parámetro 'tema' o 'query' para la búsqueda"
-        }
+        return {"error": "Debe proporcionar un parámetro 'tema' o 'query' para la búsqueda"}
 
     # Limitar el número máximo de resultados
     if max_resultados > 10:
@@ -60,7 +59,7 @@ async def search_articles(
             "list": "search",
             "srsearch": tema_busqueda,
             "utf8": 1,
-            "srlimit": max_resultados
+            "srlimit": max_resultados,
         }
 
         # Usar httpx para peticiones asíncronas
@@ -69,9 +68,7 @@ async def search_articles(
 
             if response.status_code != 200:
                 logger.error(f"Error en la API de Wikipedia: {response.status_code}")
-                return {
-                    "error": f"Error al consultar la API externa: {response.status_code}"
-                }
+                return {"error": f"Error al consultar la API externa: {response.status_code}"}
 
             # Procesar los resultados
             resultados_api = response.json()
@@ -93,7 +90,7 @@ async def search_articles(
                     # Añadir resumen si se solicita
                     if incluir_resumen:
                         # El snippet ya viene en el resultado, pero puede tener marcado HTML
-                        resumen = re.sub(r'<.*?>', '', item["snippet"])
+                        resumen = re.sub(r"<.*?>", "", item["snippet"])
                         articulo["resumen"] = resumen
 
                     articulos.append(articulo)
@@ -110,7 +107,7 @@ async def search_articles(
                 "tema": tema_busqueda,
                 "num_resultados": len(articulos),
                 "fecha_busqueda": datetime.now().strftime("%Y-%m-%d"),
-                "articulos": articulos
+                "articulos": articulos,
             }
 
     except Exception as e:
@@ -119,5 +116,5 @@ async def search_articles(
             "error": f"Error interno al buscar artículos: {str(e)}",
             "tema": tema_busqueda,
             "num_resultados": 0,
-            "articulos": []
+            "articulos": [],
         }

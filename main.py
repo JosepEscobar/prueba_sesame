@@ -16,3 +16,18 @@ from cliente_mcp_sesame import main
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def main():
+    """Inicia el servidor MCP."""
+    # Verificar puerto disponible
+    host = os.environ.get("MCP_HOST", "127.0.0.1")
+    port = int(os.environ.get("MCP_PORT", "4000"))
+
+
+# Función de inicio del servidor
+def iniciar_servidor():
+    """Inicia el servidor MCP."""
+    # Verificar puerto disponible
+    host = os.environ.get("MCP_HOST", "127.0.0.1")
+    port = int(os.environ.get("MCP_PORT", "4000"))

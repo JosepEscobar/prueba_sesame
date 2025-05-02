@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 from app.agents.base import BaseAgent
+from app.core.ai_prompt_builder import AIPromptBuilder
 from app.core.config import get_settings
 from app.core.llm import get_llm_client
 from app.core.logging import logger
@@ -11,11 +12,12 @@ from app.core.metrics import MetricsCollector
 
 settings = get_settings()
 
+
 class GuardrailAgent(BaseAgent):
     """
     Agente guardrail que actúa como filtro inicial para determinar si una consulta
     está dentro del ámbito de servicios ofrecidos por el sistema.
-    
+
     Utiliza un modelo LLM para analizar inteligentemente si la consulta está dentro
     del ámbito, en lugar de usar un sistema rígido de palabras clave.
     """
@@ -24,7 +26,7 @@ class GuardrailAgent(BaseAgent):
         """Inicializa el agente guardrail."""
         super().__init__(
             name="guardrail_agent",
-            description="Agente que determina si una consulta está dentro del ámbito de servicios ofrecidos utilizando LLM."
+            description="Agente que determina si una consulta está dentro del ámbito de servicios ofrecidos utilizando LLM.",
         )
 
         # Obtener el cliente LLM
@@ -35,13 +37,13 @@ class GuardrailAgent(BaseAgent):
             "finanzas y análisis financiero",
             "marketing y estrategias de mercado",
             "análisis de datos empresariales",
-            "estrategia y gestión empresarial"
+            "estrategia y gestión empresarial",
         ]
 
         # Definición del ámbito de la aplicación
         self.scope_definition = """
         La aplicación Sesame proporciona asistencia empresarial en estos dominios:
-        
+
         1. Finanzas y análisis financiero:
            - Análisis de estados financieros (balance, P&G, flujo de caja)
            - Cálculo y análisis de ratios financieros
@@ -49,7 +51,7 @@ class GuardrailAgent(BaseAgent):
            - Proyecciones financieras
            - Análisis de rentabilidad
            - Gestión de costos y presupuestos
-        
+
         2. Marketing y estrategias de mercado:
            - Análisis de campañas de marketing
            - Evaluación de estrategias de marketing digital
@@ -57,14 +59,14 @@ class GuardrailAgent(BaseAgent):
            - Evaluación de rendimiento publicitario
            - Planificación de campañas
            - Análisis de conversión y engagement
-        
+
         3. Análisis de datos empresariales:
            - Análisis de tendencias en datos de negocio
            - Identificación de patrones en datos empresariales
            - Preparación de informes y dashboards
            - Benchmarking y comparativas sectoriales
            - Análisis predictivos básicos
-        
+
         4. Estrategia y gestión empresarial:
            - Planificación estratégica
            - Optimización de procesos de negocio
@@ -81,24 +83,38 @@ class GuardrailAgent(BaseAgent):
             "Optimización de operaciones y procesos de negocio",
             "Valoración de empresas y activos financieros",
             "Estudios de mercado y análisis competitivo",
-            "Planificación estratégica de negocios"
+            "Planificación estratégica de negocios",
         ]
 
         # Temas explícitamente excluidos
         self.explicitly_excluded_topics = [
-            "política", "religión", "contenido para adultos", "armas", "drogas ilegales",
-            "juegos de azar", "medicina", "diagnóstico médico", "psicología", "terapia",
-            "asesoramiento legal", "hacking", "actividades ilegales", "contenido ofensivo",
-            "violencia", "discriminación", "creación de contenido ilegal", "acoso"
+            "política",
+            "religión",
+            "contenido para adultos",
+            "armas",
+            "drogas ilegales",
+            "juegos de azar",
+            "medicina",
+            "diagnóstico médico",
+            "psicología",
+            "terapia",
+            "asesoramiento legal",
+            "hacking",
+            "actividades ilegales",
+            "contenido ofensivo",
+            "violencia",
+            "discriminación",
+            "creación de contenido ilegal",
+            "acoso",
         ]
 
     def _check_explicitly_excluded(self, query: str) -> str | None:
         """
         Verifica si la consulta contiene temas explícitamente excluidos.
-        
+
         Args:
             query: La consulta a verificar
-            
+
         Returns:
             Mensaje de exclusión si contiene un tema excluido, None en caso contrario
         """
@@ -111,46 +127,87 @@ class GuardrailAgent(BaseAgent):
     def _evaluate_with_llm(self, query: str) -> dict[str, Any]:
         """
         Evalúa la consulta utilizando un modelo LLM para determinar si está dentro del ámbito.
-        
+
         Args:
             query: La consulta a evaluar
-            
+
         Returns:
             Resultado de la evaluación
         """
-        prompt = f"""
-        # Tarea: Evaluación de consulta para determinar si está dentro del ámbito de servicios
-        
-        ## Ámbito del sistema
-        {self.scope_definition}
-        
-        ## Consulta a evaluar
-        "{query}"
-        
-        ## Instrucciones
-        1. Determina si la consulta está relacionada con alguno de los dominios de la aplicación.
-        2. Si está en el ámbito, identifica el dominio más relevante y explica por qué.
-        3. Si no está en el ámbito, explica claramente por qué y sugiere cómo reformular la consulta para que esté dentro del ámbito.
-        
-        ## Formato de respuesta
-        Proporciona tu respuesta en formato JSON con los siguientes campos:
-        - "in_scope": boolean (true/false)
-        - "domain": string (el dominio más relevante si está en el ámbito)
-        - "confidence": float (0.0-1.0, tu nivel de confianza en la evaluación)
-        - "reasoning": string (tu razonamiento detallado)
-        - "explanation": string (explicación para el usuario)
-        """
+        # Verificar si es una consulta sobre capacidades del sistema o estado del servicio
+        query_lower = query.lower()
+        system_info_keywords = [
+            "capacidades",
+            "funcionalidades",
+            "qué puede hacer",
+            "qué hace",
+            "estado",
+            "status",
+            "funcionando",
+            "operativo",
+            "agentes",
+            "asistentes",
+            "especialistas",
+        ]
+
+        system_info_phrases = [
+            "cuales son las capacidades",
+            "cuál es el estado",
+            "qué puede hacer",
+            "estado actual",
+            "capacidades del sistema",
+            "funcionalidades disponibles",
+        ]
+
+        # Verificar si la consulta está relacionada con información del sistema
+        is_system_info_query = any(keyword in query_lower for keyword in system_info_keywords) or any(
+            phrase in query_lower for phrase in system_info_phrases
+        )
+
+        if is_system_info_query:
+            logger.info(f"Detectada consulta sobre información del sistema: {query}")
+            return {
+                "in_scope": True,
+                "domain": "system_info",
+                "confidence": 0.95,
+                "reasoning": "Consulta relacionada con información del sistema o estado del servicio",
+                "explanation": "Esta consulta está relacionada con información sobre el sistema o su estado actual.",
+            }
+
+        # Crear un esquema JSON para la respuesta esperada
+        json_schema = {
+            "in_scope": True,  # boolean
+            "domain": "domain_name",  # string
+            "confidence": 0.9,  # float 0.0-1.0
+            "reasoning": "detailed reasoning",  # string
+            "explanation": "explanation for user",  # string
+        }
+
+        # Usar AIPromptBuilder para crear el prompt
+        prompt_builder = AIPromptBuilder(
+            role="evaluador de consultas",
+            task="Evaluar si la consulta está dentro del ámbito de servicios ofrecidos por la aplicación",
+            input_data=f'Consulta a evaluar: "{query}"',
+            context=f"Ámbito del sistema:\n{self.scope_definition}",
+            schema=json_schema,
+            criteria="""1. Determina si la consulta está relacionada con alguno de los dominios de la aplicación.
+            2. Si está en el ámbito, identifica el dominio más relevante y explica por qué.
+            3. Si no está en el ámbito, explica claramente por qué y sugiere cómo reformular la consulta para que esté dentro del ámbito.""",
+            constraints="Proporciona tu respuesta en formato JSON según el esquema proporcionado.",
+        )
+
+        prompt = prompt_builder.build()
 
         try:
             response = self.llm_client.generate_text(prompt)
 
             # Intentar extraer el JSON de la respuesta
-            json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
+            json_match = re.search(r"```json\s*(.*?)\s*```", response, re.DOTALL)
             if json_match:
                 json_str = json_match.group(1)
             else:
                 # Buscar cualquier estructura que parezca JSON
-                json_str = re.search(r'(\{.*\})', response, re.DOTALL)
+                json_str = re.search(r"(\{.*\})", response, re.DOTALL)
                 if json_str:
                     json_str = json_str.group(1)
                 else:
@@ -169,7 +226,7 @@ class GuardrailAgent(BaseAgent):
                     "domain": "general business" if any_domain_match else None,
                     "confidence": 0.6,
                     "reasoning": "Fallback debido a error en respuesta LLM",
-                    "explanation": "No se pudo determinar con precisión si la consulta está en el ámbito."
+                    "explanation": "No se pudo determinar con precisión si la consulta está en el ámbito.",
                 }
 
         except Exception as e:
@@ -180,17 +237,17 @@ class GuardrailAgent(BaseAgent):
                 "domain": "general business",
                 "confidence": 0.5,
                 "reasoning": f"Error al consultar LLM: {str(e)}",
-                "explanation": "Debido a un error técnico, procesaremos tu consulta igualmente."
+                "explanation": "Debido a un error técnico, procesaremos tu consulta igualmente.",
             }
 
     def _execute_impl(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """
         Implementa la lógica del guardrail para determinar si la consulta está dentro del ámbito.
         Utiliza un LLM para evaluación inteligente en lugar de palabras clave.
-        
+
         Args:
             input_data: Datos de entrada con la consulta y contexto
-            
+
         Returns:
             Resultado indicando si la consulta está dentro del ámbito
         """
@@ -224,17 +281,14 @@ class GuardrailAgent(BaseAgent):
         # Registrar métricas
         execution_time = time.time() - start_time
         MetricsCollector.record_agent_execution(
-            agent_name="guardrail_agent",
-            status=True,
-            execution_time=execution_time
+            agent_name="guardrail_agent", status=True, execution_time=execution_time
         )
 
         # Preparar respuesta según la evaluación
         if not evaluation.get("in_scope", False):
             logger.info(f"Consulta fuera del ámbito según LLM: {query}")
             return self._create_out_of_scope_response(
-                specific_message=evaluation.get("explanation", None),
-                reasoning=evaluation.get("reasoning", "")
+                specific_message=evaluation.get("explanation", None), reasoning=evaluation.get("reasoning", "")
             )
 
         # La consulta está dentro del ámbito
@@ -249,17 +303,17 @@ class GuardrailAgent(BaseAgent):
             "query": query,
             "context": context,
             "confidence": confidence,
-            "reasoning": evaluation.get("reasoning", "")
+            "reasoning": evaluation.get("reasoning", ""),
         }
 
     def _create_out_of_scope_response(self, specific_message: str | None = None, reasoning: str = "") -> dict[str, Any]:
         """
         Crea una respuesta para consultas fuera del ámbito.
-        
+
         Args:
             specific_message: Mensaje específico para situaciones particulares
             reasoning: Razonamiento detallado sobre por qué está fuera del ámbito
-            
+
         Returns:
             Respuesta estructurada para consultas fuera del ámbito
         """
@@ -284,11 +338,6 @@ class GuardrailAgent(BaseAgent):
 
         return {
             "in_scope": False,
-            "result": {
-                "content": message,
-                "source": "guardrail_agent",
-                "type": "out_of_scope",
-                "reasoning": reasoning
-            },
-            "confidence": 1.0
+            "result": {"content": message, "source": "guardrail_agent", "type": "out_of_scope", "reasoning": reasoning},
+            "confidence": 1.0,
         }
