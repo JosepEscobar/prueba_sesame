@@ -134,6 +134,42 @@
           </div>
         </div>
       </div>
+      
+      <!-- Endpoints MCP Server -->
+      <div style="background-color: var(--message-surface);" class="shadow rounded-lg p-6 mt-6">
+        <h3 class="text-lg font-medium mb-4">Endpoints MCP Server</h3>
+        <div class="space-y-4">
+          <div v-for="(endpoints, category) in mcpEndpoints" :key="'mcp-'+category" class="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-0">
+            <h4 class="font-medium mb-2">{{ category }}</h4>
+            <div class="space-y-2">
+              <div 
+                v-for="endpoint in endpoints" 
+                :key="endpoint.path"
+                style="background-color: #292929;"
+                class="p-3 rounded-lg"
+              >
+                <div class="flex items-center">
+                  <span 
+                    :class="{
+                      'bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-200': endpoint.method === 'GET',
+                      'bg-blue-200 text-blue-800 dark:bg-blue-900 dark:text-blue-200': endpoint.method === 'POST',
+                      'bg-yellow-200 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': endpoint.method === 'PUT',
+                      'bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-200': endpoint.method === 'DELETE'
+                    }"
+                    class="inline-block px-2 py-1 rounded text-xs font-medium mr-2"
+                  >
+                    {{ endpoint.method }}
+                  </span>
+                  <span class="font-mono text-sm">{{ endpoint.path }}</span>
+                </div>
+                <p v-if="endpoint.description" class="text-sm text-gray-400 mt-1">
+                  {{ endpoint.description }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -157,15 +193,23 @@ const mcpError = ref(null);
 // Temporizador para actualización automática
 let refreshTimer = null;
 
+// Endpoints dinámicos según OpenAPI
+const apiEndpoints = ref({});
+const mcpEndpoints = ref({});
+
 // Montar y limpiar
 onMounted(() => {
   fetchHealthStatus();
   fetchMcpStatus();
+  fetchApiEndpoints();
+  fetchMcpEndpoints();
   
   // Actualizar cada 30 segundos
   refreshTimer = setInterval(() => {
     fetchHealthStatus();
     fetchMcpStatus();
+    fetchApiEndpoints();
+    fetchMcpEndpoints();
   }, 30000);
 });
 
@@ -204,7 +248,8 @@ const fetchMcpStatus = async () => {
       mcpStatus.value = {
         status: response.data.status || 'disconnected',
         mcp_url: response.data.mcp_url || '',
-        tools_available: response.data.tools_available || 0
+        tools_available: response.data.tools_available || 0,
+        tools: response.data.tools || []
       };
     }
   } catch (error) {
@@ -215,7 +260,8 @@ const fetchMcpStatus = async () => {
     mcpStatus.value = {
       status: 'disconnected',
       mcp_url: '',
-      tools_available: 0
+      tools_available: 0,
+      tools: []
     };
   } finally {
     isLoadingMcp.value = false;
@@ -269,17 +315,80 @@ const formatUptime = (uptime) => {
   return parts.join(' ');
 };
 
-// Ejemplos de endpoints disponibles
-const apiEndpoints = [
-  { method: "GET", path: "/health", description: "Verificar estado general" },
-  { method: "GET", path: "/api/v1/agents", description: "Listar agentes disponibles" },
-  { method: "POST", path: "/api/v1/query", description: "Enviar una consulta general" },
-  { method: "GET", path: "/mcp/status", description: "Verificar estado MCP" },
-  { method: "GET", path: "/metrics", description: "Métricas Prometheus" }
-];
+// Carga de endpoints desde /api/openapi.json
+const fetchApiEndpoints = async () => {
+  try {
+    const res = await axios.get('/api/openapi.json');
+    const paths = res.data.paths || {};
+    const grouped = {};
+    Object.entries(paths).forEach(([path, methods]) => {
+      Object.entries(methods).forEach(([method, info]) => {
+        const tags = info.tags || ['General'];
+        tags.forEach(tag => {
+          if (!grouped[tag]) grouped[tag] = [];
+          grouped[tag].push({
+            method: method.toUpperCase(),
+            path,
+            description: info.summary || info.description || ''
+          });
+        });
+      });
+    });
+    apiEndpoints.value = grouped;
+  } catch (e) {
+    console.error('Error cargando OpenAPI spec API:', e);
+    // Datos de ejemplo en caso de error
+    apiEndpoints.value = {
+      'General': [
+        { method: 'GET', path: '/health', description: 'Verificar estado de la API' },
+        { method: 'GET', path: '/api/v1/agents', description: 'Listar agentes disponibles' },
+        { method: 'POST', path: '/api/v1/query', description: 'Procesar consulta de usuario' }
+      ],
+      'Monitoreo': [
+        { method: 'GET', path: '/metrics', description: 'Métricas de Prometheus' },
+        { method: 'GET', path: '/mcp/status', description: 'Estado de conexión con MCP' }
+      ]
+    };
+  }
+};
 
-// Ejemplos adicionales
-const mcpEndpoints = [
-  { method: "GET", path: "/mcp/status", description: "Obtener estado de conexión MCP y herramientas disponibles" }
-];
+// Carga de endpoints desde /mcp/openapi.json
+const fetchMcpEndpoints = async () => {
+  try {
+    const res = await axios.get('/mcp/openapi.json');
+    const paths = res.data.paths || {};
+    const grouped = {};
+    Object.entries(paths).forEach(([path, methods]) => {
+      Object.entries(methods).forEach(([method, info]) => {
+        const tags = info.tags || ['General'];
+        tags.forEach(tag => {
+          if (!grouped[tag]) grouped[tag] = [];
+          grouped[tag].push({
+            method: method.toUpperCase(),
+            path,
+            description: info.summary || info.description || ''
+          });
+        });
+      });
+    });
+    mcpEndpoints.value = grouped;
+  } catch (e) {
+    console.error('Error cargando OpenAPI spec MCP:', e);
+    // Datos de ejemplo en caso de error
+    mcpEndpoints.value = {
+      'MCP': [
+        { method: 'GET', path: '/status', description: 'Estado del servidor MCP' },
+        { method: 'GET', path: '/tools', description: 'Listar herramientas disponibles' }
+      ],
+      'Herramientas': [
+        { method: 'POST', path: '/tools/buscar_datos_financieros', description: 'Buscar datos financieros de empresas' },
+        { method: 'POST', path: '/tools/calcular_ratios_financieros', description: 'Calcular ratios financieros' },
+        { method: 'POST', path: '/tools/analizar_rendimiento_campania', description: 'Analizar rendimiento de campaña' },
+        { method: 'POST', path: '/tools/recomendar_estrategia_marketing', description: 'Recomendar estrategia de marketing' },
+        { method: 'POST', path: '/tools/analizar_tendencia', description: 'Analizar tendencia de datos' },
+        { method: 'POST', path: '/tools/predecir_valores', description: 'Predecir valores futuros' }
+      ]
+    };
+  }
+};
 </script> 
